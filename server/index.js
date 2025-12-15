@@ -248,7 +248,7 @@ if (process.env.NODE_ENV === 'production') {
     app.use(express.static(path.join(__dirname, '../build')));
 
     // 2. 任何其他请求，都返回 index.html
-    app.get('*', (req, res) => {
+    app.get(/(.*)/, (req, res) => {
         res.sendFile(path.join(__dirname, '../build', 'index.html'));
     });
 }
