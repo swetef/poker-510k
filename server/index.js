@@ -249,7 +249,7 @@ if (process.env.NODE_ENV === 'production') {
     app.use(express.static(buildPath));
     // 2. 任何其他请求，都返回 index.html
     app.get(/(.*)/, (req, res) => {
-        res.sendFile(path.join(buildPath, 'index.html'));
+        res.sendFile(path.join(__dirname, '../client/dist', 'index.html'));
     });
 }
 
