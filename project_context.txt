@@ -1,4 +1,1050 @@
-Project Context Generated at 2025/12/15 12:26:10
+Project Context Generated at 2025/12/15 15:43:24
+
+
+================================================================================
+FILE PATH: client\eslint.config.js
+================================================================================
+import js from '@eslint/js'
+import globals from 'globals'
+import reactHooks from 'eslint-plugin-react-hooks'
+import reactRefresh from 'eslint-plugin-react-refresh'
+import { defineConfig, globalIgnores } from 'eslint/config'
+
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{js,jsx}'],
+    extends: [
+      js.configs.recommended,
+      reactHooks.configs.flat.recommended,
+      reactRefresh.configs.vite,
+    ],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: globals.browser,
+      parserOptions: {
+        ecmaVersion: 'latest',
+        ecmaFeatures: { jsx: true },
+        sourceType: 'module',
+      },
+    },
+    rules: {
+      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+    },
+  },
+])
+
+
+================================================================================
+FILE PATH: client\index.html
+================================================================================
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>client</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+
+
+================================================================================
+FILE PATH: client\package.json
+================================================================================
+{
+  "name": "client",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lucide-react": "^0.559.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "vite": "npm:rolldown-vite@7.2.5"
+  },
+  "overrides": {
+    "vite": "npm:rolldown-vite@7.2.5"
+  }
+}
+
+
+================================================================================
+FILE PATH: client\src\App.css
+================================================================================
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+
+================================================================================
+FILE PATH: client\src\App.jsx
+================================================================================
+// 主入口 - 已添加倒计时状态逻辑
+import React, { useState, useEffect, useRef } from 'react';
+import io from 'socket.io-client';
+
+import { sortHand } from './utils/cardLogic';
+import SoundManager from './utils/SoundManager';
+import { LoginScreen } from './screens/LoginScreen';
+import { LobbyScreen } from './screens/LobbyScreen';
+import { GameScreen } from './screens/GameScreen';
+
+const SOCKET_URL = 'http://localhost:3001';
+
+export default function App() {
+  const [gameState, setGameState] = useState('LOGIN'); 
+  const [username, setUsername] = useState('');
+  const [roomId, setRoomId] = useState('');
+  const [roomConfig, setRoomConfig] = useState({ deckCount: 1, maxPlayers: 3, targetScore: 500 });
+  const [isCreatorMode, setIsCreatorMode] = useState(false); 
+
+  const [players, setPlayers] = useState([]);     
+  const [myHand, setMyHand] = useState([]);       
+  const [selectedCards, setSelectedCards] = useState([]); 
+  const [lastPlayed, setLastPlayed] = useState([]); 
+  const [currentTurnId, setCurrentTurnId] = useState(null); 
+  const [lastPlayerName, setLastPlayerName] = useState(''); 
+  const [infoMessage, setInfoMessage] = useState(''); 
+  
+  const [roundResult, setRoundResult] = useState(null); 
+  const [grandResult, setGrandResult] = useState(null); 
+  const [playerScores, setPlayerScores] = useState({});
+  const [pendingPoints, setPendingPoints] = useState(0);
+  const [gameLogs, setGameLogs] = useState([]);
+
+  const [sortMode, setSortMode] = useState('POINT'); 
+  const [isConnected, setIsConnected] = useState(false);
+  const [mySocketId, setMySocketId] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // <--- 新增：倒计时剩余时间状态
+  const [turnRemaining, setTurnRemaining] = useState(60); 
+
+  const socketRef = useRef(null);
+  const isDragging = useRef(false); 
+  const dragStartMode = useRef(true); 
+  const sortModeRef = useRef('POINT');
+  const usernameRef = useRef(username); 
+  const mySocketIdRef = useRef(null);   
+
+  useEffect(() => { usernameRef.current = username; }, [username]);
+  useEffect(() => { mySocketIdRef.current = mySocketId; }, [mySocketId]);
+
+  useEffect(() => {
+    const socket = io(SOCKET_URL, { reconnectionAttempts: 5, timeout: 10000 });
+    socketRef.current = socket;
+
+    const initAudio = () => {
+        SoundManager.init();
+        window.removeEventListener('click', initAudio);
+    };
+    window.addEventListener('click', initAudio);
+
+    socket.on('connect', () => setIsConnected(true));
+    socket.on('disconnect', () => setIsConnected(false));
+    socket.on('your_id', (id) => {
+        setMySocketId(id);
+        mySocketIdRef.current = id;
+    });
+    socket.on('error_msg', (msg) => { setIsLoading(false); alert(msg); });
+
+    socket.on('room_info', (data) => {
+        setRoomId(data.roomId);
+        setRoomConfig(data.config);
+        setPlayers(data.players);
+        setGameState('LOBBY'); 
+        setIsLoading(false);
+    });
+
+    socket.on('game_started', (data) => {
+        setMyHand(sortHand(data.hand, sortModeRef.current));
+        setLastPlayed([]);
+        setRoundResult(null);
+        setGrandResult(null);
+        setPendingPoints(0);
+        if (data.grandScores) setPlayerScores(data.grandScores);
+        setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: '🏁 新一局开始！' }]); 
+        setGameState('GAME');
+        // 游戏开始时重置为 60
+        setTurnRemaining(60);
+        SoundManager.play('deal');
+    });
+
+    socket.on('game_state_update', (data) => {
+        setCurrentTurnId(data.currentTurnId);
+        
+        // <--- 接收后端传来的剩余时间
+        if (data.turnRemaining !== undefined) {
+             setTurnRemaining(data.turnRemaining);
+        }
+
+        if (data.lastPlayed && data.lastPlayed.length > 0) {
+             SoundManager.play('play'); 
+        }
+
+        if (data.lastPlayed) setLastPlayed(sortHand(data.lastPlayed, sortModeRef.current));
+        setLastPlayerName(data.lastPlayerName || '');
+        
+        if (data.infoText && data.infoText !== 'PASS') {
+            setInfoMessage(data.infoText); setTimeout(()=>setInfoMessage(''), 2000);
+            setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: data.infoText }]);
+        }
+        if (data.scores) setPlayerScores(data.scores);
+        if (data.pendingPoints !== undefined) setPendingPoints(data.pendingPoints);
+
+        if (data.currentTurnId === mySocketIdRef.current) {
+            SoundManager.play('alert');
+        }
+    });
+
+    socket.on('hand_update', (newHand) => {
+        setMyHand(sortHand(newHand, sortModeRef.current)); 
+        setSelectedCards([]);
+    });
+
+    socket.on('play_error', (msg) => { 
+        setInfoMessage(msg); 
+        setTimeout(()=>setInfoMessage(''), 2000); 
+        SoundManager.play('lose'); 
+    }); 
+    
+    socket.on('round_over', (data) => {
+        setRoundResult(data);
+        if (data.grandScores) setPlayerScores(data.grandScores);
+        const amIWinner = data.roundWinner === usernameRef.current;
+        SoundManager.play(amIWinner ? 'win' : 'lose');
+    });
+
+    socket.on('grand_game_over', (data) => {
+        setGrandResult(data);
+        SoundManager.play('win'); 
+    });
+
+    const handleGlobalMouseUp = () => { isDragging.current = false; };
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => { socket.disconnect(); window.removeEventListener('mouseup', handleGlobalMouseUp); };
+  }, []);
+
+  useEffect(() => {
+      sortModeRef.current = sortMode;
+      if (myHand.length > 0) setMyHand(prev => sortHand(prev, sortMode));
+  }, [sortMode]);
+
+  const toggleSort = () => setSortMode(prev => prev === 'POINT' ? 'SUIT' : 'POINT');
+  
+  const handleRoomAction = () => {
+      if (!isConnected) return alert("未连接服务器");
+      if (!username || !roomId) return alert("请输入信息");
+      setIsLoading(true);
+      const event = isCreatorMode ? 'create_room' : 'join_room';
+      const payload = isCreatorMode ? { roomId, username, config: roomConfig } : { roomId, username };
+      socketRef.current.emit(event, payload);
+  };
+  
+  const handleStartGame = () => socketRef.current.emit('start_game', { roomId });
+  const handleNextRound = () => socketRef.current.emit('next_round', { roomId });
+  
+  const updateSelection = (cardVal, forceSelect = null) => {
+    setSelectedCards(prev => {
+        const isSelected = prev.includes(cardVal);
+        if (forceSelect !== null) return forceSelect && !isSelected ? [...prev, cardVal] : (!forceSelect && isSelected ? prev.filter(c => c !== cardVal) : prev);
+        return isSelected ? prev.filter(c => c !== cardVal) : [...prev, cardVal];
+    });
+  };
+
+  const handleMouseDown = (cardVal) => {
+    isDragging.current = true;
+    dragStartMode.current = !selectedCards.includes(cardVal); 
+    updateSelection(cardVal, dragStartMode.current);
+    SoundManager.play('deal'); 
+  };
+  
+  const handleMouseEnter = (cardVal) => {
+    if (isDragging.current) {
+        updateSelection(cardVal, dragStartMode.current);
+    }
+  };
+
+  const handlePlayCards = () => {
+    if (selectedCards.length === 0) return alert("请先选牌");
+    socketRef.current.emit('play_cards', { roomId, cards: selectedCards });
+  };
+  
+  const handlePass = () => {
+    socketRef.current.emit('pass_turn', { roomId });
+    setSelectedCards([]);
+  };
+
+  if (gameState === 'LOGIN') return <LoginScreen {...{username, setUsername, roomId, setRoomId, roomConfig, setRoomConfig, isCreatorMode, setIsCreatorMode, handleRoomAction, isLoading}} />;
+  if (gameState === 'LOBBY') return <LobbyScreen {...{roomId, roomConfig, players, mySocketId, handleStartGame}} />;
+  
+  return <GameScreen {...{
+      roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
+      infoMessage, winner: null, playerScores, pendingPoints, gameLogs, sortMode, 
+      mySocketId, roundResult, grandResult, roomConfig,
+      turnRemaining, // <--- 传递给 GameScreen
+      toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame
+  }} />;
+}
+
+================================================================================
+FILE PATH: client\src\components\BaseUI.jsx
+================================================================================
+// 基础UI组件 (卡牌、头像、日志) - 已添加倒计时支持
+
+import React, { useEffect, useRef } from 'react';
+import { Coins, History } from 'lucide-react';
+import { getCardDisplay } from '../utils/cardLogic';
+import { styles } from '../styles';
+import CountDownTimer from './CountDownTimer'; // <--- 1. 引入组件
+
+export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacing }) => {
+    const { suit, text, color, isScore } = getCardDisplay(cardVal);
+    return (
+        <div 
+            onMouseDown={() => onClick(cardVal)}
+            onMouseEnter={() => onMouseEnter(cardVal)}
+            style={{
+                ...styles.card, 
+                color, 
+                left: index * spacing, 
+                zIndex: index,
+                transform: isSelected ? 'translateY(-40px)' : 'translateY(0)',
+                borderColor: isSelected ? '#3498db' : (isScore ? '#f1c40f' : '#bdc3c7'),
+                boxShadow: isSelected ? '0 0 15px rgba(52, 152, 219, 0.6)' : (isScore ? '0 0 8px rgba(241, 196, 15, 0.4)' : '0 -2px 5px rgba(0,0,0,0.1)'),
+            }}
+        >
+            <div style={{fontSize: 22, fontWeight: 'bold'}}>{text}</div>
+            <div style={{fontSize: 48, alignSelf: 'center', marginTop: 10}}>{suit}</div>
+            {isScore && <div style={{position:'absolute', bottom:5, right:5, fontSize:16, color:'#f1c40f'}}>★</div>}
+        </div>
+    );
+};
+
+export const MiniCard = ({ cardVal, index }) => {
+    const { text, suit, color, isScore } = getCardDisplay(cardVal);
+    return (
+        <div style={{
+            ...styles.miniCard, color,
+            border: isScore ? '2px solid #f1c40f' : '1px solid #ccc',
+            transform: isScore ? 'scale(1.1) translateY(-10px)' : 'scale(1)',
+            zIndex: index
+        }}>
+            {suit}{text}
+        </div>
+    );
+};
+
+// <--- 2. 修改 PlayerAvatar 接收 remainingSeconds
+export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, remainingSeconds }) => {
+    const progress = Math.min((score / targetScore) * 100, 100);
+    return (
+        <div style={{
+            ...styles.playerBox,
+            borderColor: isTurn ? '#f1c40f' : 'rgba(255,255,255,0.1)',
+            transform: isTurn ? 'scale(1.1)' : 'scale(1)',
+            boxShadow: isTurn ? '0 0 25px rgba(241, 196, 15, 0.5)' : 'none',
+            background: isTurn ? 'rgba(44, 62, 80, 0.9)' : 'rgba(44, 62, 80, 0.6)',
+            position: 'relative' // 确保子元素(倒计时)绝对定位准确
+        }}>
+            <div style={styles.avatar}>{player.name[0]}</div>
+            <div style={styles.playerName}>{player.name} {isMySocket && '(我)'}</div>
+            <div style={styles.scoreBarBg}>
+                <div style={{...styles.scoreBarFill, width:`${progress}%`, background: progress>=100?'#e74c3c':'#2ecc71'}}></div>
+            </div>
+            <div style={styles.playerScore}><Coins size={12} color="#f1c40f"/> {score} / {targetScore}</div>
+            
+            {/* 3. 只有轮到该玩家时，才显示倒计时 */}
+            {isTurn && (
+                <CountDownTimer 
+                    initialSeconds={remainingSeconds} 
+                    totalSeconds={60} 
+                />
+            )}
+        </div>
+    );
+};
+
+export const GameLogPanel = ({ logs }) => {
+    const endRef = useRef(null);
+    useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [logs]);
+
+    return (
+        <div style={styles.gameLogPanel}>
+            <div style={styles.logHeader}>
+                <History size={16} color="#f1c40f"/> <span style={{color:'#fff', fontWeight:'bold'}}>对局记录</span>
+            </div>
+            <div style={styles.logList}>
+                {logs.map((log, i) => (
+                    <div key={i} style={styles.logItem}>
+                        <span style={styles.logTime}>[{log.time.split(' ')[0]}]</span>
+                        <span style={{color: '#eee'}}>{log.text}</span>
+                    </div>
+                ))}
+                <div ref={endRef} />
+            </div>
+        </div>
+    );
+};
+
+================================================================================
+FILE PATH: client\src\components\CountDownTimer.jsx
+================================================================================
+import React, { useState, useEffect } from 'react';
+import { Clock } from 'lucide-react';
+
+const CountDownTimer = ({ initialSeconds, totalSeconds = 60 }) => {
+    const [seconds, setSeconds] = useState(initialSeconds);
+
+    useEffect(() => {
+        setSeconds(initialSeconds);
+    }, [initialSeconds]);
+
+    useEffect(() => {
+        if (seconds <= 0) return;
+        const timerId = setInterval(() => {
+            setSeconds((prev) => Math.max(0, prev - 1));
+        }, 1000);
+        return () => clearInterval(timerId);
+    }, [seconds]);
+
+    const isUrgent = seconds <= 10;
+    const color = isUrgent ? '#ff4d4d' : '#ffffff';
+    const bgColor = isUrgent ? 'rgba(231, 76, 60, 0.9)' : 'rgba(0, 0, 0, 0.7)';
+
+    return (
+        <div style={{
+            position: 'absolute',
+            // [修改] 显示在头顶上方，避开下方内容
+            top: -60, 
+            left: '50%',
+            transform: 'translateX(-50%)',
+            
+            // 样式调整：气泡风格
+            background: bgColor,
+            padding: '4px 12px',
+            borderRadius: 20,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            whiteSpace: 'nowrap',
+            boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            zIndex: 30,
+            transition: 'all 0.3s'
+        }}>
+            <Clock size={14} color={color} className={isUrgent ? 'spin' : ''} />
+            <span style={{ 
+                color: color, 
+                fontWeight: 'bold', 
+                fontSize: 16,
+                fontFamily: 'monospace'
+            }}>
+                {seconds}s
+            </span>
+            
+            <style>{`
+                .spin { animation: spin 1s linear infinite; }
+            `}</style>
+        </div>
+    );
+};
+
+export default CountDownTimer;
+
+================================================================================
+FILE PATH: client\src\index.css
+================================================================================
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+a:hover {
+  color: #535bf2;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+button:hover {
+  border-color: #646cff;
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  a:hover {
+    color: #747bff;
+  }
+  button {
+    background-color: #f9f9f9;
+  }
+}
+
+
+================================================================================
+FILE PATH: client\src\main.jsx
+================================================================================
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import './index.css'
+import App from './App.jsx'
+
+createRoot(document.getElementById('root')).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+)
+
+
+================================================================================
+FILE PATH: client\src\screens\GameScreen.jsx
+================================================================================
+// 游戏主界面 - 已添加倒计时透传
+import React from 'react';
+import { Coins, Layers, Crown, Clock } from 'lucide-react';
+import { styles } from '../styles';
+import { Card, MiniCard, PlayerAvatar, GameLogPanel } from '../components/BaseUI';
+import { calculateCardSpacing } from '../utils/cardLogic';
+
+export const GameScreen = ({ 
+    roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
+    infoMessage, winner, playerScores, pendingPoints, gameLogs, sortMode, 
+    mySocketId, roundResult, grandResult, roomConfig,
+    turnRemaining, // <--- 接收剩余时间
+    toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame 
+}) => {
+    const isMyTurn = currentTurnId === mySocketId;
+    const amIHost = players.find(p => p.id === mySocketId)?.isHost;
+    const cardSpacing = calculateCardSpacing(myHand.length, window.innerWidth);
+
+    return (
+        <div style={styles.gameTable} onMouseUp={() => { /* Global Mouse Up Handled in App */ }}>
+            <GameLogPanel logs={gameLogs} />
+
+            <div style={styles.tableHeader}>
+                <div style={styles.roomBadge}>Room {roomId}</div>
+                <div style={styles.scoreBoard}>
+                    <div style={{fontSize: 12, opacity: 0.8, textTransform:'uppercase'}}>Table Points</div>
+                    <div style={{fontSize: 32, fontWeight: 'bold', color: '#f1c40f', display:'flex', alignItems:'center', gap:8}}><Coins size={28} /> {pendingPoints}</div>
+                </div>
+                <button style={styles.sortButton} onClick={toggleSort}><Layers size={16} style={{marginRight:5}}/> {sortMode === 'POINT' ? '点数' : '花色'}</button>
+            </div>
+
+            <div style={styles.infoMessage}>{infoMessage}</div>
+
+            {/* 弹窗区域 */}
+            {(winner || roundResult || grandResult) && (
+                <div style={styles.modalOverlay}>
+                    <div style={styles.modalContent}>
+                        {grandResult ? (
+                            <>
+                                <Crown size={80} color="#e74c3c" style={{marginBottom: 20}} />
+                                <h2 style={{fontSize: 32, marginBottom: 10, color:'#2c3e50'}}>最终冠军: {grandResult.grandWinner}</h2>
+                                <button style={{...styles.primaryButton, fontSize: 18}} onClick={handleStartGame}>重新开始</button>
+                            </>
+                        ) : roundResult ? (
+                            <>
+                                <Coins size={60} color="#f1c40f" style={{marginBottom: 20}} />
+                                <h2 style={{fontSize: 28}}>小局结束</h2>
+                                <div style={{fontSize: 20}}>胜者: <span style={{color:'#27ae60'}}>{roundResult.roundWinner}</span></div>
+                                <div style={{fontSize: 32, fontWeight:'bold', color:'#f1c40f', margin:'10px 0'}}>+{roundResult.pointsEarned} 分</div>
+                                <div style={{color:'#666', fontSize:14, marginBottom:30}}>{roundResult.detail}</div>
+                                {amIHost ? <button style={styles.primaryButton} onClick={handleNextRound}>下一局</button> : <div style={{color:'#999'}}>等待房主...</div>}
+                            </>
+                        ) : null}
+                    </div>
+                </div>
+            )}
+
+            {/* 桌面区域 */}
+            <div style={styles.tableCenter}>
+                {lastPlayed.length > 0 && (
+                    <div style={{animation: 'popIn 0.3s'}}>
+                        <div style={styles.playerNameTag}>{lastPlayerName}</div>
+                        <div style={styles.playedRow}>
+                            {lastPlayed.map((c, i) => <MiniCard key={i} cardVal={c} index={i} />)}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* 玩家区域 */}
+            <div style={styles.playersArea}>
+                {players.map((p, i) => (
+                    <PlayerAvatar 
+                        key={i} 
+                        player={p} 
+                        isTurn={p.id === currentTurnId} 
+                        score={playerScores[p.id] || 0} 
+                        targetScore={roomConfig.targetScore} 
+                        isMySocket={p.id === mySocketId}
+                        remainingSeconds={turnRemaining} // <--- 传给 BaseUI
+                    />
+                ))}
+            </div>
+
+            {/* 手牌区域 */}
+            <div style={styles.handArea}>
+                {myHand.map((c, i) => (
+                    <Card key={`${c}-${i}`} cardVal={c} index={i} isSelected={selectedCards.includes(c)} onClick={handleMouseDown} onMouseEnter={handleMouseEnter} spacing={cardSpacing} />
+                ))}
+            </div>
+
+            {/* 操作栏 */}
+            <div style={styles.actionBar}>
+                {!winner && !roundResult && !grandResult && (
+                    <div style={{display:'flex', gap: 20}}>
+                        {isMyTurn ? (
+                            <>
+                                <button style={styles.passButton} onClick={handlePass}>不要</button>
+                                <button style={styles.playButton} onClick={handlePlayCards}>出牌</button>
+                            </>
+                        ) : (
+                            <div style={styles.waitingBadge}><Clock size={20} className="spin" /> 等待对方...</div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+================================================================================
+FILE PATH: client\src\screens\LobbyScreen.jsx
+================================================================================
+// 大厅页
+
+import React from 'react';
+import { Target, Layers, User, Play, Clock } from 'lucide-react';
+import { styles } from '../styles';
+
+export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleStartGame }) => (
+    <div style={styles.container}>
+      <div style={styles.lobbyCard}>
+          <div style={styles.lobbyHeader}>
+              <h2 style={{margin:0, fontSize: 24}}>房间: <span style={{fontFamily:'monospace', color:'#27ae60'}}>{roomId}</span></h2>
+              <div style={{display:'flex', gap:15}}>
+                  <span style={styles.tag}><Target size={14}/> 目标 {roomConfig.targetScore}</span>
+                  <span style={styles.tag}><Layers size={14}/> {roomConfig.deckCount}副牌</span>
+                  <span style={styles.tag}><User size={14}/> {roomConfig.maxPlayers}人</span>
+              </div>
+          </div>
+          <div style={styles.playerGrid}>
+              {players.map((p,i)=>(
+                  <div key={i} style={{...styles.lobbyPlayer, borderColor: p.id===mySocketId ? '#27ae60' : '#eee', background: p.id===mySocketId ? '#f0fbf4' : 'white'}}>
+                      <div style={styles.avatarLarge}>{p.name[0]}</div>
+                      <div style={{fontWeight: 'bold'}}>{p.name}</div>
+                      {p.isHost && <span style={styles.hostBadge}>房主</span>}
+                  </div>
+              ))}
+              {Array.from({length: roomConfig.maxPlayers - players.length}).map((_, i) => (
+                  <div key={`empty-${i}`} style={{...styles.lobbyPlayer, borderStyle: 'dashed', opacity: 0.5}}>
+                      <div style={{...styles.avatarLarge, background:'#f0f0f0', color:'#ccc'}}>?</div>
+                      <div style={{color:'#999'}}>等待加入</div>
+                  </div>
+              ))}
+          </div>
+          <div style={styles.lobbyFooter}>
+              {players.find(p=>p.id===mySocketId)?.isHost ? (
+                  <button style={styles.primaryButton} onClick={handleStartGame} disabled={players.length < 2}><Play size={18} style={{marginRight:5}}/> 开始对战</button>
+              ) : (
+                  <div style={{color:'#999', fontSize: 14, display:'flex', alignItems:'center', gap:5}}><Clock size={16}/> 等待房主开始...</div>
+              )}
+          </div>
+      </div>
+    </div>
+);
+
+================================================================================
+FILE PATH: client\src\screens\LoginScreen.jsx
+================================================================================
+// 登录页
+import React from 'react';
+import { User, Monitor, RefreshCw, Plus, LogIn } from 'lucide-react';
+import { styles } from '../styles';
+
+export const LoginScreen = ({ username, setUsername, roomId, setRoomId, roomConfig, setRoomConfig, isCreatorMode, setIsCreatorMode, handleRoomAction, isLoading }) => (
+    <div style={styles.container}>
+        <div style={styles.loginCard}>
+           <div style={styles.loginLeft}>
+               <div style={styles.logoArea}>510K</div>
+               <h1 style={{color:'#2c3e50', fontSize: 28, margin:0}}>扑克对战</h1>
+               <div style={{color:'#95a5a6', marginTop: 10}}>PC 模块化重构版 v8.0</div>
+           </div>
+           <div style={styles.loginRight}>
+               <div style={styles.tabs}>
+                   <button style={{...styles.tabBtn, borderBottom: !isCreatorMode ? '2px solid #27ae60' : '2px solid transparent', color: !isCreatorMode ? '#27ae60' : '#999'}} onClick={()=>setIsCreatorMode(false)}>加入房间</button>
+                   <button style={{...styles.tabBtn, borderBottom: isCreatorMode ? '2px solid #27ae60' : '2px solid transparent', color: isCreatorMode ? '#27ae60' : '#999'}} onClick={()=>setIsCreatorMode(true)}>创建房间</button>
+               </div>
+               <div style={{marginTop: 20}}>
+                   <div style={styles.inputGroup}><User size={18} color="#999"/><input style={styles.input} value={username} onChange={e=>setUsername(e.target.value)} placeholder="你的昵称"/></div>
+                   <div style={styles.inputGroup}><Monitor size={18} color="#999"/><input style={styles.input} value={roomId} onChange={e=>setRoomId(e.target.value)} placeholder="房间号码"/></div>
+               </div>
+               {isCreatorMode && (
+                   <div style={styles.configBox}>
+                        <div style={styles.configRow}><span>人数: {roomConfig.maxPlayers}</span><input type="range" min="2" max="6" value={roomConfig.maxPlayers} onChange={e=>setRoomConfig({...roomConfig, maxPlayers:parseInt(e.target.value)})}/></div>
+                        <div style={styles.configRow}><span>牌数: {roomConfig.deckCount}</span><input type="range" min="1" max="3" value={roomConfig.deckCount} onChange={e=>setRoomConfig({...roomConfig, deckCount:parseInt(e.target.value)})}/></div>
+                        <div style={styles.configRow}><span>目标: {roomConfig.targetScore}</span><input type="range" min="500" max="2000" step="100" value={roomConfig.targetScore} onChange={e=>setRoomConfig({...roomConfig, targetScore:parseInt(e.target.value)})}/></div>
+                   </div>
+               )}
+               <button style={{...styles.primaryButton, marginTop:30}} onClick={handleRoomAction} disabled={isLoading}>
+                   {isLoading ? <RefreshCw className="spin" size={20}/> : (isCreatorMode ? <Plus size={20}/> : <LogIn size={20}/>)}
+                   <span style={{marginLeft:10}}>{isCreatorMode ? "立即创建" : "进入房间"}</span>
+               </button>
+           </div>
+        </div>
+        <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+    </div>
+);
+
+================================================================================
+FILE PATH: client\src\styles.js
+================================================================================
+// 统一样式文件
+export const styles = {
+  container: { height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#2c3e50', fontFamily: '"Segoe UI", Roboto, Helvetica, Arial, sans-serif', backgroundImage: 'linear-gradient(135deg, #2c3e50 0%, #000000 100%)' },
+  
+  // Login
+  loginCard: { background: 'white', padding: 50, borderRadius: 20, width: '800px', maxWidth: '90vw', height: '500px', display: 'flex', boxShadow: '0 30px 60px rgba(0,0,0,0.5)' },
+  loginLeft: { flex: 1, borderRight: '1px solid #eee', paddingRight: 40, display:'flex', flexDirection:'column', justifyContent:'center' },
+  loginRight: { flex: 1.5, paddingLeft: 40 },
+  logoArea: { fontSize: 60, fontWeight: '900', color: '#f1c40f', lineHeight: 1 },
+  tabs: { display: 'flex', gap: 20, marginBottom: 20, borderBottom: '1px solid #eee' },
+  tabBtn: { padding: '10px 0', fontSize: 16, fontWeight: 'bold', background: 'none', cursor: 'pointer', transition: 'all 0.3s' },
+  inputGroup: { display: 'flex', alignItems: 'center', background: '#f5f7fa', borderRadius: 8, padding: '0 15px', marginBottom: 15, border: '1px solid #e1e4e8', height: 50 },
+  input: { padding: '10px', border: 'none', background: 'transparent', flex: 1, outline:'none', fontSize: 16 },
+  configBox: { background: '#f8f9fa', padding: 15, borderRadius: 8, border: '1px solid #eee' },
+  configRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, fontSize: 14, color: '#666' },
+  primaryButton: { width: '100%', padding: '15px', background: '#27ae60', color: 'white', border: 'none', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: 16, transition: 'background 0.2s', boxShadow: '0 4px 15px rgba(39, 174, 96, 0.3)' },
+
+  // Lobby
+  lobbyCard: { background: 'white', padding: 40, borderRadius: 20, width: '1000px', maxWidth: '90vw', minHeight: '600px', display: 'flex', flexDirection: 'column', boxShadow: '0 30px 60px rgba(0,0,0,0.5)' },
+  lobbyHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30, paddingBottom: 20, borderBottom: '1px solid #eee' },
+  tag: { background: '#f0f9f4', color: '#27ae60', padding: '5px 10px', borderRadius: 20, fontSize: 14, display: 'flex', alignItems: 'center', gap: 5 },
+  playerGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 20, flex: 1, alignContent: 'start' },
+  lobbyPlayer: { border: '2px solid #eee', borderRadius: 12, padding: 25, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15, position: 'relative', transition: 'all 0.2s' },
+  avatarLarge: { width: 80, height: 80, borderRadius: '50%', background: '#34495e', color: 'white', fontSize: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
+  hostBadge: { position: 'absolute', top: 10, right: 10, background: '#f1c40f', color: '#333', fontSize: 12, padding: '4px 8px', borderRadius: 4, fontWeight: 'bold' },
+  lobbyFooter: { marginTop: 'auto', borderTop: '1px solid #eee', paddingTop: 20, display: 'flex', justifyContent: 'center' },
+
+  // Game
+  gameTable: { height: '100vh', width: '100vw', background: '#1e3c29', backgroundImage: 'radial-gradient(circle at center, #2d7a54 0%, #173b25 100%)', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', userSelect: 'none' },
+  gameLogPanel: { position: 'absolute', top: 20, left: 20, width: 250, bottom: 280, background: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: 20, display: 'flex', flexDirection: 'column', zIndex: 5, backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)' },
+  logHeader: { display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: 10 },
+  logList: { flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13, scrollbarWidth: 'thin' },
+  logItem: { lineHeight: 1.5, display: 'flex', alignItems: 'flex-start' },
+  logTime: { opacity: 0.5, fontSize: 10, marginRight: 8, width: 45, display: 'inline-block', color: '#ccc' },
+  tableHeader: { padding: '20px 40px', display: 'flex', justifyContent: 'space-between', alignItems:'flex-start', zIndex: 20 },
+  roomBadge: { background: 'rgba(0,0,0,0.3)', color:'white', padding: '8px 20px', borderRadius: 20, fontSize: 16, border: '1px solid rgba(255,255,255,0.1)', fontWeight: 'bold' },
+  scoreBoard: { position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.5)', padding: '10px 50px', borderRadius: 20, textAlign: 'center', color: 'white', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' },
+  sortButton: { background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 20px', borderRadius: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: 14, transition: 'background 0.2s' },
+  infoMessage: { position: 'absolute', top: 150, width: '100%', textAlign: 'center', color: '#f1c40f', fontSize: 40, fontWeight: 'bold', textShadow: '0 5px 15px rgba(0,0,0,0.5)', pointerEvents: 'none', zIndex: 50, letterSpacing: 2 },
+  tableCenter: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', paddingBottom: 150 },
+  playerNameTag: { color: 'white', textAlign: 'center', marginBottom: 15, textShadow: '0 2px 4px rgba(0,0,0,0.5)', fontSize: 18, fontWeight: 'bold', background: 'rgba(0,0,0,0.3)', padding: '5px 20px', borderRadius: 20, display: 'inline-block' },
+  playedRow: { display: 'flex', gap: -10, filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.3))' }, 
+  miniCard: { background: 'white', padding: '15px 20px', borderRadius: 10, fontWeight: 'bold', fontSize: 28, minWidth: 50, textAlign:'center' },
+  
+  // [修改] 增大下边距 (200 -> 320)，让头像上移，避开手牌
+  playersArea: { display: 'flex', justifyContent: 'center', gap: 40, marginBottom: 320 },
+  
+  playerBox: { padding: 20, borderRadius: 16, textAlign: 'center', minWidth: 140, color:'white', border: '2px solid transparent', transition: 'all 0.3s', position: 'relative' },
+  
+  avatar: { width: 80, height: 80, background: '#ecf0f1', borderRadius: '50%', margin: '0 auto 10px', lineHeight: '80px', color:'#333', fontWeight:'bold', fontSize: 28, border: '2px solid rgba(255,255,255,0.2)' },
+  
+  playerName: { fontSize: 16, fontWeight: 'bold', marginBottom: 5 },
+  scoreBarBg: { width:'100%', height:6, background:'rgba(0,0,0,0.5)', borderRadius:3, marginTop:5, overflow:'hidden' },
+  scoreBarFill: { height:'100%', transition:'width 0.5s' },
+  playerScore: { fontSize: 14, color: '#f1c40f', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 5 },
+  turnProgress: { position: 'absolute', bottom: 0, left: 0, height: 4, background: '#f1c40f', width: '100%', animation: 'progress 15s linear forwards' },
+  handArea: { position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)', height: 180, width: '90%', maxWidth: 1600, display: 'flex', justifyContent:'center' },
+  card: { background: 'white', borderRadius: 12, border: '1px solid #999', position: 'absolute', cursor: 'pointer', display: 'flex', flexDirection: 'column', padding: 10, transition: 'transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1)', width: 100, height: 140 },
+  actionBar: { position: 'absolute', bottom: 0, width: '100%', height: 100, background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)', display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none' }, 
+  playButton: { pointerEvents: 'auto', padding: '15px 60px', background: 'linear-gradient(to bottom, #f1c40f, #f39c12)', border: 'none', borderRadius: 40, fontWeight: 'bold', cursor: 'pointer', marginLeft: 20, fontSize: 20, boxShadow: '0 8px 20px rgba(243, 156, 18, 0.4)', color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.2)', transition: 'transform 0.1s' },
+  passButton: { pointerEvents: 'auto', padding: '15px 40px', background: '#7f8c8d', border: 'none', borderRadius: 40, fontWeight: 'bold', cursor: 'pointer', fontSize: 18, color: 'white', boxShadow: '0 5px 15px rgba(0,0,0,0.3)' },
+  waitingBadge: { color: 'rgba(255,255,255,0.7)', fontSize: 16, display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(0,0,0,0.3)', padding: '10px 20px', borderRadius: 30 },
+  modalOverlay: { position: 'fixed', top:0, left:0, right:0, bottom:0, background: 'rgba(0,0,0,0.85)', display:'flex', justifyContent:'center', alignItems:'center', zIndex: 99, backdropFilter: 'blur(8px)' },
+  modalContent: { background: 'white', padding: 60, borderRadius: 30, textAlign: 'center', boxShadow: '0 30px 80px rgba(0,0,0,0.6)', animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }
+};
+
+================================================================================
+FILE PATH: client\src\utils\cardLogic.js
+================================================================================
+// 纯逻辑工具
+
+// 排序权重：2(15) > A(14) > K(13)...
+export const getSortValue = (cardVal) => {
+    const normalized = cardVal % 54;
+    if (normalized === 52) return 16;
+    if (normalized === 53) return 17;
+    const base = normalized % 13;
+    if (base === 0) return 14; 
+    if (base === 1) return 15; 
+    return base + 1;
+};
+
+// 花色排序权重
+export const getSuitSortValue = (cardVal) => {
+    if (cardVal >= 52) return cardVal * 100;
+    const suit = Math.floor(cardVal / 13) % 4; 
+    const val = cardVal % 13;
+    return suit * 100 + val; 
+};
+
+// 获取单张牌的显示信息
+export const getCardDisplay = (cardVal) => {
+    const normalizedValue = cardVal % 54; 
+    if (normalizedValue === 52) return { suit: 'Joker', text: '小王', color: '#000', isScore: false };
+    if (normalizedValue === 53) return { suit: 'Joker', text: '大王', color: '#d00', isScore: false };
+    
+    const suits = ['♠', '♥', '♣', '♦'];
+    const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+    const valueIndex = normalizedValue % 13;
+    const suit = suits[Math.floor(normalizedValue / 13)];
+    const color = (suit === '♥' || suit === '♦') ? '#d00' : '#000';
+    const text = values[valueIndex];
+    const isScore = (text === '5' || text === '10' || text === 'K');
+    
+    return { suit, text, color, isScore };
+};
+
+// 手牌排序
+export const sortHand = (cards, mode = 'POINT') => {
+    if (mode === 'SUIT') {
+        return [...cards].sort((a, b) => getSuitSortValue(b) - getSuitSortValue(a));
+    }
+    return [...cards].sort((a, b) => getSortValue(b) - getSortValue(a));
+};
+
+// 计算手牌间距
+export const calculateCardSpacing = (count, screenWidth) => {
+    if (count <= 1) return 0;
+    const w = Math.min(screenWidth * 0.9, 1400); // 宽屏适配
+    const cardWidth = 100; 
+    const maxGap = 50; 
+    const neededWidth = (count - 1) * maxGap + cardWidth;
+    return neededWidth <= w ? maxGap : (w - cardWidth) / (count - 1);
+};
+
+================================================================================
+FILE PATH: client\src\utils\SoundManager.js
+================================================================================
+/**
+ * 简易 Web Audio API 音效管理器
+ * 不需要外部 MP3 文件，直接用代码生成声音
+ */
+const SoundManager = {
+    ctx: null,
+
+    init: () => {
+        if (!SoundManager.ctx) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            SoundManager.ctx = new AudioContext();
+        }
+    },
+
+    // 播放指定类型的音效
+    play: (type) => {
+        try {
+            // 某些浏览器需要用户交互后才能恢复 Context
+            if (SoundManager.ctx && SoundManager.ctx.state === 'suspended') {
+                SoundManager.ctx.resume();
+            }
+            if (!SoundManager.ctx) SoundManager.init();
+
+            switch (type) {
+                case 'deal': // 发牌/点击牌 (短促的高频音)
+                    SoundManager.beep(800, 0.05, 'sine');
+                    break;
+                case 'play': // 出牌 (有打击感)
+                    SoundManager.noise(0.1); 
+                    break;
+                case 'win': // 胜利 (连续的琶音)
+                    SoundManager.arpeggio([523.25, 659.25, 783.99, 1046.50], 0.1);
+                    break;
+                case 'lose': // 失败/被压 (低沉)
+                    SoundManager.beep(150, 0.3, 'sawtooth');
+                    break;
+                case 'alert': // 轮到你了
+                    SoundManager.beep(880, 0.1, 'square');
+                    setTimeout(() => SoundManager.beep(880, 0.1, 'square'), 150);
+                    break;
+                default:
+                    break;
+            }
+        } catch (e) {
+            console.warn('Audio play failed:', e);
+        }
+    },
+
+    // --- 合成器底层函数 ---
+
+    // 发出单音
+    beep: (freq, duration, type = 'sine') => {
+        const ctx = SoundManager.ctx;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+    },
+
+    // 模拟打击声 (白噪音)
+    noise: (duration) => {
+        const ctx = SoundManager.ctx;
+        const bufferSize = ctx.sampleRate * duration;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+
+        noise.connect(gain);
+        gain.connect(ctx.destination);
+        noise.start();
+    },
+
+    // 琶音 (胜利音效)
+    arpeggio: (freqs, interval) => {
+        freqs.forEach((f, i) => {
+            setTimeout(() => SoundManager.beep(f, 0.2, 'triangle'), i * interval * 1000);
+        });
+    }
+};
+
+export default SoundManager;
+
+================================================================================
+FILE PATH: client\vite.config.js
+================================================================================
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+// https://vite.dev/config/
+export default defineConfig({
+  plugins: [react()],
+})
 
 
 ================================================================================
@@ -218,20 +1264,345 @@ module.exports = Deck;
 ================================================================================
 FILE PATH: server\game\GameManager.js
 ================================================================================
-// 房间管理、游戏流程控制 (Deal, Play, Pass)
+const CardRules = require('./CardRules');
+const Deck = require('./Deck');
+
+// --- 配置：超时时间设置 ---
+const TURN_TIME_LIMIT = 60000; // 60秒 = 60000毫秒
+
+class GameManager {
+    // 构造函数接收 io 和 roomId，用于主动广播
+    constructor(roomConfig, players, io, roomId) {
+        this.config = roomConfig;
+        this.players = players; 
+        
+        this.io = io; 
+        this.roomId = roomId;
+
+        this.grandScores = {};
+        this.players.forEach(p => this.grandScores[p.id] = 0);
+        this.lastWinnerId = null;
+        this.gameState = null; 
+        
+        // --- 倒计时相关 ---
+        this.timer = null;
+        this.turnStartTime = 0; // 记录当前回合开始的时间戳
+    }
+
+    // --- 流程控制 ---
+
+    startRound(isNextRound = false) {
+        if (!isNextRound) {
+            this.players.forEach(p => this.grandScores[p.id] = 0);
+            this.lastWinnerId = null;
+        }
+
+        const deck = new Deck(this.config.deckCount);
+        const hands = deck.deal(this.players.length);
+
+        let startIndex = 0;
+        if (this.lastWinnerId) {
+            const winnerIdx = this.players.findIndex(p => p.id === this.lastWinnerId);
+            if (winnerIdx !== -1) startIndex = winnerIdx;
+        }
+
+        this.gameState = {
+            hands: {},
+            currentTurnIndex: startIndex,
+            lastPlayedCards: [],    
+            consecutivePasses: 0,   
+            roundPoints: {},        
+            pendingTablePoints: 0,  
+            roundWinnerId: null,    
+        };
+
+        this.players.forEach((p, index) => {
+            this.gameState.hands[p.id] = hands[index];
+            this.gameState.roundPoints[p.id] = 0;
+        });
+
+        // 启动倒计时
+        this._resetTimer();
+
+        return {
+            startPlayerIndex: startIndex,
+            startPlayerId: this.players[startIndex].id,
+            hands: this.gameState.hands
+        };
+    }
+
+    // --- 玩家动作 ---
+
+    playCards(playerId, cards) {
+        if (!this.gameState) return { success: false, error: '游戏未开始' };
+
+        const currPlayer = this.players[this.gameState.currentTurnIndex];
+        if (currPlayer.id !== playerId) return { success: false, error: '还没轮到你' };
+
+        // 1. 校验手牌
+        const playerHand = this.gameState.hands[playerId];
+        if (!this._handContainsCards(playerHand, cards)) {
+            return { success: false, error: '手牌不足或数据不同步' };
+        }
+
+        // 2. 校验规则
+        const isNewRound = this.gameState.lastPlayedCards.length === 0 || 
+                           this.gameState.consecutivePasses >= this.players.length - 1;
+        const cardsToBeat = isNewRound ? [] : this.gameState.lastPlayedCards;
+
+        if (!CardRules.canPlay(cards, cardsToBeat, this.config.deckCount)) {
+            return { success: false, error: '牌型不符或管不上' };
+        }
+
+        // 3. 执行出牌
+        this._removeCardsFromHand(playerId, cards);
+        this.gameState.pendingTablePoints += CardRules.calculateTotalScore(cards);
+        this.gameState.lastPlayedCards = cards;
+        this.gameState.consecutivePasses = 0;
+        this.gameState.roundWinnerId = playerId;
+
+        // 4. 轮转
+        this._advanceTurn();
+
+        // 5. 结算判定
+        const isWin = this.gameState.hands[playerId].length === 0;
+        let roundResult = null;
+        
+        if (isWin) {
+            this._clearTimer(); // 赢了停止计时
+            roundResult = this._concludeRound(playerId);
+        } else {
+            this._resetTimer(); //哪怕只有一个人，轮到下家也要重置时间
+        }
+
+        return { 
+            success: true, 
+            isWin, 
+            roundResult, 
+            cardsPlayed: cards,
+            pendingPoints: this.gameState.pendingTablePoints
+        };
+    }
+
+    passTurn(playerId) {
+        if (!this.gameState) return { success: false, error: '游戏未开始' };
+
+        const currPlayer = this.players[this.gameState.currentTurnIndex];
+        if (currPlayer.id !== playerId) return { success: false, error: '还没轮到你' };
+
+        if (this.gameState.lastPlayedCards.length === 0 || 
+            this.gameState.consecutivePasses >= this.players.length - 1) {
+            return { success: false, error: '必须出牌' };
+        }
+
+        this.gameState.consecutivePasses++;
+        this._advanceTurn();
+
+        let turnCleared = false;
+        if (this.gameState.consecutivePasses >= this.players.length - 1) {
+            const wId = this.gameState.roundWinnerId;
+            if (wId) {
+                this.gameState.roundPoints[wId] = (this.gameState.roundPoints[wId] || 0) + this.gameState.pendingTablePoints;
+                this.gameState.pendingTablePoints = 0;
+                const wIdx = this.players.findIndex(p => p.id === wId);
+                this.gameState.currentTurnIndex = wIdx;
+            }
+            this.gameState.lastPlayedCards = [];
+            turnCleared = true;
+        }
+
+        this._resetTimer(); // 轮到下一个人，重置计时
+
+        return { success: true, turnCleared };
+    }
+
+    // --- 核心：倒计时与自动托管 ---
+
+    _clearTimer() {
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+    }
+
+    _resetTimer() {
+        this._clearTimer();
+        
+        if (this.gameState) {
+            // 记录当前这一轮的开始时间戳
+            this.turnStartTime = Date.now();
+            
+            this.timer = setTimeout(() => {
+                this._handleTimeout();
+            }, TURN_TIME_LIMIT);
+        }
+    }
+
+    _handleTimeout() {
+        if (!this.gameState) return;
+        
+        const currIdx = this.gameState.currentTurnIndex;
+        const currPlayer = this.players[currIdx];
+        
+        console.log(`[Timeout] Player ${currPlayer.name} (${currPlayer.id}) timed out.`);
+
+        // 判断是否必须出牌
+        const isNewRound = this.gameState.lastPlayedCards.length === 0 || 
+                           this.gameState.consecutivePasses >= this.players.length - 1;
+
+        if (isNewRound) {
+            // 必须出牌 -> 自动出最小牌
+            const hand = this.gameState.hands[currPlayer.id];
+            const sorted = hand.map(c => ({ id: c, val: CardRules.getPoint(c) })).sort((a, b) => a.val - b.val);
+            const cardToPlay = [sorted[0].id]; 
+            
+            const result = this.playCards(currPlayer.id, cardToPlay);
+            
+            if (result.success) {
+                this.io.to(currPlayer.id).emit('hand_update', this.gameState.hands[currPlayer.id]);
+                
+                const publicState = this.getPublicState();
+                publicState.infoText = `${currPlayer.name} 超时，系统代打`;
+                this.io.to(this.roomId).emit('game_state_update', publicState);
+            }
+        } else {
+            // 可以过牌 -> 自动喊过
+            this.passTurn(currPlayer.id);
+            
+            const publicState = this.getPublicState();
+            publicState.infoText = `${currPlayer.name} 超时，自动过牌`;
+            this.io.to(this.roomId).emit('game_state_update', publicState);
+        }
+    }
+
+    // --- 获取公共状态 (新增 turnRemaining) ---
+    
+    getPublicState() {
+        if (!this.gameState) return null;
+        
+        const currentScoresDisplay = {};
+        this.players.forEach(p => {
+            currentScoresDisplay[p.id] = (this.grandScores[p.id] || 0) + (this.gameState.roundPoints[p.id] || 0);
+        });
+
+        const winnerObj = this.players.find(p => p.id === this.gameState.roundWinnerId);
+
+        // >>> 新增：计算剩余秒数 <<<
+        let remainingSeconds = 0;
+        if (this.turnStartTime) {
+            const elapsed = Date.now() - this.turnStartTime;
+            // 总时间 - 已经过去的时间 = 剩余时间
+            remainingSeconds = Math.max(0, Math.ceil((TURN_TIME_LIMIT - elapsed) / 1000));
+        }
+        
+        return {
+            turnIndex: this.gameState.currentTurnIndex,
+            currentTurnId: this.players[this.gameState.currentTurnIndex].id,
+            // 告诉前端还剩多少秒
+            turnRemaining: remainingSeconds, 
+            lastPlayed: this.gameState.lastPlayedCards,
+            lastPlayerName: winnerObj ? winnerObj.name : '',
+            scores: currentScoresDisplay,
+            pendingPoints: this.gameState.pendingTablePoints
+        };
+    }
+
+    reconnectPlayer(oldId, newId) {
+        if (this.grandScores[oldId] !== undefined) {
+            this.grandScores[newId] = this.grandScores[oldId];
+            delete this.grandScores[oldId];
+        }
+        if (this.lastWinnerId === oldId) this.lastWinnerId = newId;
+
+        if (this.gameState) {
+            if (this.gameState.hands[oldId]) {
+                this.gameState.hands[newId] = this.gameState.hands[oldId];
+                delete this.gameState.hands[oldId];
+            }
+            if (this.gameState.roundPoints[oldId] !== undefined) {
+                this.gameState.roundPoints[newId] = this.gameState.roundPoints[oldId];
+                delete this.gameState.roundPoints[oldId];
+            }
+            if (this.gameState.roundWinnerId === oldId) this.gameState.roundWinnerId = newId;
+            
+            // 重连回来，如果正在轮到他，不需要重置计时器，直接继续倒计时即可
+            // (因为 turnStartTime 没变，getPublicState 会算出剩余时间)
+        }
+        return true;
+    }
+    
+    _advanceTurn() {
+        this.gameState.currentTurnIndex = (this.gameState.currentTurnIndex + 1) % this.players.length;
+    }
+
+    _handContainsCards(hand, cardsToPlay) {
+        const tempHand = [...hand];
+        for (let c of cardsToPlay) {
+            const idx = tempHand.indexOf(c);
+            if (idx === -1) return false;
+            tempHand.splice(idx, 1);
+        }
+        return true;
+    }
+
+    _removeCardsFromHand(playerId, cards) {
+        const newHand = [...this.gameState.hands[playerId]];
+        for (let c of cards) {
+            const idx = newHand.indexOf(c);
+            if (idx !== -1) newHand.splice(idx, 1);
+        }
+        this.gameState.hands[playerId] = newHand;
+    }
+
+    _concludeRound(winnerId) {
+        this.lastWinnerId = winnerId;
+        let totalRoundScore = this.gameState.pendingTablePoints;
+        let penaltyLog = "";
+
+        this.players.forEach(p => {
+            if (p.id !== winnerId) {
+                const handPts = CardRules.calculateTotalScore(this.gameState.hands[p.id]);
+                if (handPts > 0) {
+                    totalRoundScore += handPts;
+                    penaltyLog += `${p.name}剩${handPts}分 `;
+                }
+            }
+        });
+
+        totalRoundScore += (this.gameState.roundPoints[winnerId] || 0);
+        this.grandScores[winnerId] += totalRoundScore;
+        const isGrandOver = this.grandScores[winnerId] >= this.config.targetScore;
+        if (isGrandOver) this.gameState = null; 
+
+        return {
+            roundWinnerName: this.players.find(p=>p.id===winnerId).name,
+            pointsEarned: totalRoundScore,
+            detail: penaltyLog ? `罚分: ${penaltyLog}` : '无罚分',
+            grandScores: this.grandScores,
+            isGrandOver
+        };
+    }
+    
+    getPlayerHand(playerId) {
+        if (!this.gameState || !this.gameState.hands) return [];
+        return this.gameState.hands[playerId] || [];
+    }
+}
+
+module.exports = GameManager;
 
 ================================================================================
 FILE PATH: server\index.js
 ================================================================================
-// (原 server.js) 程序入口，只负责启动服务和 Socket 监听
+// 程序入口，只负责启动服务和 Socket 监听
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const path = require('path');
 
 // 引入模块
-const CardRules = require('./game/CardRules');
-const Deck = require('./game/Deck');
+const GameManager = require('./game/GameManager');
 
 const app = express();
 app.use(cors());
@@ -241,27 +1612,22 @@ const io = new Server(server, {
     cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
+// 内存数据库
 const rooms = {}; 
 
+/**
+ * 辅助函数：向房间内所有人广播最新状态
+ */
 function broadcastGameState(io, roomId, room, infoText = null) {
-    const game = room.game;
-    if (!game) return;
-    const players = room.players;
+    if (!room.gameManager) return;
     
-    const currentScoresDisplay = {};
-    players.forEach(p => {
-        currentScoresDisplay[p.id] = (room.grandScores[p.id] || 0) + (game.roundPoints[p.id] || 0);
-    });
+    // 从 GameManager 获取纯净的 UI 展示数据
+    const publicState = room.gameManager.getPublicState();
+    if (!publicState) return;
 
-    io.to(roomId).emit('game_state_update', {
-        turnIndex: game.currentTurnIndex,
-        currentTurnId: players[game.currentTurnIndex].id,
-        lastPlayed: game.lastPlayedCards,
-        lastPlayerName: players.find(p => p.id === game.roundWinnerId)?.name || '',
-        infoText: infoText,
-        scores: currentScoresDisplay,
-        pendingPoints: game.pendingTablePoints
-    });
+    if (infoText) publicState.infoText = infoText;
+
+    io.to(roomId).emit('game_state_update', publicState);
 }
 
 io.on('connection', (socket) => {
@@ -272,21 +1638,25 @@ io.on('connection', (socket) => {
     socket.on('create_room', ({ roomId, username, config }) => {
         if (rooms[roomId]) return socket.emit('error_msg', '房间已存在');
         
+        const cleanName = String(username || '').trim();
+        if (!cleanName) return socket.emit('error_msg', '用户名不能为空');
+
         const roomConfig = { deckCount: 1, maxPlayers: 3, targetScore: 500, ...config };
         
         rooms[roomId] = {
             config: roomConfig,
             players: [],
-            grandScores: {}, 
-            lastWinnerId: null, // 新增：记录上一局赢家
-            game: null
+            gameManager: null,
+            destroyTimer: null 
         };
         
         socket.join(roomId);
-        rooms[roomId].players.push({ id: socket.id, name: username, isHost: true });
-        rooms[roomId].grandScores[socket.id] = 0;
+        rooms[roomId].players.push({ id: socket.id, name: cleanName, isHost: true, online: true });
+        
+        const initialScores = {};
+        rooms[roomId].players.forEach(p => initialScores[p.id] = 0);
 
-        const data = { roomId, config: roomConfig, players: rooms[roomId].players, grandScores: rooms[roomId].grandScores };
+        const data = { roomId, config: roomConfig, players: rooms[roomId].players, grandScores: initialScores };
         socket.emit('room_info', data); 
         io.to(roomId).emit('room_info', data);
     });
@@ -295,186 +1665,214 @@ io.on('connection', (socket) => {
     socket.on('join_room', ({ roomId, username }) => {
         const room = rooms[roomId];
         if (!room) return socket.emit('error_msg', '房间不存在');
-        if (room.players.length >= room.config.maxPlayers) return socket.emit('error_msg', '房间已满');
+
+        const cleanName = String(username || '').trim();
+        if (!cleanName) return socket.emit('error_msg', '用户名不能为空');
+
+        const existingPlayerIndex = room.players.findIndex(p => p.name === cleanName);
+        let isReconnect = false;
+        let oldSocketId = null;
+
+        if (existingPlayerIndex !== -1) {
+            const existingPlayer = room.players[existingPlayerIndex];
+            
+            if (existingPlayer.online) {
+                return socket.emit('error_msg', `名字 "${cleanName}" 已被使用且玩家在线`);
+            }
+
+            isReconnect = true;
+            oldSocketId = existingPlayer.id;
+            console.log(`[Reconnect] Success! ${cleanName} (${oldSocketId} -> ${socket.id})`);
+
+            existingPlayer.id = socket.id;
+            existingPlayer.online = true; 
+
+            if (room.destroyTimer) {
+                clearTimeout(room.destroyTimer);
+                room.destroyTimer = null;
+                console.log(`[Room] Destruction cancelled for ${roomId} (player returned)`);
+            }
+
+            if (room.gameManager) {
+                room.gameManager.reconnectPlayer(oldSocketId, socket.id);
+            }
+        } else {
+            if (room.players.length >= room.config.maxPlayers) {
+                return socket.emit('error_msg', '房间已满');
+            }
+            
+            socket.join(roomId);
+            if (!room.players.find(u => u.id === socket.id)) {
+                room.players.push({ id: socket.id, name: cleanName, isHost: false, online: true });
+            }
+        }
 
         socket.join(roomId);
-        if (!room.players.find(u=>u.id===socket.id)) {
-            room.players.push({ id: socket.id, name: username, isHost: false });
-            if (room.grandScores[socket.id] === undefined) room.grandScores[socket.id] = 0;
+        
+        let currentGrandScores = {};
+        if (room.gameManager) {
+            currentGrandScores = room.gameManager.grandScores;
+        } else {
+            room.players.forEach(p => currentGrandScores[p.id] = 0);
         }
         
-        const data = { roomId, config: room.config, players: room.players, grandScores: room.grandScores };
+        const data = { roomId, config: room.config, players: room.players, grandScores: currentGrandScores };
+        
         socket.emit('room_info', data);
-        io.to(roomId).emit('room_info', data);
+
+        const isGameRunning = room.gameManager && room.gameManager.gameState;
+        if (!isGameRunning) {
+            socket.to(roomId).emit('room_info', data);
+        }
+
+        if (isGameRunning) {
+            if (isReconnect) {
+                const hand = room.gameManager.getPlayerHand(socket.id);
+                socket.emit('game_started', { 
+                    hand: hand, 
+                    grandScores: room.gameManager.grandScores 
+                });
+            }
+            broadcastGameState(io, roomId, room);
+        }
     });
 
-    // --- 游戏流程控制 ---
-    const startGameLogic = (roomId, isNextRound = false) => {
+    // --- 游戏流程 ---
+    const handleGameStart = (roomId, isNextRound) => {
         const room = rooms[roomId];
         if (!room) return;
 
-        // 如果是全新开始，重置大分和赢家记录
-        if (!isNextRound) {
-            room.players.forEach(p => room.grandScores[p.id] = 0);
-            room.lastWinnerId = null;
+        if (!isNextRound || !room.gameManager) {
+            // >>> 关键修改：传入 io 和 roomId，让 GameManager 能发倒计时通知 <<<
+            room.gameManager = new GameManager(room.config, room.players, io, roomId);
         }
 
-        const deck = new Deck(room.config.deckCount);
-        const hands = deck.deal(room.players.length);
+        const startInfo = room.gameManager.startRound(isNextRound);
 
-        // 确定谁先出牌：如果有上一局赢家，他先出；否则房主(0)先出
-        let startIndex = 0;
-        if (room.lastWinnerId) {
-            const winnerIdx = room.players.findIndex(p => p.id === room.lastWinnerId);
-            if (winnerIdx !== -1) startIndex = winnerIdx;
-        }
-
-        room.game = {
-            hands: {}, 
-            currentTurnIndex: startIndex, // 设定初始出牌人
-            lastPlayedCards: [], 
-            consecutivePasses: 0, 
-            winner: null,
-            roundPoints: {},      
-            pendingTablePoints: 0,
-            roundWinnerId: null,  
-        };
-
-        room.players.forEach((p, index) => {
-            room.game.hands[p.id] = hands[index];
-            room.game.roundPoints[p.id] = 0;
-            io.to(p.id).emit('game_started', { hand: hands[index], grandScores: room.grandScores });
+        room.players.forEach((p) => {
+            const hand = startInfo.hands[p.id];
+            io.to(p.id).emit('game_started', { 
+                hand: hand, 
+                grandScores: room.gameManager.grandScores 
+            });
         });
 
-        const startPlayerName = room.players[startIndex].name;
-        broadcastGameState(io, roomId, room, isNextRound ? `新一轮开始！由 ${startPlayerName} 先出` : `游戏开始！目标 ${room.config.targetScore} 分`);
+        const startPlayerName = room.players[startInfo.startPlayerIndex].name;
+        const msg = isNextRound 
+            ? `新一轮开始！由 ${startPlayerName} 先出` 
+            : `游戏开始！目标 ${room.config.targetScore} 分`;
+        
+        broadcastGameState(io, roomId, room, msg);
     };
 
-    socket.on('start_game', ({ roomId }) => startGameLogic(roomId, false));
-    socket.on('next_round', ({ roomId }) => startGameLogic(roomId, true));
+    socket.on('start_game', ({ roomId }) => handleGameStart(roomId, false));
+    socket.on('next_round', ({ roomId }) => handleGameStart(roomId, true));
 
     // --- 出牌 ---
     socket.on('play_cards', ({ roomId, cards }) => {
         const room = rooms[roomId];
-        if (!room || !room.game) return;
-        const gameState = room.game;
+        if (!room || !room.gameManager) return;
         
-        const isNewRound = gameState.lastPlayedCards.length === 0 || gameState.consecutivePasses >= room.players.length - 1;
-        const cardsToBeat = isNewRound ? [] : gameState.lastPlayedCards;
-        
-        if (!CardRules.canPlay(cards, cardsToBeat, room.config.deckCount)) {
-            return socket.emit('play_error', '管不上！');
+        const result = room.gameManager.playCards(socket.id, cards);
+
+        if (!result.success) {
+            return socket.emit('play_error', result.error);
         }
 
-        const playerHand = gameState.hands[socket.id];
-        let newHand = [...playerHand];
-        for (let c of cards) {
-            const idx = newHand.indexOf(c);
-            if (idx !== -1) newHand.splice(idx, 1);
-        }
-        gameState.hands[socket.id] = newHand;
-        
-        gameState.pendingTablePoints += CardRules.calculateTotalScore(cards);
-        
-        gameState.lastPlayedCards = cards;
-        gameState.consecutivePasses = 0;
-        gameState.roundWinnerId = socket.id;
+        const currentHand = room.gameManager.gameState.hands[socket.id];
+        io.to(socket.id).emit('hand_update', currentHand);
 
-        const currIdx = room.players.findIndex(p => p.id === socket.id);
-        gameState.currentTurnIndex = (currIdx + 1) % room.players.length;
-
-        // 判定小局结束
-        if (newHand.length === 0) {
-            const winnerId = socket.id;
-            const winnerName = room.players[currIdx].name;
-            
-            // 记录本局赢家，用于下一局先手
-            room.lastWinnerId = winnerId;
-
-            let totalRoundScore = gameState.pendingTablePoints; 
-            
-            let penaltyLog = "";
-            room.players.forEach(p => {
-                if (p.id !== winnerId) {
-                    const handPts = CardRules.calculateTotalScore(gameState.hands[p.id]);
-                    if (handPts > 0) {
-                        totalRoundScore += handPts;
-                        penaltyLog += `${p.name}剩${handPts}分 `;
-                    }
-                }
-            });
-
-            totalRoundScore += (gameState.roundPoints[winnerId] || 0);
-            room.grandScores[winnerId] += totalRoundScore;
-
-            if (room.grandScores[winnerId] >= room.config.targetScore) {
-                io.to(roomId).emit('grand_game_over', { grandWinner: winnerName, grandScores: room.grandScores });
-                room.game = null;
+        if (result.isWin) {
+            const rInfo = result.roundResult;
+            if (rInfo.isGrandOver) {
+                io.to(roomId).emit('grand_game_over', { 
+                    grandWinner: rInfo.roundWinnerName, 
+                    grandScores: rInfo.grandScores 
+                });
+                room.gameManager = null; 
             } else {
                 io.to(roomId).emit('round_over', {
-                    roundWinner: winnerName,
-                    pointsEarned: totalRoundScore,
-                    detail: penaltyLog ? `罚分: ${penaltyLog}` : '无罚分',
-                    grandScores: room.grandScores
+                    roundWinner: rInfo.roundWinnerName,
+                    pointsEarned: rInfo.pointsEarned,
+                    detail: rInfo.detail,
+                    grandScores: rInfo.grandScores
                 });
             }
         } else {
             broadcastGameState(io, roomId, room);
-            io.to(socket.id).emit('hand_update', newHand);
         }
     });
 
     // --- 过牌 ---
     socket.on('pass_turn', ({ roomId }) => {
         const room = rooms[roomId];
-        if (!room || !room.game) return;
-        const gameState = room.game;
+        if (!room || !room.gameManager) return;
+
+        const result = room.gameManager.passTurn(socket.id);
         
-        if (gameState.lastPlayedCards.length === 0 || gameState.consecutivePasses >= room.players.length - 1) {
-            return socket.emit('play_error', '必须出牌');
-        }
-
-        gameState.consecutivePasses++;
-        const currIdx = room.players.findIndex(p => p.id === socket.id);
-        gameState.currentTurnIndex = (currIdx + 1) % room.players.length;
-
-        if (gameState.consecutivePasses >= room.players.length - 1) {
-            const wId = gameState.roundWinnerId;
-            if (wId) {
-                gameState.roundPoints[wId] = (gameState.roundPoints[wId] || 0) + gameState.pendingTablePoints;
-                gameState.pendingTablePoints = 0;
-            }
-            gameState.lastPlayedCards = [];
-            gameState.currentTurnIndex = room.players.findIndex(p => p.id === wId);
-        }
+        if (!result.success) return socket.emit('play_error', result.error);
 
         broadcastGameState(io, roomId, room, "PASS");
     });
 
+    // --- 断开连接 ---
     socket.on('disconnect', () => {
-        for (const rId in rooms) {
+        Object.keys(rooms).forEach(rId => {
             const r = rooms[rId];
-            if (!r.game) {
-                const idx = r.players.findIndex(p => p.id === socket.id);
-                if (idx !== -1) {
-                    r.players.splice(idx, 1);
-                    io.to(rId).emit('room_info', { roomId: rId, config: r.config, players: r.players, grandScores: r.grandScores });
+            
+            const idx = r.players.findIndex(p => p.id === socket.id);
+            if (idx === -1) return; 
+
+            const player = r.players[idx];
+            const isGameRunning = r.gameManager && r.gameManager.gameState;
+
+            if (!isGameRunning) {
+                r.players.splice(idx, 1);
+                console.log(`[Disconnect] Lobby user ${player.name} removed from ${rId}`);
+                
+                if (r.players.length === 0) {
+                    if (r.destroyTimer) clearTimeout(r.destroyTimer);
+                    delete rooms[rId];
+                    console.log(`[Room] Room ${rId} deleted (empty lobby).`);
+                } else {
+                    io.to(rId).emit('room_info', { 
+                        roomId: rId, 
+                        config: r.config, 
+                        players: r.players, 
+                        grandScores: r.gameManager ? r.gameManager.grandScores : {} 
+                    });
+                }
+            } else {
+                player.online = false;
+                console.log(`[Disconnect] Game user ${player.name} (${socket.id}) dropped.`);
+
+                const allOffline = r.players.every(p => !p.online);
+                if (allOffline) {
+                    console.log(`[Room] Room ${rId} is empty. Scheduling destruction in 60s...`);
+                    
+                    if (r.destroyTimer) clearTimeout(r.destroyTimer);
+                    
+                    r.destroyTimer = setTimeout(() => {
+                        if (rooms[rId] && rooms[rId].players.every(p => !p.online)) {
+                            delete rooms[rId];
+                            console.log(`[Room] Room ${rId} destroyed due to inactivity (game running).`);
+                        }
+                    }, 60000); 
                 }
             }
-        }
+        });
     });
 });
-const path = require('path');
 
-// --- 生产环境部署配置 (关键代码) ---
+
 // 这一段的意思是：如果是在线上环境，就把 React 打包好的文件(build)发给浏览器
 if (process.env.NODE_ENV === 'production') {
     // 1. 指定静态文件目录
-    app.use(express.static(path.join(__dirname, '../build')));
-
+    const buildPath = path.join(__dirname, '../client/dist');
+    app.use(express.static(buildPath));
     // 2. 任何其他请求，都返回 index.html
     app.get(/(.*)/, (req, res) => {
-        res.sendFile(path.join(__dirname, '../build', 'index.html'));
+        res.sendFile(path.join(__dirname, '../client/dist', 'index.html'));
     });
 }
 

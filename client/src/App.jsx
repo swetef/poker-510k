@@ -1,23 +1,29 @@
-// 主入口
+// 主入口 - 修复了引用路径，添加了 .js/.jsx 后缀
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 
-// --- 模块化导入 ---
-// 请确保你本地已经创建了这些文件
-import { sortHand } from './utils/cardLogic';
-import SoundManager from './utils/SoundManager';
-import { LoginScreen } from './screens/LoginScreen';
-import { LobbyScreen } from './screens/LobbyScreen';
-import { GameScreen } from './screens/GameScreen';
+// [修复] 添加显式后缀名以解决编译错误
+import { sortHand } from './utils/cardLogic.js';
+import SoundManager from './utils/SoundManager.js';
+import { LoginScreen } from './screens/LoginScreen.jsx';
+import { LobbyScreen } from './screens/LobbyScreen.jsx';
+import { GameScreen } from './screens/GameScreen.jsx';
 
 const SOCKET_URL = 'http://localhost:3001';
 
 export default function App() {
-  // --- 核心状态 ---
   const [gameState, setGameState] = useState('LOGIN'); 
   const [username, setUsername] = useState('');
   const [roomId, setRoomId] = useState('');
-  const [roomConfig, setRoomConfig] = useState({ deckCount: 1, maxPlayers: 3, targetScore: 500 });
+  
+  // 初始配置增加 turnTimeout，默认 60s
+  const [roomConfig, setRoomConfig] = useState({ 
+      deckCount: 2,          // 默认改为2副牌，更适合多人
+      maxPlayers: 4,         // 默认4人
+      targetScore: 1000,     // 默认1000分
+      turnTimeout: 60000     // 默认60秒
+  });
+  
   const [isCreatorMode, setIsCreatorMode] = useState(false); 
 
   const [players, setPlayers] = useState([]);     
@@ -39,24 +45,22 @@ export default function App() {
   const [mySocketId, setMySocketId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // --- Refs (用于解决闭包陈旧值问题) ---
+  const [turnRemaining, setTurnRemaining] = useState(60); 
+
   const socketRef = useRef(null);
   const isDragging = useRef(false); 
   const dragStartMode = useRef(true); 
   const sortModeRef = useRef('POINT');
-  const usernameRef = useRef(username); // 追踪最新用户名
-  const mySocketIdRef = useRef(null);   // 追踪最新SocketID
+  const usernameRef = useRef(username); 
+  const mySocketIdRef = useRef(null);   
 
-  // 同步 Ref
   useEffect(() => { usernameRef.current = username; }, [username]);
   useEffect(() => { mySocketIdRef.current = mySocketId; }, [mySocketId]);
 
-  // --- Socket 逻辑 ---
   useEffect(() => {
     const socket = io(SOCKET_URL, { reconnectionAttempts: 5, timeout: 10000 });
     socketRef.current = socket;
 
-    // 全局点击一次以激活 AudioContext (浏览器策略要求)
     const initAudio = () => {
         SoundManager.init();
         window.removeEventListener('click', initAudio);
@@ -88,18 +92,19 @@ export default function App() {
         if (data.grandScores) setPlayerScores(data.grandScores);
         setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: '🏁 新一局开始！' }]); 
         setGameState('GAME');
-        
-        // 🎵 音效：发牌
+        setTurnRemaining(60);
         SoundManager.play('deal');
     });
 
     socket.on('game_state_update', (data) => {
         setCurrentTurnId(data.currentTurnId);
         
-        // 检测是否有新牌打出 (简单的长度或内容变化检测)
+        if (data.turnRemaining !== undefined) {
+             setTurnRemaining(data.turnRemaining);
+        }
+
         if (data.lastPlayed && data.lastPlayed.length > 0) {
-             // 这里可以加更复杂的判断防止重连时重复播放，暂略
-             SoundManager.play('play'); // 🎵 音效：出牌
+             SoundManager.play('play'); 
         }
 
         if (data.lastPlayed) setLastPlayed(sortHand(data.lastPlayed, sortModeRef.current));
@@ -112,9 +117,7 @@ export default function App() {
         if (data.scores) setPlayerScores(data.scores);
         if (data.pendingPoints !== undefined) setPendingPoints(data.pendingPoints);
 
-        // 🎵 音效：轮到我了
         if (data.currentTurnId === mySocketIdRef.current) {
-            // 简单的防抖或逻辑判断，避免频繁提示，这里直接播放
             SoundManager.play('alert');
         }
     });
@@ -127,21 +130,19 @@ export default function App() {
     socket.on('play_error', (msg) => { 
         setInfoMessage(msg); 
         setTimeout(()=>setInfoMessage(''), 2000); 
-        SoundManager.play('lose'); // 🎵 音效：错误/管不上
+        SoundManager.play('lose'); 
     }); 
     
     socket.on('round_over', (data) => {
         setRoundResult(data);
         if (data.grandScores) setPlayerScores(data.grandScores);
-        
-        // 🎵 音效：判断输赢
         const amIWinner = data.roundWinner === usernameRef.current;
         SoundManager.play(amIWinner ? 'win' : 'lose');
     });
 
     socket.on('grand_game_over', (data) => {
         setGrandResult(data);
-        SoundManager.play('win'); // 🎵 音效：大局胜利
+        SoundManager.play('win'); 
     });
 
     const handleGlobalMouseUp = () => { isDragging.current = false; };
@@ -154,7 +155,6 @@ export default function App() {
       if (myHand.length > 0) setMyHand(prev => sortHand(prev, sortMode));
   }, [sortMode]);
 
-  // --- Handlers ---
   const toggleSort = () => setSortMode(prev => prev === 'POINT' ? 'SUIT' : 'POINT');
   
   const handleRoomAction = () => {
@@ -181,14 +181,12 @@ export default function App() {
     isDragging.current = true;
     dragStartMode.current = !selectedCards.includes(cardVal); 
     updateSelection(cardVal, dragStartMode.current);
-    SoundManager.play('deal'); // 🎵 音效：点击选牌
+    SoundManager.play('deal'); 
   };
   
   const handleMouseEnter = (cardVal) => {
     if (isDragging.current) {
         updateSelection(cardVal, dragStartMode.current);
-        // 拖拽时不想太吵，可以注释掉下面这行，或者换个轻微的声音
-        // SoundManager.play('deal'); 
     }
   };
 
@@ -202,7 +200,6 @@ export default function App() {
     setSelectedCards([]);
   };
 
-  // --- Render ---
   if (gameState === 'LOGIN') return <LoginScreen {...{username, setUsername, roomId, setRoomId, roomConfig, setRoomConfig, isCreatorMode, setIsCreatorMode, handleRoomAction, isLoading}} />;
   if (gameState === 'LOBBY') return <LobbyScreen {...{roomId, roomConfig, players, mySocketId, handleStartGame}} />;
   
@@ -210,6 +207,7 @@ export default function App() {
       roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
       infoMessage, winner: null, playerScores, pendingPoints, gameLogs, sortMode, 
       mySocketId, roundResult, grandResult, roomConfig,
+      turnRemaining, 
       toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame
   }} />;
 }

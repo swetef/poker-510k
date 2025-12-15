@@ -1,9 +1,10 @@
-// 基础UI组件 (卡牌、头像、日志)
+// 基础UI组件 (卡牌、头像、日志) - 已添加倒计时支持
 
 import React, { useEffect, useRef } from 'react';
 import { Coins, History } from 'lucide-react';
 import { getCardDisplay } from '../utils/cardLogic';
 import { styles } from '../styles';
+import CountDownTimer from './CountDownTimer'; // <--- 1. 引入组件
 
 export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacing }) => {
     const { suit, text, color, isScore } = getCardDisplay(cardVal);
@@ -42,7 +43,8 @@ export const MiniCard = ({ cardVal, index }) => {
     );
 };
 
-export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket }) => {
+// <--- 2. 修改 PlayerAvatar 接收 remainingSeconds
+export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, remainingSeconds }) => {
     const progress = Math.min((score / targetScore) * 100, 100);
     return (
         <div style={{
@@ -51,6 +53,7 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket })
             transform: isTurn ? 'scale(1.1)' : 'scale(1)',
             boxShadow: isTurn ? '0 0 25px rgba(241, 196, 15, 0.5)' : 'none',
             background: isTurn ? 'rgba(44, 62, 80, 0.9)' : 'rgba(44, 62, 80, 0.6)',
+            position: 'relative' // 确保子元素(倒计时)绝对定位准确
         }}>
             <div style={styles.avatar}>{player.name[0]}</div>
             <div style={styles.playerName}>{player.name} {isMySocket && '(我)'}</div>
@@ -58,7 +61,14 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket })
                 <div style={{...styles.scoreBarFill, width:`${progress}%`, background: progress>=100?'#e74c3c':'#2ecc71'}}></div>
             </div>
             <div style={styles.playerScore}><Coins size={12} color="#f1c40f"/> {score} / {targetScore}</div>
-            {isTurn && <div style={styles.turnProgress}></div>}
+            
+            {/* 3. 只有轮到该玩家时，才显示倒计时 */}
+            {isTurn && (
+                <CountDownTimer 
+                    initialSeconds={remainingSeconds} 
+                    totalSeconds={60} 
+                />
+            )}
         </div>
     );
 };

@@ -1,19 +1,26 @@
-// 游戏主界面
+// 游戏主界面 - 完整修复版
 import React from 'react';
 import { Coins, Layers, Crown, Clock } from 'lucide-react';
-import { styles } from '../styles';
-import { Card, MiniCard, PlayerAvatar, GameLogPanel } from '../components/BaseUI';
-import { calculateCardSpacing } from '../utils/cardLogic';
+import { styles } from '../styles.js'; // 确保加上 .js 后缀
+import { Card, MiniCard, PlayerAvatar, GameLogPanel } from '../components/BaseUI.jsx';
+import { calculateCardSpacing } from '../utils/cardLogic.js';
 
 export const GameScreen = ({ 
     roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
     infoMessage, winner, playerScores, pendingPoints, gameLogs, sortMode, 
     mySocketId, roundResult, grandResult, roomConfig,
+    turnRemaining, 
     toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame 
 }) => {
     const isMyTurn = currentTurnId === mySocketId;
     const amIHost = players.find(p => p.id === mySocketId)?.isHost;
     const cardSpacing = calculateCardSpacing(myHand.length, window.innerWidth);
+
+    // [新增] 动态计算是否需要紧凑模式 (超过6人时缩小显示)
+    const isCrowded = players.length > 6;
+    const avatarScale = isCrowded ? 0.85 : 1;
+    // 使用 margin 负值来抵消 scale 带来的视觉空白，让排列更紧凑
+    const avatarStyleOverride = isCrowded ? { transform: `scale(${avatarScale})`, margin: -5 } : {};
 
     return (
         <div style={styles.gameTable} onMouseUp={() => { /* Global Mouse Up Handled in App */ }}>
@@ -66,10 +73,20 @@ export const GameScreen = ({
                 )}
             </div>
 
-            {/* 玩家区域 */}
+            {/* 玩家区域 - 关键修改点 */}
+            {/* 这里的 styles.playersArea 已经在 styles.js 中被修改为 flex-wrap: wrap */}
             <div style={styles.playersArea}>
                 {players.map((p, i) => (
-                    <PlayerAvatar key={i} player={p} isTurn={p.id === currentTurnId} score={playerScores[p.id] || 0} targetScore={roomConfig.targetScore} isMySocket={p.id === mySocketId} />
+                    <div key={i} style={avatarStyleOverride}> 
+                        <PlayerAvatar 
+                            player={p} 
+                            isTurn={p.id === currentTurnId} 
+                            score={playerScores[p.id] || 0} 
+                            targetScore={roomConfig.targetScore} 
+                            isMySocket={p.id === mySocketId}
+                            remainingSeconds={turnRemaining}
+                        />
+                    </div>
                 ))}
             </div>
 

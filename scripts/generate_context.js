@@ -4,10 +4,12 @@ const fs = require('fs');
 const path = require('path');
 
 // --- 配置项 ---
-// 你想要扫描的目录
-const SEARCH_DIRS = ['src', 'server'];
+// 【修改点】：这里改成 'client' 和 'server'，对应你截图里的文件夹名
+const SEARCH_DIRS = ['client', 'server']; 
+
 // 输出文件名
 const OUTPUT_FILE = 'project_context.txt';
+
 // 忽略的文件或文件夹
 const IGNORE_PATTERNS = [
     'node_modules', 
@@ -17,13 +19,15 @@ const IGNORE_PATTERNS = [
     'yarn.lock', 
     'dist', 
     'build',
-    'images', // 图片文件夹通常忽略
-    'generate_context.js' // 忽略自己
+    'images', 
+    'generate_context.js',
+    'public', // (可选) 如果public里只有图标，可以忽略；如果有逻辑代码请保留
+    '.vscode'
 ];
 // 只读取这些后缀的文件
-const INCLUDE_EXTS = ['.js', '.jsx', '.ts', '.tsx', '.css', '.json'];
+const INCLUDE_EXTS = ['.js', '.jsx', '.ts', '.tsx', '.css', '.json', '.html']; // 加了个 .html 以防万一
 
-// --- 主逻辑 ---
+// --- 主逻辑 (保持不变) ---
 
 function getAllFiles(dirPath, arrayOfFiles) {
     const files = fs.readdirSync(dirPath);
@@ -31,7 +35,6 @@ function getAllFiles(dirPath, arrayOfFiles) {
     arrayOfFiles = arrayOfFiles || [];
 
     files.forEach(function(file) {
-        // 检查是否在忽略列表中
         if (IGNORE_PATTERNS.includes(file)) return;
 
         const fullPath = path.join(dirPath, file);
@@ -39,7 +42,6 @@ function getAllFiles(dirPath, arrayOfFiles) {
         if (fs.statSync(fullPath).isDirectory()) {
             arrayOfFiles = getAllFiles(fullPath, arrayOfFiles);
         } else {
-            // 检查后缀名
             const ext = path.extname(file);
             if (INCLUDE_EXTS.includes(ext)) {
                 arrayOfFiles.push(fullPath);
@@ -55,9 +57,11 @@ function mergeFiles() {
     let fileCount = 0;
 
     SEARCH_DIRS.forEach(dir => {
-        const rootPath = path.join(__dirname, '..', dir); // 假设脚本在 scripts/ 目录下，向上找一级
+        // 这里的 .. 代表回到根目录，然后进入 client 或 server
+        const rootPath = path.join(__dirname, '..', dir); 
+        
         if (!fs.existsSync(rootPath)) {
-            console.warn(`Warning: Directory ${dir} not found.`);
+            console.warn(`Warning: Directory ${dir} not found at ${rootPath}`);
             return;
         }
 
