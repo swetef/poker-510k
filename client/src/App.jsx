@@ -1,27 +1,35 @@
-// 主入口 - 修复了引用路径，添加了 .js/.jsx 后缀
+// 主入口 - 修复了服务器连接地址，支持自动切换线上/本地环境
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 
-// [修复] 添加显式后缀名以解决编译错误
 import { sortHand } from './utils/cardLogic.js';
 import SoundManager from './utils/SoundManager.js';
 import { LoginScreen } from './screens/LoginScreen.jsx';
 import { LobbyScreen } from './screens/LobbyScreen.jsx';
 import { GameScreen } from './screens/GameScreen.jsx';
 
-const SOCKET_URL = 'http://localhost:3001';
+// [关键修复] 动态获取 Socket 地址
+// 如果是在本地开发(localhost)，连接本地3001端口
+// 如果是在线上(render等)，直接连接当前域名(/)
+const getSocketUrl = () => {
+    const { hostname } = window.location;
+    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
+    return isLocal ? 'http://localhost:3001' : '/';
+};
+
+const SOCKET_URL = getSocketUrl();
 
 export default function App() {
   const [gameState, setGameState] = useState('LOGIN'); 
   const [username, setUsername] = useState('');
   const [roomId, setRoomId] = useState('');
   
-  // 初始配置增加 turnTimeout，默认 60s
+  // 初始配置
   const [roomConfig, setRoomConfig] = useState({ 
-      deckCount: 2,          // 默认改为2副牌，更适合多人
-      maxPlayers: 4,         // 默认4人
-      targetScore: 1000,     // 默认1000分
-      turnTimeout: 60000     // 默认60秒
+      deckCount: 2,          
+      maxPlayers: 4,         
+      targetScore: 1000,     
+      turnTimeout: 60000     
   });
   
   const [isCreatorMode, setIsCreatorMode] = useState(false); 
@@ -58,6 +66,8 @@ export default function App() {
   useEffect(() => { mySocketIdRef.current = mySocketId; }, [mySocketId]);
 
   useEffect(() => {
+    // 建立连接
+    console.log(`Connecting to server at: ${SOCKET_URL}`);
     const socket = io(SOCKET_URL, { reconnectionAttempts: 5, timeout: 10000 });
     socketRef.current = socket;
 
@@ -67,8 +77,18 @@ export default function App() {
     };
     window.addEventListener('click', initAudio);
 
-    socket.on('connect', () => setIsConnected(true));
+    socket.on('connect', () => {
+        console.log("Socket connected!");
+        setIsConnected(true);
+    });
+    
     socket.on('disconnect', () => setIsConnected(false));
+    
+    socket.on('connect_error', (err) => {
+        console.error("Connection error:", err);
+        setIsLoading(false);
+    });
+
     socket.on('your_id', (id) => {
         setMySocketId(id);
         mySocketIdRef.current = id;
@@ -158,8 +178,8 @@ export default function App() {
   const toggleSort = () => setSortMode(prev => prev === 'POINT' ? 'SUIT' : 'POINT');
   
   const handleRoomAction = () => {
-      if (!isConnected) return alert("未连接服务器");
-      if (!username || !roomId) return alert("请输入信息");
+      if (!isConnected) return alert("连接中，请稍后...");
+      if (!username || !roomId) return alert("请输入昵称和房间号");
       setIsLoading(true);
       const event = isCreatorMode ? 'create_room' : 'join_room';
       const payload = isCreatorMode ? { roomId, username, config: roomConfig } : { roomId, username };
