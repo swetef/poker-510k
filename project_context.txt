@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/16 14:41:28
+Project Context Generated at 2025/12/16 16:23:14
 
 
 ================================================================================
@@ -140,43 +140,304 @@ FILE PATH: client\src\App.css
 ================================================================================
 FILE PATH: client\src\App.jsx
 ================================================================================
-import React from 'react';
-import { GameProvider, useGame } from './context/GameContext.jsx';
-import { LoginScreen } from './screens/LoginScreen';
-import { LobbyScreen } from './screens/LobbyScreen';
-import { GameScreen } from './screens/GameScreen';
-import './index.css'; // 全局样式
+import React, { useState, useEffect, useRef } from 'react';
+import io from 'socket.io-client';
+import { Smartphone } from 'lucide-react'; // [新增] 图标
 
-// 内容组件，消费 Context
-const GameContent = () => {
-    const { gameState } = useGame();
+import { sortHand } from './utils/cardLogic.js';
+import SoundManager from './utils/SoundManager.js';
+import { LoginScreen } from './screens/LoginScreen.jsx';
+import { LobbyScreen } from './screens/LobbyScreen.jsx';
+import { GameScreen } from './screens/GameScreen.jsx';
 
-    const renderLandscapeHint = () => (
-        <div className="landscape-hint">
-            <div className="phone-rotate-icon"></div>
-            <h3>建议使用横屏游玩</h3>
-            <button onClick={(e) => { e.currentTarget.parentElement.style.display = 'none'; }}>
-                我非要竖屏玩
-            </button>
-        </div>
-    );
-
-    return (
-        <>
-            {renderLandscapeHint()}
-            {gameState === 'LOGIN' && <LoginScreen />}
-            {gameState === 'LOBBY' && <LobbyScreen />}
-            {gameState === 'GAME' && <GameScreen />}
-        </>
-    );
+const getSocketUrl = () => {
+    const { hostname, protocol } = window.location;
+    const isLocal = hostname === 'localhost' || 
+                    hostname === '127.0.0.1' || 
+                    hostname.startsWith('192.168.') || 
+                    hostname.startsWith('10.');
+    if (isLocal) {
+        return `${protocol}//${hostname}:3001`;
+    }
+    return '/';
 };
 
+const SOCKET_URL = getSocketUrl();
+
 export default function App() {
-    return (
-        <GameProvider>
-            <GameContent />
-        </GameProvider>
-    );
+  const [gameState, setGameState] = useState('LOGIN'); 
+  const [username, setUsername] = useState('');
+  const [roomId, setRoomId] = useState('');
+  
+  const [roomConfig, setRoomConfig] = useState({ 
+      deckCount: 2,          
+      maxPlayers: 4,         
+      targetScore: 1000,     
+      turnTimeout: 60000,
+      enableRankPenalty: false,    
+      rankPenaltyScores: [30, 15]  
+  });
+  
+  const [isCreatorMode, setIsCreatorMode] = useState(false); 
+
+  const [players, setPlayers] = useState([]);     
+  const [myHand, setMyHand] = useState([]);       
+  const [selectedCards, setSelectedCards] = useState([]); 
+  const [lastPlayed, setLastPlayed] = useState([]); 
+  const [currentTurnId, setCurrentTurnId] = useState(null); 
+  const [lastPlayerName, setLastPlayerName] = useState(''); 
+  const [infoMessage, setInfoMessage] = useState(''); 
+  
+  const [roundResult, setRoundResult] = useState(null); 
+  const [grandResult, setGrandResult] = useState(null); 
+  const [playerScores, setPlayerScores] = useState({});
+  const [playersInfo, setPlayersInfo] = useState({});
+  const [finishedRank, setFinishedRank] = useState([]); 
+  
+  const [pendingPoints, setPendingPoints] = useState(0);
+  const [gameLogs, setGameLogs] = useState([]);
+
+  const [sortMode, setSortMode] = useState('POINT'); 
+  const [isConnected, setIsConnected] = useState(false); 
+  const [mySocketId, setMySocketId] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const [turnRemaining, setTurnRemaining] = useState(60); 
+
+  const socketRef = useRef(null);
+  const isDragging = useRef(false); 
+  const dragStartMode = useRef(true); 
+  const sortModeRef = useRef('POINT');
+  const usernameRef = useRef(username); 
+  const mySocketIdRef = useRef(null);   
+
+  useEffect(() => { usernameRef.current = username; }, [username]);
+  useEffect(() => { mySocketIdRef.current = mySocketId; }, [mySocketId]);
+
+  useEffect(() => {
+    console.log(`正在连接服务器: ${SOCKET_URL}`);
+    
+    const socket = io(SOCKET_URL, { 
+        reconnectionAttempts: 10,   
+        reconnectionDelay: 1000,    
+        timeout: 20000,             
+        transports: ['websocket', 'polling'] 
+    });
+    
+    socketRef.current = socket;
+
+    const initAudio = () => {
+        SoundManager.init();
+        window.removeEventListener('click', initAudio);
+    };
+    window.addEventListener('click', initAudio);
+
+    socket.on('connect', () => {
+        console.log("Socket 连接成功!");
+        setIsConnected(true); 
+    });
+    
+    socket.on('disconnect', () => {
+        console.log("Socket 断开连接");
+        setIsConnected(false); 
+    });
+    
+    socket.on('connect_error', (err) => {
+        console.warn("连接错误:", err);
+    });
+
+    socket.on('your_id', (id) => {
+        setMySocketId(id);
+        mySocketIdRef.current = id;
+    });
+    socket.on('error_msg', (msg) => { setIsLoading(false); alert(msg); });
+
+    socket.on('room_info', (data) => {
+        setRoomId(data.roomId);
+        setRoomConfig(data.config);
+        setPlayers(data.players);
+        setGameState('LOBBY'); 
+        setIsLoading(false);
+    });
+
+    socket.on('game_started', (data) => {
+        if (data.hand) {
+            setMyHand(sortHand(data.hand, sortModeRef.current));
+        }
+        setLastPlayed([]);
+        setRoundResult(null);
+        setGrandResult(null);
+        setPendingPoints(0);
+        setFinishedRank([]); 
+        if (data.grandScores) setPlayerScores(data.grandScores);
+        setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: '🏁 新一局开始！' }]); 
+        setGameState('GAME');
+        setTurnRemaining(60);
+        setPlayersInfo({});
+        SoundManager.play('deal');
+    });
+
+    socket.on('game_state_update', (data) => {
+        setCurrentTurnId(data.currentTurnId);
+        
+        if (data.turnRemaining !== undefined) {
+             setTurnRemaining(data.turnRemaining);
+        }
+
+        if (data.lastPlayed && data.lastPlayed.length > 0) {
+             SoundManager.play('play'); 
+        }
+
+        if (data.lastPlayed) setLastPlayed(sortHand(data.lastPlayed, sortModeRef.current));
+        setLastPlayerName(data.lastPlayerName || '');
+        
+        if (data.infoText && data.infoText !== 'PASS') {
+            setInfoMessage(data.infoText); setTimeout(()=>setInfoMessage(''), 2000);
+            setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: data.infoText }]);
+        }
+        if (data.scores) setPlayerScores(data.scores);
+        if (data.playersInfo) setPlayersInfo(data.playersInfo);
+        
+        if (data.finishedRank) setFinishedRank(data.finishedRank);
+
+        if (data.pendingPoints !== undefined) setPendingPoints(data.pendingPoints);
+
+        if (data.currentTurnId === mySocketIdRef.current) {
+            SoundManager.play('alert');
+        }
+    });
+
+    socket.on('hand_update', (newHand) => {
+        setMyHand(sortHand(newHand, sortModeRef.current)); 
+        setSelectedCards([]);
+    });
+
+    socket.on('play_error', (msg) => { 
+        setInfoMessage(msg); 
+        setTimeout(()=>setInfoMessage(''), 2000); 
+        SoundManager.play('lose'); 
+    }); 
+    
+    socket.on('round_over', (data) => {
+        setRoundResult(data);
+        if (data.grandScores) setPlayerScores(data.grandScores);
+        const amIWinner = data.roundWinner === usernameRef.current;
+        SoundManager.play(amIWinner ? 'win' : 'lose');
+    });
+
+    socket.on('grand_game_over', (data) => {
+        setGrandResult(data);
+        SoundManager.play('win'); 
+    });
+
+    const handleGlobalMouseUp = () => { isDragging.current = false; };
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => { socket.disconnect(); window.removeEventListener('mouseup', handleGlobalMouseUp); };
+  }, []);
+
+  useEffect(() => {
+      sortModeRef.current = sortMode;
+      if (myHand.length > 0) setMyHand(prev => sortHand(prev, sortMode));
+  }, [sortMode]);
+
+  const toggleSort = () => setSortMode(prev => prev === 'POINT' ? 'SUIT' : 'POINT');
+  
+  const handleRoomAction = () => {
+      if (!isConnected) return; 
+      if (!username || !roomId) return alert("请输入昵称和房间号");
+      setIsLoading(true);
+      const event = isCreatorMode ? 'create_room' : 'join_room';
+      const payload = isCreatorMode ? { roomId, username, config: roomConfig } : { roomId, username };
+      socketRef.current.emit(event, payload);
+  };
+  
+  const handleStartGame = () => socketRef.current.emit('start_game', { roomId });
+  const handleNextRound = () => socketRef.current.emit('next_round', { roomId });
+  const handleAddBot = () => socketRef.current.emit('add_bot', { roomId });
+  
+  const handleToggleAutoPlay = () => socketRef.current.emit('toggle_auto_play', { roomId });
+
+  const updateSelection = (cardVal, forceSelect = null) => {
+    setSelectedCards(prev => {
+        const isSelected = prev.includes(cardVal);
+        if (forceSelect !== null) return forceSelect && !isSelected ? [...prev, cardVal] : (!forceSelect && isSelected ? prev.filter(c => c !== cardVal) : prev);
+        return isSelected ? prev.filter(c => c !== cardVal) : [...prev, cardVal];
+    });
+  };
+
+  const handleMouseDown = (cardVal) => {
+    isDragging.current = true;
+    dragStartMode.current = !selectedCards.includes(cardVal); 
+    updateSelection(cardVal, dragStartMode.current);
+    SoundManager.play('deal'); 
+  };
+  
+  const handleMouseEnter = (cardVal) => {
+    if (isDragging.current) {
+        updateSelection(cardVal, dragStartMode.current);
+    }
+  };
+
+  const handlePlayCards = () => {
+    if (selectedCards.length === 0) return alert("请先选牌");
+    socketRef.current.emit('play_cards', { roomId, cards: selectedCards });
+  };
+  
+  const handlePass = () => {
+    socketRef.current.emit('pass_turn', { roomId });
+    setSelectedCards([]);
+  };
+
+  // --- Render Helpers ---
+
+  // 横屏引导层
+  const renderLandscapeHint = () => (
+      <div className="landscape-hint">
+          <div className="phone-rotate-icon"></div>
+          <h3 style={{marginBottom: 10, fontSize: 18}}>建议使用横屏游玩</h3>
+          <p style={{fontSize: 14, opacity: 0.8, maxWidth: 250}}>
+              510K 需要较大的展示空间。<br/>
+              请旋转您的手机以获得最佳体验。
+          </p>
+          <button 
+            style={{marginTop: 20, padding: '8px 20px', background: 'rgba(255,255,255,0.2)', color:'white', border:'1px solid white'}}
+            onClick={(e) => { e.currentTarget.parentElement.style.display = 'none'; }}
+          >
+              我非要竖屏玩
+          </button>
+      </div>
+  );
+
+  return (
+    <>
+      {renderLandscapeHint()}
+      
+      {gameState === 'LOGIN' && <LoginScreen {...{
+          username, setUsername, 
+          roomId, setRoomId, 
+          roomConfig, setRoomConfig, 
+          isCreatorMode, setIsCreatorMode, 
+          handleRoomAction, 
+          isLoading,
+          isConnected 
+      }} />}
+      
+      {gameState === 'LOBBY' && <LobbyScreen {...{
+          roomId, roomConfig, players, mySocketId, 
+          handleStartGame, 
+          handleAddBot 
+      }} />}
+      
+      {gameState === 'GAME' && <GameScreen {...{
+          roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
+          infoMessage, winner: null, playerScores, playersInfo, pendingPoints, gameLogs, sortMode, 
+          mySocketId, roundResult, grandResult, roomConfig,
+          turnRemaining, finishedRank,
+          toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
+          handleToggleAutoPlay 
+      }} />}
+    </>
+  );
 }
 
 ================================================================================
@@ -395,242 +656,6 @@ const CountDownTimer = ({ initialSeconds, totalSeconds = 60 }) => {
 };
 
 export default CountDownTimer;
-
-================================================================================
-FILE PATH: client\src\context\GameContext.jsx
-================================================================================
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import io from 'socket.io-client';
-import SoundManager from '../utils/SoundManager.js';
-import { sortHand } from '../utils/cardLogic.js';
-
-const GameContext = createContext(null);
-
-export const GameProvider = ({ children }) => {
-    // --- 1. 状态定义 ---
-    const [socket, setSocket] = useState(null);
-    const [isConnected, setIsConnected] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
-    const [mySocketId, setMySocketId] = useState(null);
-
-    // 游戏核心数据
-    const [gameState, setGameState] = useState('LOGIN'); // LOGIN, LOBBY, GAME
-    const [roomId, setRoomId] = useState('');
-    const [roomConfig, setRoomConfig] = useState({ 
-        deckCount: 2, maxPlayers: 4, targetScore: 1000, turnTimeout: 60000, 
-        enableRankPenalty: false, rankPenaltyScores: [30, 15] 
-    });
-    const [players, setPlayers] = useState([]);
-    const [playerScores, setPlayerScores] = useState({});
-    const [playersInfo, setPlayersInfo] = useState({});
-
-    // 玩家个人数据
-    const [username, setUsername] = useState('');
-    const [myHand, setMyHand] = useState([]);
-    const [selectedCards, setSelectedCards] = useState([]);
-    const [sortMode, setSortMode] = useState('POINT');
-
-    // 游戏进程数据
-    const [currentTurnId, setCurrentTurnId] = useState(null);
-    const [lastPlayed, setLastPlayed] = useState([]);
-    const [lastPlayerName, setLastPlayerName] = useState('');
-    const [pendingPoints, setPendingPoints] = useState(0);
-    const [turnRemaining, setTurnRemaining] = useState(60);
-    const [roundResult, setRoundResult] = useState(null);
-    const [grandResult, setGrandResult] = useState(null);
-    const [finishedRank, setFinishedRank] = useState([]);
-
-    // UI 交互数据
-    const [infoMessage, setInfoMessage] = useState('');
-    const [gameLogs, setGameLogs] = useState([]);
-
-    // Refs 用于解决闭包问题
-    const socketRef = useRef(null);
-    const sortModeRef = useRef('POINT');
-    const usernameRef = useRef('');
-
-    useEffect(() => { usernameRef.current = username; }, [username]);
-    useEffect(() => { sortModeRef.current = sortMode; }, [sortMode]);
-
-    // --- 2. Socket 初始化 ---
-    useEffect(() => {
-        const getSocketUrl = () => {
-            const { hostname, protocol } = window.location;
-            const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.');
-            return isLocal ? `${protocol}//${hostname}:3001` : '/';
-        };
-
-        const newSocket = io(getSocketUrl(), {
-            reconnectionAttempts: 10,
-            reconnectionDelay: 1000,
-            timeout: 20000,
-            transports: ['websocket', 'polling']
-        });
-
-        socketRef.current = newSocket;
-        setSocket(newSocket);
-
-        // 初始化音效
-        const initAudio = () => {
-            SoundManager.init();
-            window.removeEventListener('click', initAudio);
-        };
-        window.addEventListener('click', initAudio);
-
-        // --- 绑定事件监听 ---
-        newSocket.on('connect', () => setIsConnected(true));
-        newSocket.on('disconnect', () => setIsConnected(false));
-        newSocket.on('your_id', (id) => setMySocketId(id));
-        newSocket.on('error_msg', (msg) => { setIsLoading(false); alert(msg); });
-
-        newSocket.on('room_info', (data) => {
-            setRoomId(data.roomId);
-            setRoomConfig(data.config);
-            setPlayers(data.players);
-            if(data.grandScores) setPlayerScores(data.grandScores);
-            setGameState('LOBBY');
-            setIsLoading(false);
-        });
-
-        newSocket.on('game_started', (data) => {
-            if (data.hand) setMyHand(sortHand(data.hand, sortModeRef.current));
-            setLastPlayed([]);
-            setRoundResult(null);
-            setGrandResult(null);
-            setPendingPoints(0);
-            setFinishedRank([]);
-            if (data.grandScores) setPlayerScores(data.grandScores);
-            setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: '🏁 新一局开始！' }]);
-            setGameState('GAME');
-            setTurnRemaining(60);
-            setPlayersInfo({});
-            SoundManager.play('deal');
-        });
-
-        newSocket.on('game_state_update', (data) => {
-            setCurrentTurnId(data.currentTurnId);
-            if (data.turnRemaining !== undefined) setTurnRemaining(data.turnRemaining);
-            
-            if (data.lastPlayed && data.lastPlayed.length > 0) {
-                setLastPlayed(sortHand(data.lastPlayed, sortModeRef.current));
-                SoundManager.play('play');
-            } else {
-                setLastPlayed([]);
-            }
-            
-            setLastPlayerName(data.lastPlayerName || '');
-            if (data.scores) setPlayerScores(data.scores);
-            if (data.playersInfo) setPlayersInfo(data.playersInfo);
-            if (data.finishedRank) setFinishedRank(data.finishedRank);
-            if (data.pendingPoints !== undefined) setPendingPoints(data.pendingPoints);
-
-            if (data.infoText && data.infoText !== 'PASS') {
-                showInfo(data.infoText);
-                setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: data.infoText }]);
-            }
-
-            if (data.currentTurnId === socketRef.current.id) {
-                SoundManager.play('alert');
-            }
-        });
-
-        newSocket.on('hand_update', (newHand) => {
-            setMyHand(sortHand(newHand, sortModeRef.current));
-            setSelectedCards([]);
-        });
-
-        newSocket.on('play_error', (msg) => {
-            showInfo(msg);
-            SoundManager.play('lose');
-        });
-
-        newSocket.on('round_over', (data) => {
-            setRoundResult(data);
-            if (data.grandScores) setPlayerScores(data.grandScores);
-            SoundManager.play(data.roundWinner === usernameRef.current ? 'win' : 'lose');
-        });
-
-        newSocket.on('grand_game_over', (data) => {
-            setGrandResult(data);
-            SoundManager.play('win');
-        });
-
-        return () => newSocket.disconnect();
-    }, []);
-
-    // --- 3. 辅助 Effect ---
-    useEffect(() => {
-        if (myHand.length > 0) setMyHand(prev => sortHand(prev, sortMode));
-    }, [sortMode]);
-
-    // --- 4. 动作 Actions ---
-    const showInfo = (msg) => {
-        setInfoMessage(msg);
-        setTimeout(() => setInfoMessage(''), 2000);
-    };
-
-    const handleRoomAction = (isCreatorMode) => {
-        if (!username || !roomId) return alert("请输入昵称和房间号");
-        setIsLoading(true);
-        const event = isCreatorMode ? 'create_room' : 'join_room';
-        const payload = isCreatorMode ? { roomId, username, config: roomConfig } : { roomId, username };
-        socket.emit(event, payload);
-    };
-
-    const toggleSort = () => setSortMode(prev => prev === 'POINT' ? 'SUIT' : 'POINT');
-    
-    // 选牌逻辑
-    const toggleSelectCard = (cardVal, forceSelect = null) => {
-        setSelectedCards(prev => {
-            const isSelected = prev.includes(cardVal);
-            if (forceSelect !== null) {
-                return forceSelect && !isSelected ? [...prev, cardVal] : (!forceSelect && isSelected ? prev.filter(c => c !== cardVal) : prev);
-            }
-            return isSelected ? prev.filter(c => c !== cardVal) : [...prev, cardVal];
-        });
-    };
-
-    // 游戏操作
-    const actions = {
-        playCards: () => {
-            if (selectedCards.length === 0) return alert("请先选牌");
-            socket.emit('play_cards', { roomId, cards: selectedCards });
-        },
-        passTurn: () => {
-            socket.emit('pass_turn', { roomId });
-            setSelectedCards([]);
-        },
-        startGame: () => socket.emit('start_game', { roomId }),
-        nextRound: () => socket.emit('next_round', { roomId }),
-        addBot: () => socket.emit('add_bot', { roomId }),
-        toggleAutoPlay: () => socket.emit('toggle_auto_play', { roomId }),
-        handleRoomAction,
-        toggleSort,
-        toggleSelectCard,
-        setUsername,
-        setRoomId,
-        setRoomConfig
-    };
-
-    const value = {
-        // State
-        socket, isConnected, isLoading, mySocketId,
-        gameState, roomId, roomConfig, players, playerScores, playersInfo,
-        username, myHand, selectedCards, sortMode,
-        currentTurnId, lastPlayed, lastPlayerName, pendingPoints, turnRemaining, roundResult, grandResult, finishedRank,
-        infoMessage, gameLogs,
-        // Actions
-        ...actions
-    };
-
-    return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
-};
-
-export const useGame = () => {
-    const context = useContext(GameContext);
-    if (!context) throw new Error("useGame must be used within a GameProvider");
-    return context;
-};
 
 ================================================================================
 FILE PATH: client\src\index.css
@@ -1269,511 +1294,321 @@ export const GameScreen = ({
 ================================================================================
 FILE PATH: client\src\screens\LobbyScreen.jsx
 ================================================================================
+// 大厅页 - 修复移动端溢出问题
+
 import React from 'react';
-import { useGame } from '../context/GameContext.jsx';
-import styles from '../styles/LobbyScreen.module.css';
+import { Target, Layers, User, Play, Clock, Bot } from 'lucide-react';
+import { styles } from '../styles';
 
-export const LobbyScreen = () => {
-    const { roomId, players, roomConfig, startGame, addBot, mySocketId } = useGame();
-    const isHost = players.find(p => p.id === mySocketId)?.isHost;
-
-    return (
-        <div className={styles.container}>
-            <div className={styles.card}>
-                <h2>房间: {roomId} <span style={{fontSize:14, color:'#666'}}>({players.length}/{roomConfig.maxPlayers}人)</span></h2>
-                
-                <div className={styles.playerList}>
-                    {players.map(p => (
-                        <div key={p.id} className={styles.playerItem} style={{borderColor: p.id===mySocketId ? '#27ae60' : '#eee'}}>
-                            <div style={{width:40, height:40, background:'#eee', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center'}}>
-                                {p.name[0]}
-                            </div>
-                            <div>
-                                <div style={{fontWeight:'bold'}}>{p.name}</div>
-                                {p.isHost && <div style={{fontSize:12, color:'#f39c12'}}>房主</div>}
-                            </div>
-                        </div>
-                    ))}
+export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleStartGame, handleAddBot }) => (
+    <div style={styles.container}>
+      {/* [修改] 增加 mobile-layout-column 类名，并重构内部结构以支持 flex 滚动 */}
+      <div style={styles.lobbyCard} className="mobile-layout-column">
+          
+          <div className="mobile-lobby-content" style={{display:'flex', flexDirection:'column', height:'100%', overflow:'hidden', borderRadius: 20}}>
+            
+            {/* 头部：保持不变，固定在顶部 */}
+            <div style={styles.lobbyHeader}>
+                <h2 style={{margin:0, fontSize: 24}}>房间: <span style={{fontFamily:'monospace', color:'#27ae60'}}>{roomId}</span></h2>
+                <div style={{display:'flex', gap:15}}>
+                    <span style={styles.tag}><Target size={14}/> 目标 {roomConfig.targetScore}</span>
+                    <span style={styles.tag}><Layers size={14}/> {roomConfig.deckCount}副牌</span>
+                    <span style={styles.tag}><User size={14}/> {roomConfig.maxPlayers}人</span>
                 </div>
+            </div>
 
-                {isHost ? (
-                    <div style={{display:'flex', gap:10}}>
-                        <button className={styles.startBtn} style={{background:'#95a5a6', flex:1}} onClick={addBot}>+ 机器人</button>
-                        <button className={styles.startBtn} style={{flex:2}} onClick={startGame} disabled={players.length < 2}>开始游戏</button>
+            {/* 中间：玩家列表 - [修改] 增加 mobile-lobby-grid 类名，支持滚动 */}
+            <div style={styles.playerGrid} className="mobile-lobby-grid">
+                {players.map((p,i)=>(
+                    <div key={i} style={{...styles.lobbyPlayer, borderColor: p.id===mySocketId ? '#27ae60' : '#eee', background: p.id===mySocketId ? '#f0fbf4' : 'white'}}>
+                        <div style={styles.avatarLarge}>
+                            {p.isBot ? <Bot size={40} /> : p.name[0]}
+                        </div>
+                        <div style={{fontWeight: 'bold', display:'flex', alignItems:'center', gap:5}}>
+                            {p.name}
+                            {p.isBot && <span style={{fontSize:10, background:'#eee', padding:'2px 5px', borderRadius:4}}>AI</span>}
+                        </div>
+                        {p.isHost && <span style={styles.hostBadge}>房主</span>}
+                    </div>
+                ))}
+                {Array.from({length: roomConfig.maxPlayers - players.length}).map((_, i) => (
+                    <div key={`empty-${i}`} style={{...styles.lobbyPlayer, borderStyle: 'dashed', opacity: 0.5}}>
+                        <div style={{...styles.avatarLarge, background:'#f0f0f0', color:'#ccc'}}>?</div>
+                        <div style={{color:'#999'}}>等待加入</div>
+                    </div>
+                ))}
+            </div>
+
+            {/* 底部：按钮区 - [修改] 增加 mobile-lobby-footer 类名，固定在底部 */}
+            <div style={styles.lobbyFooter} className="mobile-lobby-footer">
+                {players.find(p=>p.id===mySocketId)?.isHost ? (
+                    <div style={{display:'flex', gap: 15, justifyContent: 'center'}}>
+                        <button 
+                            style={{...styles.primaryButton, background: '#7f8c8d', width:'auto', padding:'0 20px', fontSize: 16, marginTop:0}} 
+                            onClick={handleAddBot}
+                            disabled={players.length >= roomConfig.maxPlayers}
+                        >
+                            <Bot size={18} style={{marginRight:5}}/> +Bot
+                        </button>
+
+                        <button style={{...styles.primaryButton, width:'auto', padding:'0 30px', marginTop:0}} onClick={handleStartGame} disabled={players.length < 2}>
+                            <Play size={18} style={{marginRight:5}}/> 开始对战
+                        </button>
                     </div>
                 ) : (
-                    <div style={{textAlign:'center', color:'#999'}}>等待房主开始...</div>
+                    <div style={{color:'#999', fontSize: 14, display:'flex', alignItems:'center', gap:5}}><Clock size={16}/> 等待房主开始...</div>
                 )}
             </div>
-        </div>
-    );
-};
+          
+          </div>
+      </div>
+    </div>
+);
 
 ================================================================================
 FILE PATH: client\src\screens\LoginScreen.jsx
 ================================================================================
-import React, { useState } from 'react';
-import { User, Monitor, LogIn, Plus, RefreshCw, Wifi, WifiOff } from 'lucide-react';
-import { useGame } from '../context/GameContext.jsx';
-import styles from '../styles/LoginScreen.module.css';
+// 登录页 - 适配移动端
+// 增加了服务器连接状态显示，解决用户不知道服务器是否就绪的问题
+import React from 'react';
+import { User, Monitor, RefreshCw, Plus, LogIn, Settings, Clock, Layers, Users, Target, Wifi, WifiOff, Award } from 'lucide-react';
+import { styles } from '../styles.js';
 
-export const LoginScreen = () => {
-    // 直接从 Context 获取状态和方法
-    const { 
-        username, setUsername, roomId, setRoomId, roomConfig, setRoomConfig,
-        handleRoomAction, isLoading, isConnected 
-    } = useGame();
-
-    const [isCreatorMode, setIsCreatorMode] = useState(false);
+export const LoginScreen = ({ 
+    username, setUsername, 
+    roomId, setRoomId, 
+    roomConfig, setRoomConfig, 
+    isCreatorMode, setIsCreatorMode, 
+    handleRoomAction, 
+    isLoading,
+    isConnected 
+}) => {
+    
+    // 渲染配置项的辅助函数
+    const renderConfigSlider = (icon, label, value, min, max, step, onChange, suffix = '') => (
+        <div style={styles.configItem}>
+            <div style={styles.configLabel}>
+                <span style={{display:'flex', alignItems:'center', gap:6}}>{icon} {label}</span>
+                <span style={styles.configValue}>{value}{suffix}</span>
+            </div>
+            <input 
+                type="range" 
+                style={styles.rangeInput}
+                min={min} 
+                max={max} 
+                step={step || 1}
+                value={value} 
+                onChange={(e) => onChange(parseInt(e.target.value))}
+            />
+        </div>
+    );
 
     return (
-        <div className={styles.container}>
-            <div className={styles.card}>
-                {/* 左侧 */}
-                <div className={styles.leftPanel}>
-                    <h1 className={styles.brandTitle}>510K</h1>
-                    <div style={{opacity:0.9}}>多人在线扑克对战</div>
+        <div style={styles.container}>
+            {/* [修改] 增加 mobile-layout-column 类名 */}
+            <div style={styles.loginCard} className="mobile-layout-column">
+                {/* 左侧：品牌展示区 - [修改] 增加 mobile-login-left 类名 */}
+                <div style={styles.loginLeft} className="mobile-login-left">
+                    <div style={styles.logoCircle}>
+                        <div style={styles.logoText}>510K</div>
+                    </div>
+                    <h1 style={styles.brandTitle}>扑克对战</h1>
+                    <div style={styles.brandSubtitle}>多人在线 · 自由规则 · 极速畅玩</div>
+                    
+                    {/* [修改] 在手机上隐藏特性列表，节省空间 */}
+                    <div style={styles.featureList} className="hide-on-mobile">
+                        <div style={styles.featureItem}>✨ 支持 2-12 人同台竞技</div>
+                        <div style={styles.featureItem}>🚀 只有 1 副牌? 不，现在支持 8 副!</div>
+                        <div style={styles.featureItem}>⏱️ 自定义思考时间与获胜目标</div>
+                    </div>
                 </div>
 
-                {/* 右侧 */}
-                <div className={styles.rightPanel}>
-                    {/* 状态栏 */}
-                    <div style={{display:'flex', justifyContent:'flex-end', marginBottom:20}}>
+                {/* 右侧：操作区 - [修改] 增加 mobile-login-right 类名 */}
+                <div style={styles.loginRight} className="mobile-login-right">
+                    {/* 顶部状态栏 */}
+                    <div style={{
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        marginBottom: 20
+                    }}>
+                        <div style={{...styles.tabs, marginBottom: 0, borderBottom: 'none'}}> 
+                           {/* 占位，保持布局平衡 */}
+                        </div>
+
+                        {/* 连接状态指示器 */}
                         <div style={{
-                            display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 12px', borderRadius: 20,
-                            background: isConnected ? '#eafaf1' : '#fdedec', color: isConnected ? '#27ae60' : '#e74c3c'
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 6, 
+                            fontSize: 12,
+                            padding: '6px 12px',
+                            borderRadius: 20,
+                            background: isConnected ? '#eafaf1' : '#fdedec',
+                            color: isConnected ? '#27ae60' : '#e74c3c',
+                            fontWeight: 'bold',
+                            border: `1px solid ${isConnected ? '#abebc6' : '#fadbd8'}`
                         }}>
                             {isConnected ? <Wifi size={14}/> : <WifiOff size={14}/>}
-                            {isConnected ? '已连接' : '连接中...'}
+                            {isConnected ? '服务器已连接' : '正在连接服务器...'}
                         </div>
                     </div>
 
-                    {/* Tabs */}
-                    <div className={styles.tabs}>
-                        <button className={!isCreatorMode ? styles.tabBtnActive : styles.tabBtn} onClick={()=>setIsCreatorMode(false)}>加入房间</button>
-                        <button className={isCreatorMode ? styles.tabBtnActive : styles.tabBtn} onClick={()=>setIsCreatorMode(true)}>创建房间</button>
+                    {/* 顶部 Tab 切换 */}
+                    <div style={styles.tabs}>
+                        <button 
+                            style={!isCreatorMode ? styles.tabBtnActive : styles.tabBtn} 
+                            onClick={()=>setIsCreatorMode(false)}
+                        >
+                            加入房间
+                        </button>
+                        <button 
+                            style={isCreatorMode ? styles.tabBtnActive : styles.tabBtn} 
+                            onClick={()=>setIsCreatorMode(true)}
+                        >
+                            创建房间
+                        </button>
                     </div>
 
-                    {/* 表单 */}
-                    <div className={styles.inputGroup}>
-                        <User size={18} color="#7f8c8d" />
-                        <input className={styles.input} value={username} onChange={e=>setUsername(e.target.value)} placeholder="你的昵称" maxLength={10} />
-                    </div>
-                    <div className={styles.inputGroup}>
-                        <Monitor size={18} color="#7f8c8d" />
-                        <input className={styles.input} value={roomId} onChange={e=>setRoomId(e.target.value)} placeholder="房间号 (如: 888)" maxLength={6} />
-                    </div>
-
-                    {/* 配置区域 (简化版，复用 inputGroup 或新增样式) */}
-                    {isCreatorMode && (
-                        <div style={{background:'#f8f9fa', padding:15, borderRadius:12, marginBottom:20}}>
-                            <div style={{fontSize:14, color:'#666', marginBottom:10}}>获胜目标: {roomConfig.targetScore}分</div>
-                            <input type="range" min="500" max="2000" step="100" style={{width:'100%'}} 
-                                value={roomConfig.targetScore} onChange={e=>setRoomConfig({...roomConfig, targetScore: parseInt(e.target.value)})} 
+                    <div style={styles.formContent}>
+                        {/* 基础信息输入 (昵称/房号) */}
+                        <div style={styles.inputGroup}>
+                            <User size={18} color="#7f8c8d" />
+                            <input 
+                                style={styles.input} 
+                                value={username} 
+                                onChange={e=>setUsername(e.target.value)} 
+                                placeholder="请输入你的昵称" 
+                                maxLength={10}
                             />
                         </div>
-                    )}
+                        <div style={styles.inputGroup}>
+                            <Monitor size={18} color="#7f8c8d" />
+                            <input 
+                                style={styles.input} 
+                                value={roomId} 
+                                onChange={e=>setRoomId(e.target.value)} 
+                                placeholder="请输入房间号 (如: 888)" 
+                                maxLength={6}
+                            />
+                        </div>
 
-                    <button className={styles.primaryBtn} onClick={() => handleRoomAction(isCreatorMode)} disabled={isLoading || !isConnected}>
-                        {isLoading ? <RefreshCw className="spin" size={20}/> : (isCreatorMode ? <Plus size={20}/> : <LogIn size={20}/>)}
-                        <span>{isCreatorMode ? "创建房间" : "进入游戏"}</span>
-                    </button>
+                        {/* 创建模式下的高级配置区 */}
+                        {isCreatorMode && (
+                            <div style={styles.advancedConfigPanel}>
+                                <div style={styles.configGrid}>
+                                    {renderConfigSlider(<Users size={14}/>, "玩家人数", roomConfig.maxPlayers, 2, 12, 1, v=>setRoomConfig({...roomConfig, maxPlayers:v}), '人')}
+                                    {renderConfigSlider(<Layers size={14}/>, "牌库数量", roomConfig.deckCount, 1, 8, 1, v=>setRoomConfig({...roomConfig, deckCount:v}), '副')}
+                                    {renderConfigSlider(<Target size={14}/>, "获胜目标", roomConfig.targetScore, 500, 5000, 500, v=>setRoomConfig({...roomConfig, targetScore:v}), '分')}
+                                    
+                                    {/* 倒计时选择 */}
+                                    <div style={styles.configItem}>
+                                        <div style={styles.configLabel}>
+                                            <span style={{display:'flex', alignItems:'center', gap:6}}><Clock size={14}/> 出牌时限</span>
+                                            <span style={styles.configValue}>{roomConfig.turnTimeout / 1000}秒</span>
+                                        </div>
+                                        <div style={styles.radioGroup}>
+                                            {[30, 60, 90, 120].map(sec => (
+                                                <button 
+                                                    key={sec}
+                                                    style={roomConfig.turnTimeout === sec * 1000 ? styles.radioBtnActive : styles.radioBtn}
+                                                    onClick={() => setRoomConfig({...roomConfig, turnTimeout: sec * 1000})}
+                                                >
+                                                    {sec}s
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* [新增] 排名赏罚设置区域 */}
+                                <div style={{marginTop: 20, paddingTop: 20, borderTop: '1px solid #f0f0f0'}}>
+                                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 15}}>
+                                        <div style={{display:'flex', alignItems:'center', gap:8, fontWeight:'600', color:'#555', fontSize:14}}>
+                                            <Award size={16} /> 启用排名赏罚 (进贡/抓分)
+                                        </div>
+                                        <label style={{position:'relative', display:'inline-block', width:40, height:20}}>
+                                            <input 
+                                                type="checkbox" 
+                                                style={{opacity:0, width:0, height:0}}
+                                                checked={roomConfig.enableRankPenalty}
+                                                onChange={(e) => setRoomConfig({...roomConfig, enableRankPenalty: e.target.checked})}
+                                            />
+                                            <span style={{
+                                                position:'absolute', cursor:'pointer', top:0, left:0, right:0, bottom:0, 
+                                                backgroundColor: roomConfig.enableRankPenalty ? '#27ae60' : '#ccc', 
+                                                transition:'.4s', borderRadius: 20
+                                            }}>
+                                                <span style={{
+                                                    position:'absolute', content:"", height:16, width:16, left:2, bottom:2, 
+                                                    backgroundColor:'white', transition:'.4s', borderRadius:'50%',
+                                                    transform: roomConfig.enableRankPenalty ? 'translateX(20px)' : 'translateX(0)'
+                                                }}></span>
+                                            </span>
+                                        </label>
+                                    </div>
+
+                                    {/* 如果开启，显示详细分值设置 */}
+                                    {roomConfig.enableRankPenalty && (
+                                        <div style={{background:'#f9f9f9', padding: 15, borderRadius: 8, display:'flex', gap: 20, fontSize: 13}}>
+                                            <div style={{flex:1}}>
+                                                <div style={{marginBottom:5, color:'#7f8c8d'}}>头尾赏罚 (第1名 vs 倒1)</div>
+                                                <input 
+                                                    type="number" style={{...styles.input, background:'white', height: 35, padding: '0 10px'}} 
+                                                    value={roomConfig.rankPenaltyScores[0]}
+                                                    onChange={e => {
+                                                        const val = Math.max(0, parseInt(e.target.value) || 0);
+                                                        setRoomConfig({...roomConfig, rankPenaltyScores: [val, roomConfig.rankPenaltyScores[1]]});
+                                                    }}
+                                                />
+                                            </div>
+                                            <div style={{flex:1}}>
+                                                <div style={{marginBottom:5, color:'#7f8c8d'}}>次级赏罚 (第2名 vs 倒2)</div>
+                                                <input 
+                                                    type="number" style={{...styles.input, background:'white', height: 35, padding: '0 10px'}} 
+                                                    value={roomConfig.rankPenaltyScores[1]}
+                                                    onChange={e => {
+                                                        const val = Math.max(0, parseInt(e.target.value) || 0);
+                                                        setRoomConfig({...roomConfig, rankPenaltyScores: [roomConfig.rankPenaltyScores[0], val]});
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        <div style={{flex: 1}}></div> {/* 弹簧填充 */}
+
+                        <button 
+                            style={{
+                                ...styles.primaryButton,
+                                opacity: (!isConnected || isLoading) ? 0.7 : 1,
+                                cursor: (!isConnected || isLoading) ? 'not-allowed' : 'pointer',
+                                background: (!isConnected) ? '#95a5a6' : '#2c3e50'
+                            }} 
+                            onClick={handleRoomAction} 
+                            disabled={isLoading || !isConnected}
+                        >
+                            {(isLoading || !isConnected) ? <RefreshCw className="spin" size={20}/> : (isCreatorMode ? <Plus size={20}/> : <LogIn size={20}/>)}
+                            <span style={{marginLeft:10}}>
+                                {!isConnected ? "正在连接服务器..." : (isLoading ? "处理中..." : (isCreatorMode ? "立即创建房间" : "进入游戏房间"))}
+                            </span>
+                        </button>
+                        
+                        {!isConnected && (
+                            <div style={{textAlign:'center', marginTop: 15, fontSize: 13, color:'#e74c3c', background:'#fdedec', padding:'8px', borderRadius:8}}>
+                                ⚠️ 首次访问可能需要 30-50秒 唤醒服务器，请耐心等待右上角变为绿色。
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
             <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
         </div>
     );
 };
-
-================================================================================
-FILE PATH: client\src\styles\GameScreen.css
-================================================================================
-/* 游戏桌布背景 */
-.gameTable {
-    height: 100vh;
-    width: 100vw;
-    background-color: #1e3c29;
-    background-image: radial-gradient(circle at center, #2d7a54 0%, #173b25 100%);
-    position: relative;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    user-select: none;
-}
-
-/* 顶部信息栏 */
-.header {
-    padding: 20px 40px;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    z-index: 20;
-}
-
-.roomBadge {
-    background: rgba(0,0,0,0.3);
-    color: white;
-    padding: 8px 20px;
-    border-radius: 20px;
-    font-weight: bold;
-    border: 1px solid rgba(255,255,255,0.1);
-}
-
-.pendingScore {
-    position: absolute;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0,0,0,0.5);
-    padding: 10px 40px;
-    border-radius: 20px;
-    color: #f1c40f;
-    font-size: 24px;
-    font-weight: bold;
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(255,255,255,0.1);
-}
-
-/* 桌面中心出牌区 */
-.tableCenter {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding-bottom: 120px; /* 给手牌留空间 */
-    z-index: 10;
-}
-
-.lastPlayerName {
-    color: white;
-    background: rgba(0,0,0,0.4);
-    padding: 4px 15px;
-    border-radius: 12px;
-    margin-bottom: 10px;
-    font-size: 14px;
-}
-
-.cardsRow {
-    display: flex;
-    gap: 5px; /* 默认间距 */
-}
-
-/* 玩家头像区域 */
-.playersArea {
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-    flex-wrap: wrap;
-    width: 90%;
-    margin: 0 auto;
-    /* 放在中间偏上位置 */
-    position: absolute;
-    top: 100px;
-    left: 0; right: 0;
-    pointer-events: none;
-}
-
-/* 手牌区域 */
-.handArea {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    height: 140px;
-    width: 100%;
-    max-width: 1400px;
-    display: flex;
-    justify-content: center;
-    z-index: 30;
-}
-
-/* 操作栏 */
-.actionBar {
-    position: absolute;
-    bottom: 30px;
-    left: 0; right: 0;
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-    z-index: 40;
-    pointer-events: none; /* 让点击穿透到手牌 */
-}
-
-.actionBtn {
-    pointer-events: auto;
-    padding: 12px 40px;
-    border-radius: 30px;
-    border: none;
-    font-weight: bold;
-    font-size: 18px;
-    cursor: pointer;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-    transition: transform 0.1s;
-}
-
-.playBtn {
-    background: linear-gradient(to bottom, #f1c40f, #f39c12);
-    color: white;
-}
-
-.passBtn {
-    background: #7f8c8d;
-    color: white;
-}
-
-/* --- 移动端适配 (Media Queries) --- */
-@media (max-width: 768px) {
-    .header {
-        padding: 10px;
-    }
-    
-    .roomBadge { font-size: 12px; padding: 5px 10px; }
-    
-    .pendingScore {
-        top: 60px; /* 避开房号 */
-        padding: 5px 20px;
-        font-size: 18px;
-    }
-
-    .playersArea {
-        top: 110px;
-        gap: 8px;
-        width: 100%;
-        overflow-x: auto;
-        justify-content: flex-start; /* 允许横向滚动 */
-        padding: 0 10px;
-    }
-
-    .tableCenter {
-        /* 上移以避开手牌 */
-        position: absolute;
-        top: 40%;
-        left: 0; right: 0;
-        padding: 0;
-    }
-
-    .cardsRow {
-        gap: -5px; /* 牌叠得紧一点 */
-        transform: scale(0.8);
-    }
-
-    .handArea {
-        bottom: 0;
-        height: 120px;
-        /* 背景渐变，防止看不清牌 */
-        background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
-    }
-
-    .actionBar {
-        bottom: 130px; /* 提到手牌上面 */
-    }
-    
-    .actionBtn {
-        padding: 8px 30px;
-        font-size: 16px;
-    }
-}
-
-================================================================================
-FILE PATH: client\src\styles\LobbyScreen.module.css
-================================================================================
-.container {
-    height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: #f0f2f5;
-}
-.card {
-    background: white;
-    padding: 30px;
-    border-radius: 20px;
-    width: 600px;
-    max-width: 90%;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
-.playerList {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
-}
-.playerItem {
-    padding: 15px;
-    border: 1px solid #eee;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-.startBtn {
-    background: #27ae60;
-    color: white;
-    border: none;
-    padding: 15px;
-    border-radius: 10px;
-    font-size: 18px;
-    font-weight: bold;
-    cursor: pointer;
-}
-.startBtn:disabled { background: #ccc; }
-
-================================================================================
-FILE PATH: client\src\styles\LoginScreen.module.css
-================================================================================
-/* 容器 */
-.container {
-    height: 100vh;
-    width: 100vw;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background-image: radial-gradient(circle at top right, #34495e 0%, #000000 100%);
-    overflow: hidden;
-}
-
-.card {
-    background: white;
-    border-radius: 24px;
-    width: 95%;
-    max-width: 1100px;
-    min-height: 600px;
-    max-height: 90vh;
-    display: flex;
-    box-shadow: 0 50px 100px -20px rgba(0,0,0,0.7);
-    overflow: hidden;
-    animation: popIn 0.5s ease-out;
-}
-
-/* 左侧品牌 */
-.leftPanel {
-    flex: 0.8;
-    background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
-    padding: 60px 50px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    color: white;
-    position: relative;
-}
-
-.brandTitle {
-    font-size: 48px;
-    font-weight: 800;
-    margin-bottom: 15px;
-    letter-spacing: -1.5px;
-}
-
-/* 右侧表单 */
-.rightPanel {
-    flex: 1.2;
-    padding: 50px 60px;
-    background: white;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-}
-
-/* Tabs */
-.tabs {
-    display: flex;
-    gap: 35px;
-    margin-bottom: 35px;
-    border-bottom: 2px solid #f1f2f6;
-}
-
-.tabBtn {
-    padding: 12px 0;
-    font-size: 18px;
-    font-weight: bold;
-    color: #95a5a6;
-    background: none;
-    border: none;
-    cursor: pointer;
-    border-bottom: 3px solid transparent;
-    transition: all 0.3s;
-}
-
-.tabBtnActive {
-    composes: tabBtn;
-    color: #2c3e50;
-    border-bottom: 3px solid #27ae60;
-}
-
-/* 输入框 */
-.inputGroup {
-    display: flex;
-    align-items: center;
-    background: #f8f9fa;
-    border-radius: 14px;
-    padding: 0 20px;
-    margin-bottom: 20px;
-    border: 1px solid #e1e4e8;
-    height: 60px;
-}
-
-.input {
-    border: none;
-    background: transparent;
-    flex: 1;
-    outline: none;
-    font-size: 17px;
-    margin-left: 10px;
-    font-weight: 500;
-}
-
-/* 按钮 */
-.primaryBtn {
-    margin-top: 25px;
-    width: 100%;
-    height: 65px;
-    background: #2c3e50;
-    color: white;
-    border: none;
-    border-radius: 14px;
-    font-weight: bold;
-    font-size: 19px;
-    cursor: pointer;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 10px;
-    transition: all 0.2s;
-}
-
-.primaryBtn:disabled {
-    background: #95a5a6;
-    cursor: not-allowed;
-}
-
-/* 移动端适配 */
-@media (max-width: 768px) {
-    .card {
-        flex-direction: column;
-        min-height: auto;
-        border-radius: 0;
-        width: 100%;
-        height: 100%;
-    }
-    .leftPanel {
-        flex: 0 0 auto;
-        padding: 40px 20px;
-        border-radius: 0 0 20px 20px;
-        align-items: center;
-        text-align: center;
-    }
-    .rightPanel {
-        border-radius: 20px 20px 0 0;
-        margin-top: -20px;
-        padding: 30px 20px;
-    }
-    .brandTitle { font-size: 32px; }
-}
-
-@keyframes popIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
 ================================================================================
 FILE PATH: client\src\styles.js
@@ -1993,7 +1828,7 @@ export const styles = {
   avatarLarge: { width: 80, height: 80, borderRadius: '50%', background: '#34495e', color: 'white', fontSize: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
   hostBadge: { position: 'absolute', top: 10, right: 10, background: '#f1c40f', color: '#333', fontSize: 12, padding: '4px 8px', borderRadius: 4, fontWeight: 'bold' },
   lobbyFooter: { marginTop: 'auto', borderTop: '1px solid #eee', paddingTop: 20, display: 'flex', justifyContent: 'center' },
-};
+  };
 
 ================================================================================
 FILE PATH: client\src\utils\cardLogic.js

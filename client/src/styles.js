@@ -2,7 +2,8 @@
 export const styles = {
   // 全局容器
   container: { 
-      height: '100vh', 
+      // [核心修改] 改为 100dvh，自动减去地址栏高度，防止底部被遮挡
+      height: '100dvh', 
       width: '100vw', 
       display: 'flex', 
       justifyContent: 'center', 
@@ -10,19 +11,16 @@ export const styles = {
       background: '#1e272e', 
       fontFamily: '"Segoe UI", Roboto, Helvetica, Arial, sans-serif', 
       backgroundImage: 'radial-gradient(circle at top right, #34495e 0%, #000000 100%)',
-      overflow: 'hidden' // 注意：如果页面内容过多，这里可能会导致无法滚动，但在 index.css 中 mobile 类处理了滚动
+      overflow: 'hidden' 
   },
   
   // --- Login Card ---
   loginCard: { 
       background: 'white', 
       borderRadius: 24, 
-      // [修改] 宽度改为百分比 + 最大宽度限制，适应手机
       width: '95%', 
       maxWidth: '1100px', 
-      // [修改] 去掉固定高度，使用 minHeight
       minHeight: '600px', 
-      // [新增] 限制最大高度，防止在大屏上也铺太满
       maxHeight: '90vh',
       display: 'flex', 
       boxShadow: '0 50px 100px -20px rgba(0,0,0,0.7)',
@@ -57,7 +55,7 @@ export const styles = {
       display: 'flex',
       flexDirection: 'column',
       background: '#ffffff',
-      overflowY: 'auto' // 防止内容过多时无法滚动
+      overflowY: 'auto' 
   },
   
   tabs: { display: 'flex', gap: 35, marginBottom: 35, borderBottom: '2px solid #f1f2f6' },
@@ -111,18 +109,28 @@ export const styles = {
 
   // --- Game Screen Styles ---
 
-  gameTable: { height: '100vh', width: '100vw', background: '#1e3c29', backgroundImage: 'radial-gradient(circle at center, #2d7a54 0%, #173b25 100%)', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', userSelect: 'none' },
+  // [核心修改] 这里的 100dvh 是最关键的，确保游戏桌面不被地址栏挤压
+  gameTable: { 
+      height: '100dvh', 
+      width: '100vw', 
+      background: '#1e3c29', 
+      backgroundImage: 'radial-gradient(circle at center, #2d7a54 0%, #173b25 100%)', 
+      position: 'relative', 
+      overflow: 'hidden', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      userSelect: 'none' 
+  },
   
-  // Players Area: 调整间距和位置以适应移动端
   playersArea: { 
       display: 'flex', 
       justifyContent: 'center', 
       alignContent: 'center', 
       flexWrap: 'wrap',       
-      gap: '10px',            // [修改] 减小间距，手机一行能排更多
-      paddingTop: 60,         // [新增] 避开顶部的 scoreBoard
-      marginBottom: 200,      // [修改] 减小底部留白
-      width: '98%',           // [修改] 占满宽度
+      gap: '10px',            
+      paddingTop: 60,         
+      marginBottom: 200,      
+      width: '98%',           
       maxWidth: 1600,         
       margin: '0 auto 200px', 
       pointerEvents: 'none',  
@@ -154,6 +162,9 @@ export const styles = {
   roomBadge: { background: 'rgba(0,0,0,0.3)', color:'white', padding: '8px 20px', borderRadius: 20, fontSize: 16, border: '1px solid rgba(255,255,255,0.1)', fontWeight: 'bold' },
   
   scoreBoard: { position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.5)', padding: '10px 50px', borderRadius: 20, textAlign: 'center', color: 'white', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' },
+  
+  // 增加通用按钮样式，方便复用
+  glassButton: { background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 20px', borderRadius: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: 14, transition: 'background 0.2s' },
   sortButton: { background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 20px', borderRadius: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: 14, transition: 'background 0.2s' },
   
   infoMessage: { position: 'absolute', top: '25%', width: '100%', textAlign: 'center', color: '#f1c40f', fontSize: 40, fontWeight: 'bold', textShadow: '0 5px 15px rgba(0,0,0,0.5)', pointerEvents: 'none', zIndex: 50, letterSpacing: 2 },
@@ -168,33 +179,31 @@ export const styles = {
   playerScore: { fontSize: 13, color: '#f1c40f', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 5 },
   turnProgress: { position: 'absolute', bottom: 0, left: 0, height: 4, background: '#f1c40f', width: '100%', animation: 'progress 15s linear forwards' },
   
-  // [修改] 手牌区域：调整高度和宽度占比
   handArea: { 
       position: 'absolute', 
-      bottom: 20,             // [修改] 稍微靠下
+      bottom: 20,             
       left: '50%', 
       transform: 'translateX(-50%)', 
       height: 140, 
-      width: '100%',          // [修改] 宽度占满，防止最左最右的牌点不到
+      width: '100%',          
       maxWidth: 1600, 
       display: 'flex', 
       justifyContent:'center', 
       zIndex: 20 
   },
   
-  // [修改] 卡牌：适配移动端尺寸
   card: { 
       background: 'white', 
-      borderRadius: 8,       // [修改] 圆角改小
+      borderRadius: 8,       
       border: '1px solid #999', 
       position: 'absolute', 
       cursor: 'pointer', 
       display: 'flex', 
       flexDirection: 'column', 
-      padding: 5,            // [修改] 内边距减小
+      padding: 5,            
       transition: 'transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1)', 
-      width: 80,             // [修改] 宽度缩小到 80
-      height: 110            // [修改] 高度缩小到 110
+      width: 80,             
+      height: 110            
   },
   
   actionBar: { position: 'absolute', bottom: 0, width: '100%', height: 120, background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)', display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', zIndex: 30 }, 
@@ -204,7 +213,6 @@ export const styles = {
   modalOverlay: { position: 'fixed', top:0, left:0, right:0, bottom:0, background: 'rgba(0,0,0,0.85)', display:'flex', justifyContent:'center', alignItems:'center', zIndex: 99, backdropFilter: 'blur(8px)' },
   modalContent: { background: 'white', padding: 60, borderRadius: 30, textAlign: 'center', boxShadow: '0 30px 80px rgba(0,0,0,0.6)', animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)' },
   
-  // Lobby 样式
   lobbyCard: { background: 'white', padding: 40, borderRadius: 20, width: '1000px', maxWidth: '95vw', minHeight: '600px', display: 'flex', flexDirection: 'column', boxShadow: '0 30px 60px rgba(0,0,0,0.5)' },
   lobbyHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30, paddingBottom: 20, borderBottom: '1px solid #eee' },
   tag: { background: '#f0f9f4', color: '#27ae60', padding: '5px 10px', borderRadius: 20, fontSize: 14, display: 'flex', alignItems: 'center', gap: 5 },
@@ -213,4 +221,4 @@ export const styles = {
   avatarLarge: { width: 80, height: 80, borderRadius: '50%', background: '#34495e', color: 'white', fontSize: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
   hostBadge: { position: 'absolute', top: 10, right: 10, background: '#f1c40f', color: '#333', fontSize: 12, padding: '4px 8px', borderRadius: 4, fontWeight: 'bold' },
   lobbyFooter: { marginTop: 'auto', borderTop: '1px solid #eee', paddingTop: 20, display: 'flex', justifyContent: 'center' },
-  };
+};

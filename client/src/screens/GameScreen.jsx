@@ -1,6 +1,6 @@
-// 游戏主界面 - 深度适配移动端布局
-import React from 'react';
-import { Coins, Layers, Crown, Clock, Bot, Zap } from 'lucide-react';
+// 游戏主界面 - 深度适配移动端布局，增加了全屏按钮
+import React, { useState } from 'react';
+import { Coins, Layers, Crown, Clock, Bot, Zap, Maximize, Minimize } from 'lucide-react';
 import { styles } from '../styles.js'; 
 import { Card, MiniCard, PlayerAvatar, GameLogPanel } from '../components/BaseUI.jsx';
 import { calculateCardSpacing } from '../utils/cardLogic.js';
@@ -24,9 +24,28 @@ export const GameScreen = ({
     const avatarScale = isCrowded ? 0.85 : 1;
     const avatarStyleOverride = isCrowded ? { transform: `scale(${avatarScale})`, margin: -5 } : {};
 
+    // [新增] 全屏状态控制
+    const [isFullScreen, setIsFullScreen] = useState(false);
+
+    // [新增] 切换全屏逻辑
+    const toggleFullScreen = () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen()
+                .then(() => setIsFullScreen(true))
+                .catch(err => {
+                    console.error("全屏启用失败:", err);
+                    // 很多 iPhone 不支持 requestFullscreen，这里可以给个提示或者静默失败
+                    // 但有了 PWA 方案作为后备，这里静默即可
+                });
+        } else {
+            document.exitFullscreen()
+                .then(() => setIsFullScreen(false))
+                .catch(err => console.error(err));
+        }
+    };
+
     return (
         <div style={styles.gameTable} onMouseUp={() => { /* Global Mouse Up Handled in App */ }}>
-            {/* 增加类名 gameLogPanel 以便在手机上隐藏 */}
             <div className="gameLogPanel">
                  <GameLogPanel logs={gameLogs} />
             </div>
@@ -37,7 +56,22 @@ export const GameScreen = ({
                     <div style={{fontSize: 12, opacity: 0.8, textTransform:'uppercase'}}>Table Points</div>
                     <div style={{fontSize: 32, fontWeight: 'bold', color: '#f1c40f', display:'flex', alignItems:'center', gap:8}}><Coins size={28} /> {pendingPoints}</div>
                 </div>
-                <button style={styles.sortButton} onClick={toggleSort}><Layers size={16} style={{marginRight:5}}/> {sortMode === 'POINT' ? '点数' : '花色'}</button>
+                
+                {/* [修改] 右上角按钮组 */}
+                <div style={{display:'flex', gap: 10}}>
+                    {/* [新增] 全屏按钮 */}
+                    <button 
+                        style={{...styles.glassButton, padding: '8px 12px'}} 
+                        onClick={toggleFullScreen}
+                        title={isFullScreen ? "退出全屏" : "进入全屏"}
+                    >
+                        {isFullScreen ? <Minimize size={18}/> : <Maximize size={18}/>}
+                    </button>
+
+                    <button style={styles.sortButton} onClick={toggleSort}>
+                        <Layers size={16} style={{marginRight:5}}/> {sortMode === 'POINT' ? '点数' : '花色'}
+                    </button>
+                </div>
             </div>
 
             <div style={styles.infoMessage}>{infoMessage}</div>
@@ -76,22 +110,17 @@ export const GameScreen = ({
                 </div>
             )}
 
-            {/* 桌面区域 (出牌展示) */}
-            {/* [修改] 增加 mobile-table-center 类名 */}
             <div style={styles.tableCenter} className="mobile-table-center">
                 {lastPlayed.length > 0 && (
                     <div style={{animation: 'popIn 0.3s'}}>
                         <div style={styles.playerNameTag}>{lastPlayerName}</div>
                         <div style={styles.playedRow} className="mini-card-container"> 
-                            {/* 给 MiniCard 加个父容器类名以便 CSS 控制 */}
                             {lastPlayed.map((c, i) => <MiniCard key={i} cardVal={c} index={i} />)}
                         </div>
                     </div>
                 )}
             </div>
 
-            {/* 玩家区域 */}
-            {/* [修改] 增加 mobile-players-area 类名 */}
             <div style={styles.playersArea} className="mobile-players-area">
                 {players.map((p, i) => {
                     const info = (playersInfo && playersInfo[p.id]) || {};
@@ -120,7 +149,6 @@ export const GameScreen = ({
                 })}
             </div>
 
-            {/* 手牌区域 */}
             <div 
                 style={{
                     ...styles.handArea, 
@@ -146,8 +174,6 @@ export const GameScreen = ({
                 ))}
             </div>
 
-            {/* 操作栏 */}
-            {/* [修改] 增加 action-bar-container 类名 */}
             <div style={styles.actionBar} className="action-bar-container">
                 {!winner && !roundResult && !grandResult && (
                     <div style={{display:'flex', alignItems: 'center', gap: 20}}>
