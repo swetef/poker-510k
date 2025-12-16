@@ -198,7 +198,9 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
       align-content: start !important;
       gap: 10px !important;
       -webkit-overflow-scrolling: touch; 
-      padding-bottom: 100px !important; 
+      
+      /* [关键修改] 移除下边距占位，因为 Footer 不再是绝对定位 */
+      padding-bottom: 10px !important; 
   }
   
   .mobile-lobby-grid > div { padding: 15px !important; gap: 10px !important; }
@@ -211,8 +213,12 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
       border-top: 1px solid #eee;
       z-index: 10;
       padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important; 
-      position: absolute; 
-      bottom: 0; left: 0; right: 0;
+      
+      /* [关键修复] 取消绝对定位，改用 flex 布局的自然底部对齐 */
+      /* 之前是 position: absolute; bottom: 0; */
+      position: static !important; 
+      margin-top: auto !important; /* 这会让它自动顶到最下面，但不会飞出容器 */
+      
       display: flex !important;
       justify-content: space-around !important;
       box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
@@ -228,8 +234,6 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
 
 
   /* --- 2.3 游戏页 (Game Table) --- */
-  
-  /* 弹窗适配 */
   .modal-content-wrapper {
       padding: 24px !important; 
       width: 85% !important;    
@@ -239,7 +243,6 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
   }
   .modal-content-wrapper h2 { font-size: 22px !important; }
   .modal-content-wrapper div { font-size: 15px !important; line-height: 1.6 !important; }
-  
 }
 
 
@@ -256,15 +259,27 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
         padding-right: max(15px, env(safe-area-inset-right)) !important; 
     }
 
-    /* [关键修复] 针对 LobbyScreen (大厅) 强制保持纵向布局，防止全屏/横屏时变成左右结构导致拉伸 */
+    /* [关键修复] 针对 LobbyScreen (大厅) 强制保持“竖屏样式” */
     .lobbyCard.mobile-layout-column {
-        flex-direction: column !important;
-        width: 100% !important; /* 确保宽度撑满 */
+        flex-direction: column !important; /* 强制垂直排列，不要左右分栏 */
+        width: 100% !important;
+        max-width: 500px !important; /* 限制最大宽度，防止横屏太宽难看 */
+        margin: 0 auto !important;   /* 居中显示 */
+        border-radius: 12px !important; /* 保持圆角 */
+        height: 95dvh !important; /* 稍微留点边距 */
+        margin-top: 2.5dvh !important;
     }
 
-    /* [关键修复] 确保横屏下大厅内容容器宽度正常 */
+    /* 确保横屏下内容宽度正常 */
     .mobile-lobby-content {
         width: 100% !important;
+    }
+
+    /* [关键修复] 确保 Footer 在横屏下也乖乖呆在下面，并且可见 */
+    .mobile-lobby-footer {
+        position: static !important;
+        margin-top: auto !important;
+        padding-bottom: 5px !important;
     }
 
     .mobile-login-left { 

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Target, Layers, User, Play, Clock, Bot } from 'lucide-react';
-import { styles } from '../styles';
+import { styles } from '../styles.js'; // [修复] 增加 .js 后缀以确保解析正确
 
 export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleStartGame, handleAddBot }) => (
     <div style={styles.container}>
