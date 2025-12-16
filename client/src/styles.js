@@ -20,10 +20,13 @@ export const styles = {
       borderRadius: 24, 
       width: '95%', 
       maxWidth: '1100px', 
-      minHeight: '600px', 
+      // [修改] 移除强制的 minHeight，避免小屏幕被撑出屏幕外
+      minHeight: 'auto', 
+      // [修改] 保持最大高度，但在CSS中我们通常会覆盖它为100%或自适应
       maxHeight: '90vh',
       display: 'flex', 
       boxShadow: '0 50px 100px -20px rgba(0,0,0,0.7)',
+      // [保留] 圆角需要 hidden，但如果内容依然缺失，请确保 index.css 中的 .mobile-layout-column 覆盖了 overflow
       overflow: 'hidden',
       animation: 'popIn 0.5s ease-out'
   },
@@ -32,7 +35,8 @@ export const styles = {
   loginLeft: { 
       flex: 0.8, 
       background: 'linear-gradient(135deg, #27ae60 0%, #2ecc71 100%)', 
-      padding: '60px 50px', 
+      // [关键修改] 大幅减小 Padding，防止在手机上占满屏幕导致右侧内容消失
+      padding: '40px 30px', 
       display:'flex', 
       flexDirection:'column', 
       justifyContent:'center', 
@@ -41,31 +45,32 @@ export const styles = {
       position: 'relative',
       overflow: 'hidden'
   },
-  logoCircle: { width: 90, height: 90, background: 'rgba(255,255,255,0.2)', borderRadius: 24, display:'flex', alignItems:'center', justifyContent:'center', marginBottom: 25, backdropFilter: 'blur(10px)' },
-  logoText: { fontSize: 28, fontWeight: '900', color: 'white' },
-  brandTitle: { fontSize: 48, fontWeight: '800', margin: '0 0 15px 0', letterSpacing: -1.5 },
-  brandSubtitle: { fontSize: 18, opacity: 0.9, marginBottom: 50, fontWeight: '500' },
-  featureList: { marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 15 },
-  featureItem: { fontSize: 15, opacity: 0.95, display:'flex', alignItems:'center', fontWeight: '500' },
+  logoCircle: { width: 70, height: 70, background: 'rgba(255,255,255,0.2)', borderRadius: 20, display:'flex', alignItems:'center', justifyContent:'center', marginBottom: 20, backdropFilter: 'blur(10px)' },
+  logoText: { fontSize: 24, fontWeight: '900', color: 'white' },
+  brandTitle: { fontSize: 36, fontWeight: '800', margin: '0 0 10px 0', letterSpacing: -1 },
+  brandSubtitle: { fontSize: 16, opacity: 0.9, marginBottom: 30, fontWeight: '500' },
+  featureList: { marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 },
+  featureItem: { fontSize: 14, opacity: 0.95, display:'flex', alignItems:'center', fontWeight: '500' },
 
   // 右侧表单区
   loginRight: { 
       flex: 1.2, 
-      padding: '50px 60px', 
+      // [关键修改] 减小 Padding，给内容更多空间
+      padding: '30px 30px', 
       display: 'flex',
       flexDirection: 'column',
       background: '#ffffff',
       overflowY: 'auto' 
   },
   
-  tabs: { display: 'flex', gap: 35, marginBottom: 35, borderBottom: '2px solid #f1f2f6' },
-  tabBtn: { padding: '12px 0', fontSize: 18, fontWeight: 'bold', color: '#95a5a6', background: 'none', border: 'none', cursor: 'pointer', transition: 'all 0.3s', borderBottom: '3px solid transparent', marginBottom: -3 },
-  tabBtnActive: { padding: '12px 0', fontSize: 18, fontWeight: 'bold', color: '#2c3e50', background: 'none', border: 'none', cursor: 'pointer', transition: 'all 0.3s', borderBottom: '3px solid #27ae60', marginBottom: -3 },
+  tabs: { display: 'flex', gap: 35, marginBottom: 25, borderBottom: '2px solid #f1f2f6' },
+  tabBtn: { padding: '12px 0', fontSize: 16, fontWeight: 'bold', color: '#95a5a6', background: 'none', border: 'none', cursor: 'pointer', transition: 'all 0.3s', borderBottom: '3px solid transparent', marginBottom: -3 },
+  tabBtnActive: { padding: '12px 0', fontSize: 16, fontWeight: 'bold', color: '#2c3e50', background: 'none', border: 'none', cursor: 'pointer', transition: 'all 0.3s', borderBottom: '3px solid #27ae60', marginBottom: -3 },
   
   formContent: { flex: 1, display: 'flex', flexDirection: 'column' },
 
-  inputGroup: { display: 'flex', alignItems: 'center', background: '#f8f9fa', borderRadius: 14, padding: '0 20px', marginBottom: 20, border: '1px solid #e1e4e8', height: 60, transition: 'all 0.2s' },
-  input: { padding: '10px', border: 'none', background: 'transparent', flex: 1, outline:'none', fontSize: 17, color: '#2c3e50', fontWeight: '500' },
+  inputGroup: { display: 'flex', alignItems: 'center', background: '#f8f9fa', borderRadius: 14, padding: '0 15px', marginBottom: 15, border: '1px solid #e1e4e8', height: 50, transition: 'all 0.2s' },
+  input: { padding: '10px', border: 'none', background: 'transparent', flex: 1, outline:'none', fontSize: 16, color: '#2c3e50', fontWeight: '500' },
 
   // 高级配置面板
   advancedConfigPanel: { 
@@ -77,22 +82,22 @@ export const styles = {
   configGrid: {
       display: 'grid',
       gridTemplateColumns: '1fr 1fr', 
-      gap: '25px 35px'
+      gap: '15px 20px'
   },
-  configItem: { display: 'flex', flexDirection: 'column', gap: 10 },
-  configLabel: { display: 'flex', justifyContent: 'space-between', fontSize: 14, color: '#7f8c8d', fontWeight: '600' },
+  configItem: { display: 'flex', flexDirection: 'column', gap: 8 },
+  configLabel: { display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#7f8c8d', fontWeight: '600' },
   configValue: { color: '#27ae60', fontWeight: 'bold' },
   
   rangeInput: { width: '100%', cursor: 'pointer', accentColor: '#27ae60', height: 6 },
 
   radioGroup: { display: 'flex', gap: 10 },
-  radioBtn: { flex: 1, padding: '8px 0', borderRadius: 8, border: '1px solid #e1e4e8', background: 'white', color: '#7f8c8d', fontSize: 13, cursor: 'pointer', transition: 'all 0.2s' },
-  radioBtnActive: { flex: 1, padding: '8px 0', borderRadius: 8, border: '1px solid #27ae60', background: '#eafaf1', color: '#27ae60', fontSize: 13, fontWeight: 'bold', cursor: 'pointer' },
+  radioBtn: { flex: 1, padding: '8px 0', borderRadius: 8, border: '1px solid #e1e4e8', background: 'white', color: '#7f8c8d', fontSize: 12, cursor: 'pointer', transition: 'all 0.2s' },
+  radioBtnActive: { flex: 1, padding: '8px 0', borderRadius: 8, border: '1px solid #27ae60', background: '#eafaf1', color: '#27ae60', fontSize: 12, fontWeight: 'bold', cursor: 'pointer' },
 
   primaryButton: { 
-      marginTop: 25, 
+      marginTop: 20, 
       width: '100%', 
-      height: 65, 
+      height: 55, 
       background: '#2c3e50', 
       color: 'white', 
       border: 'none', 
@@ -102,7 +107,7 @@ export const styles = {
       display: 'flex', 
       justifyContent: 'center', 
       alignItems: 'center', 
-      fontSize: 19, 
+      fontSize: 18, 
       transition: 'all 0.2s', 
       boxShadow: '0 10px 25px rgba(44, 62, 80, 0.25)' 
   },
