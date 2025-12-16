@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/16 20:56:38
+Project Context Generated at 2025/12/16 21:08:30
 
 
 ================================================================================
@@ -2583,10 +2583,13 @@ class GameManager {
 
         player.isAutoPlay = !player.isAutoPlay;
         
+        // 如果当前正好是该玩家的回合
         if (this.gameState && this.players[this.gameState.currentTurnIndex].id === playerId) {
             if (player.isAutoPlay) {
+                // 开启托管：立即尝试运行 Bot
                 this._checkAndRunBot();
             } else {
+                // 取消托管：清除 Bot 计时器，重置超时计时器给玩家思考时间
                 if (this.botTimer) {
                     clearTimeout(this.botTimer);
                     this.botTimer = null;
@@ -2660,12 +2663,15 @@ class GameManager {
 
     _executeBotTurn(botPlayer) {
         if (!this.gameState) return;
+        // 双重检查：确保当前回合确实属于该 Bot，防止 Timer 触发时回合已变
         if (this.players[this.gameState.currentTurnIndex].id !== botPlayer.id) return;
 
         try {
             const hand = this.gameState.hands[botPlayer.id];
+            // 没牌了，直接跳过
             if (!hand || hand.length === 0) {
                  this._advanceTurn(); 
+                 this._broadcastUpdate(); // 广播状态
                  return;
             }
 
@@ -2680,6 +2686,7 @@ class GameManager {
                 cardsToPlay = BotLogic.decideMove(sortedHand, cardsToBeat, this.config.deckCount);
             } catch (err) {
                 console.error("[Bot Error] Logic crashed:", err);
+                // 逻辑崩溃时，默认为 null (过牌/出最小)
             }
 
             if (cardsToPlay) {
@@ -2694,14 +2701,17 @@ class GameManager {
                     if (result.isRoundOver) {
                         this._handleWin(result, botPlayer.id);
                     } else {
-                        const publicState = this.getPublicState();
-                        this.io.to(this.roomId).emit('game_state_update', publicState);
+                        // 正常出牌后广播
+                        this._broadcastUpdate();
                     }
                 } else {
                     console.error(`[Bot Error] Play failed: ${result.error}`);
                     // [修复] 如果出牌失败（可能是逻辑判断错误），且不是新回合，强制过牌
                     if (!isNewRound) {
                         this._forcePass(botPlayer);
+                    } else {
+                        // 新回合必须出牌但失败了，尝试出最小的一张兜底
+                        this._playMinCard(botPlayer, sortedHand);
                     }
                 }
             } else {
@@ -2709,10 +2719,7 @@ class GameManager {
                 if (isNewRound) {
                     // [修复] 如果是新回合（必须出牌），但 AI 返回 null（异常），强制出一张最小的牌
                     console.warn(`[Bot Fix] AI tried to pass on new round. Forcing min card.`);
-                    const minCard = [sortedHand[0]];
-                    this.playCards(botPlayer.id, minCard);
-                    this.io.to(this.roomId).emit('game_state_update', this.getPublicState());
-                    if (!botPlayer.isBot) this.io.to(botPlayer.id).emit('hand_update', this.gameState.hands[botPlayer.id]);
+                    this._playMinCard(botPlayer, sortedHand);
                 } else {
                     // 正常过牌
                     console.log(`[Bot/Auto] ${botPlayer.name} passes.`);
@@ -2720,24 +2727,60 @@ class GameManager {
                 }
             }
         } catch (error) {
-            console.error(`[Bot Error] Exception in _executeBotTurn:`, error);
-            // 兜底：防止死循环，直接跳过
+            console.error(`[Bot Error] Critical Exception in _executeBotTurn:`, error);
+            
+            // [关键 Bug 修复]
+            // 如果发生严重错误，我们必须确保游戏继续流转，并且通知前端！
+            // 之前的代码在这里调用了 _advanceTurn 但没有 broadcast，导致前端卡死在 AI 回合，服务器却跑到了用户回合。
+            
+            // 1. 强制跳过当前玩家
             this._advanceTurn();
+            
+            // 2. 重置计时器给下一个人
             this._resetTimer();
+            
+            // 3. 广播状态更新！告诉前端换人了！
+            const publicState = this.getPublicState();
+            publicState.infoText = `${botPlayer.name} 发生错误，跳过`;
+            this.io.to(this.roomId).emit('game_state_update', publicState);
+
+            // 4. 继续驱动 AI (如果是连续 AI)
             this._checkAndRunBot();
         }
     }
     
-    // [新增] 强制过牌辅助函数，处理逻辑更统一
+    // [新增] 辅助：出最小的一张牌 (用于兜底)
+    _playMinCard(botPlayer, sortedHand) {
+        const minCard = [sortedHand[0]];
+        const result = this.playCards(botPlayer.id, minCard);
+        if (result.success) {
+            if (!botPlayer.isBot) this.io.to(botPlayer.id).emit('hand_update', this.gameState.hands[botPlayer.id]);
+            this._broadcastUpdate();
+        } else {
+             // 连最小的牌都出不出去？（理论不应该），只能跳过了
+             this._forcePass(botPlayer); // 实际上如果是新回合不能 pass，但这属于死局保护了
+        }
+    }
+
+    // [新增] 统一广播函数
+    _broadcastUpdate(infoText = null) {
+        const publicState = this.getPublicState();
+        if (infoText) publicState.infoText = infoText;
+        this.io.to(this.roomId).emit('game_state_update', publicState);
+    }
+    
+    // 强制过牌辅助函数
     _forcePass(botPlayer) {
         const result = this.passTurn(botPlayer.id);
         if (result.success) {
-            const publicState = this.getPublicState();
-            publicState.infoText = 'PASS';
-            this.io.to(this.roomId).emit('game_state_update', publicState);
+            this._broadcastUpdate('PASS');
         } else {
-            // 如果连过牌都失败了（例如必须出牌但没出），由于上面已处理 isNewRound，理论上不该走到这
             console.error("[Bot Critical] Failed to pass turn:", result.error);
+            // 如果连 Pass 都失败，可能游戏状态有问题，尝试强制流转
+            this._advanceTurn();
+            this._broadcastUpdate();
+            this._resetTimer();
+            this._checkAndRunBot();
         }
     }
 
@@ -2901,17 +2944,13 @@ class GameManager {
                 if (result.isRoundOver) {
                      this._handleWin(result, currPlayer.id);
                 } else {
-                     const publicState = this.getPublicState();
-                     publicState.infoText = `${currPlayer.name} 超时，系统代打`;
-                     this.io.to(this.roomId).emit('game_state_update', publicState);
+                     this._broadcastUpdate(`${currPlayer.name} 超时，系统代打`);
                 }
             }
         } else {
             const result = this.passTurn(currPlayer.id);
             if (result.success) {
-                const publicState = this.getPublicState();
-                publicState.infoText = `${currPlayer.name} 超时，自动过牌`;
-                this.io.to(this.roomId).emit('game_state_update', publicState);
+                this._broadcastUpdate(`${currPlayer.name} 超时，自动过牌`);
             }
         }
     }
@@ -2932,8 +2971,7 @@ class GameManager {
         let nextIndex = this.gameState.currentTurnIndex;
         let attempts = 0;
         
-        // [修改] 逆时针出牌逻辑 (Counter-Clockwise)
-        // 索引减 1，如果小于0则加总数取模
+        // 逆时针出牌逻辑 (Counter-Clockwise)
         do {
             nextIndex = (nextIndex - 1 + playerCount) % playerCount;
             attempts++;
@@ -3026,23 +3064,18 @@ class GameManager {
         this.gameState.hands[playerId] = newHand;
     }
 
-    // [核心修改] 结算逻辑：增加排名赏罚
     _concludeRound() {
         const lastPlayer = this.players.find(p => this.gameState.hands[p.id].length > 0);
         if (lastPlayer) {
             this.gameState.finishedRank.push(lastPlayer.id);
         }
         
-        // 1. 处理最后一轮的桌面分
         const wId = this.gameState.roundWinnerId;
         if (wId) {
              this.gameState.roundPoints[wId] = (this.gameState.roundPoints[wId] || 0) + this.gameState.pendingTablePoints;
              this.gameState.pendingTablePoints = 0;
         }
 
-        // 2. 构造完整排名 (已跑完 + 剩余玩家)
-        // 实际上在 activeCount <= 1 时，剩下的那个玩家也已经被 push 到 finishedRank 里了(通过上面的 lastPlayer 逻辑)
-        // 但为了保险，我们用 Set 去重确保完整性
         const fullRankIds = [...this.gameState.finishedRank];
         this.players.forEach(p => {
             if (!fullRankIds.includes(p.id)) fullRankIds.push(p.id);
@@ -3053,7 +3086,6 @@ class GameManager {
 
         let logLines = [];
 
-        // 3. 规则一：剩余手牌罚分 (原有逻辑)
         let totalCardPenalty = 0;
         let cardPenaltyDetail = "";
 
@@ -3063,7 +3095,6 @@ class GameManager {
                 totalCardPenalty += handPts;
                 cardPenaltyDetail += `${p.name}-${handPts} `;
             }
-            // 先累加桌面分
             this.grandScores[p.id] += (this.gameState.roundPoints[p.id] || 0);
         });
 
@@ -3072,17 +3103,14 @@ class GameManager {
             logLines.push(`[手牌罚分] 输家共计 ${totalCardPenalty} 分，归第一名 ${this.players.find(p=>p.id===firstWinnerId)?.name}。`);
         }
 
-        // 4. [新增] 规则二：排名赏罚 (Rank Penalty)
         if (this.config.enableRankPenalty && this.config.rankPenaltyScores && this.config.rankPenaltyScores.length > 0) {
             const penaltyConfig = this.config.rankPenaltyScores;
             const playerCount = fullRankIds.length;
             
-            // 遍历配置：[30, 15] 对应 (第一vs倒一), (第二vs倒二)
             penaltyConfig.forEach((score, index) => {
-                const winnerIndex = index; // 0, 1
-                const loserIndex = playerCount - 1 - index; // N-1, N-2
+                const winnerIndex = index; 
+                const loserIndex = playerCount - 1 - index; 
 
-                // 只有当赢家索引小于输家索引时才执行 (避免奇数人数中间撞车)
                 if (winnerIndex < loserIndex) {
                     const winnerId = fullRankIds[winnerIndex];
                     const loserId = fullRankIds[loserIndex];
@@ -3106,7 +3134,7 @@ class GameManager {
         return {
             roundWinnerName: firstWinnerName,
             pointsEarned: totalPointsEarned, 
-            detail: logLines.join('\n') || '完美结束，无额外罚分', // 用换行符连接
+            detail: logLines.join('\n') || '完美结束，无额外罚分', 
             grandScores: this.grandScores,
             isGrandOver
         };

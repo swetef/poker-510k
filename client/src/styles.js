@@ -119,7 +119,11 @@ export const styles = {
       display: 'flex', 
       flexDirection: 'column', 
       userSelect: 'none',
-      // [关键修改] 修复左侧被吞掉的问题：使用 max 确保至少有 15px 的安全边距
+      
+      // [关键修复2] 必须加上 border-box，否则 100vw + padding 会导致宽度溢出屏幕，
+      // 从而让右侧绝对定位的玩家（right: 10）被挤出屏幕外
+      boxSizing: 'border-box',
+
       paddingTop: 'env(safe-area-inset-top)',
       paddingLeft: 'max(15px, env(safe-area-inset-left))',
       paddingRight: 'max(15px, env(safe-area-inset-right))',
@@ -194,10 +198,13 @@ export const styles = {
   logTime: { display: 'none' },
   
   tableHeader: { 
-      padding: '10px 20px', 
-      // [修复] 确保 Header 也受到安全区保护
-      paddingTop: 'calc(10px + env(safe-area-inset-top))', 
-      paddingLeft: 'max(15px, env(safe-area-inset-left))',
+      // [关键修复1] 减小基础内边距，让内容紧贴左上角
+      padding: '4px 10px', // 原: 10px 20px -> 现: 4px 10px
+      
+      // 减小安全区叠加的距离，确保在无刘海设备上也很紧凑
+      paddingTop: 'calc(4px + env(safe-area-inset-top))', 
+      paddingLeft: 'max(4px, env(safe-area-inset-left))', // 原: 15px -> 现: 4px
+      
       display: 'flex', 
       justifyContent: 'space-between', 
       alignItems:'flex-start', 
@@ -205,7 +212,7 @@ export const styles = {
       position: 'absolute',
       top: 0,
       width: '100%',
-      boxSizing: 'border-box',
+      boxSizing: 'border-box', // 确保 width 100% 不会溢出
       pointerEvents: 'none' 
   },
   
@@ -213,7 +220,7 @@ export const styles = {
   roomBadgeContainer: {
     display: 'flex',
     alignItems: 'center',
-    gap: 10,
+    gap: 8, // 稍微缩小间距
     pointerEvents: 'auto'
   },
 
