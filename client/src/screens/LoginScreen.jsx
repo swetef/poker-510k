@@ -1,7 +1,6 @@
-// 登录页 - 适配移动端
-// 增加了服务器连接状态显示，解决用户不知道服务器是否就绪的问题
-import React from 'react';
-import { User, Monitor, RefreshCw, Plus, LogIn, Settings, Clock, Layers, Users, Target, Wifi, WifiOff, Award } from 'lucide-react';
+// 登录页 - 适配移动端，包含自动全屏逻辑 + 手动全屏按钮
+import React, { useState } from 'react'; // [修改] 引入 useState
+import { User, Monitor, RefreshCw, Plus, LogIn, Settings, Clock, Layers, Users, Target, Wifi, WifiOff, Award, Maximize, Minimize } from 'lucide-react'; // [修改] 引入 Maximize, Minimize 图标
 import { styles } from '../styles.js';
 
 export const LoginScreen = ({ 
@@ -14,6 +13,52 @@ export const LoginScreen = ({
     isConnected 
 }) => {
     
+    // [新增] 全屏状态管理
+    const [isFullScreen, setIsFullScreen] = useState(false);
+
+    // [新增] 手动切换全屏
+    const toggleFullScreen = () => {
+        if (!document.fullscreenElement) {
+            const docEl = document.documentElement;
+            const requestFull = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+            if (requestFull) {
+                requestFull.call(docEl)
+                    .then(() => setIsFullScreen(true))
+                    .catch(err => console.log("全屏请求被拦截:", err));
+            }
+        } else {
+            const exitFull = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+            if (exitFull) {
+                exitFull.call(document)
+                    .then(() => setIsFullScreen(false));
+            }
+        }
+    };
+
+    // 尝试请求全屏的辅助函数 (用于点击进入房间时自动触发)
+    const tryEnterFullScreen = () => {
+        try {
+            if (!document.fullscreenElement) {
+                const docEl = document.documentElement;
+                const requestFull = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+                
+                if (requestFull) {
+                    requestFull.call(docEl)
+                        .then(() => setIsFullScreen(true))
+                        .catch(err => console.log("全屏自动触发被拦截 (正常):", err));
+                }
+            }
+        } catch (e) {
+            console.log("全屏错误:", e);
+        }
+    };
+
+    // 包装原本的 handleRoomAction
+    const onActionClick = () => {
+        tryEnterFullScreen(); 
+        handleRoomAction();   
+    };
+
     // 渲染配置项的辅助函数
     const renderConfigSlider = (icon, label, value, min, max, step, onChange, suffix = '') => (
         <div style={styles.configItem}>
@@ -35,9 +80,8 @@ export const LoginScreen = ({
 
     return (
         <div style={styles.container}>
-            {/* [修改] 增加 mobile-layout-column 类名 */}
             <div style={styles.loginCard} className="mobile-layout-column">
-                {/* 左侧：品牌展示区 - [修改] 增加 mobile-login-left 类名 */}
+                {/* 左侧：品牌展示区 */}
                 <div style={styles.loginLeft} className="mobile-login-left">
                     <div style={styles.logoCircle}>
                         <div style={styles.logoText}>510K</div>
@@ -45,7 +89,6 @@ export const LoginScreen = ({
                     <h1 style={styles.brandTitle}>扑克对战</h1>
                     <div style={styles.brandSubtitle}>多人在线 · 自由规则 · 极速畅玩</div>
                     
-                    {/* [修改] 在手机上隐藏特性列表，节省空间 */}
                     <div style={styles.featureList} className="hide-on-mobile">
                         <div style={styles.featureItem}>✨ 支持 2-12 人同台竞技</div>
                         <div style={styles.featureItem}>🚀 只有 1 副牌? 不，现在支持 8 副!</div>
@@ -53,7 +96,7 @@ export const LoginScreen = ({
                     </div>
                 </div>
 
-                {/* 右侧：操作区 - [修改] 增加 mobile-login-right 类名 */}
+                {/* 右侧：操作区 */}
                 <div style={styles.loginRight} className="mobile-login-right">
                     {/* 顶部状态栏 */}
                     <div style={{
@@ -62,11 +105,29 @@ export const LoginScreen = ({
                         alignItems: 'center',
                         marginBottom: 20
                     }}>
-                        <div style={{...styles.tabs, marginBottom: 0, borderBottom: 'none'}}> 
-                           {/* 占位，保持布局平衡 */}
-                        </div>
+                        {/* [新增] 左侧：全屏切换按钮 */}
+                        <button 
+                            onClick={toggleFullScreen}
+                            style={{
+                                background: '#f8f9fa', 
+                                border: '1px solid #e1e4e8', 
+                                borderRadius: 20,
+                                padding: '6px 12px',
+                                cursor: 'pointer', 
+                                color: '#7f8c8d', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: 6,
+                                fontSize: 12, 
+                                fontWeight: 'bold',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            {isFullScreen ? <Minimize size={14}/> : <Maximize size={14}/>}
+                            <span>{isFullScreen ? '退出全屏' : '全屏模式'}</span>
+                        </button>
 
-                        {/* 连接状态指示器 */}
+                        {/* 右侧：连接状态指示器 */}
                         <div style={{
                             display: 'flex', 
                             alignItems: 'center', 
@@ -80,7 +141,7 @@ export const LoginScreen = ({
                             border: `1px solid ${isConnected ? '#abebc6' : '#fadbd8'}`
                         }}>
                             {isConnected ? <Wifi size={14}/> : <WifiOff size={14}/>}
-                            {isConnected ? '服务器已连接' : '正在连接服务器...'}
+                            {isConnected ? '已连接' : '连接中...'}
                         </div>
                     </div>
 
@@ -151,7 +212,7 @@ export const LoginScreen = ({
                                     </div>
                                 </div>
 
-                                {/* [新增] 排名赏罚设置区域 */}
+                                {/* 排名赏罚设置区域 */}
                                 <div style={{marginTop: 20, paddingTop: 20, borderTop: '1px solid #f0f0f0'}}>
                                     <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 15}}>
                                         <div style={{display:'flex', alignItems:'center', gap:8, fontWeight:'600', color:'#555', fontSize:14}}>
@@ -218,7 +279,7 @@ export const LoginScreen = ({
                                 cursor: (!isConnected || isLoading) ? 'not-allowed' : 'pointer',
                                 background: (!isConnected) ? '#95a5a6' : '#2c3e50'
                             }} 
-                            onClick={handleRoomAction} 
+                            onClick={onActionClick} 
                             disabled={isLoading || !isConnected}
                         >
                             {(isLoading || !isConnected) ? <RefreshCw className="spin" size={20}/> : (isCreatorMode ? <Plus size={20}/> : <LogIn size={20}/>)}

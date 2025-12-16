@@ -1,9 +1,9 @@
 // 统一样式文件 - 移动端适配版
+// 增加了 viewport 安全区支持，防止刘海遮挡
 export const styles = {
   // 全局容器
   container: { 
-      // [核心修改] 改为 100dvh，自动减去地址栏高度，防止底部被遮挡
-      height: '100dvh', 
+      height: '100dvh', // 使用 100dvh 自动适配动态地址栏
       width: '100vw', 
       display: 'flex', 
       justifyContent: 'center', 
@@ -109,9 +109,8 @@ export const styles = {
 
   // --- Game Screen Styles ---
 
-  // [核心修改] 这里的 100dvh 是最关键的，确保游戏桌面不被地址栏挤压
   gameTable: { 
-      height: '100dvh', 
+      height: '100dvh', // 使用 100dvh
       width: '100vw', 
       background: '#1e3c29', 
       backgroundImage: 'radial-gradient(circle at center, #2d7a54 0%, #173b25 100%)', 
@@ -119,16 +118,23 @@ export const styles = {
       overflow: 'hidden', 
       display: 'flex', 
       flexDirection: 'column', 
-      userSelect: 'none' 
+      userSelect: 'none',
+      // [关键修改] 增加 safe-area-inset 适配刘海屏
+      paddingTop: 'env(safe-area-inset-top)',
+      paddingLeft: 'env(safe-area-inset-left)',
+      paddingRight: 'env(safe-area-inset-right)',
+      paddingBottom: 'env(safe-area-inset-bottom)'
   },
   
+  // Players Area: 调整位置，避免被顶部 Header 遮挡
   playersArea: { 
       display: 'flex', 
       justifyContent: 'center', 
       alignContent: 'center', 
       flexWrap: 'wrap',       
       gap: '10px',            
-      paddingTop: 60,         
+      // [修改] 增加顶部 padding，给 Header 留出空间
+      paddingTop: 80,         
       marginBottom: 200,      
       width: '98%',           
       maxWidth: 1600,         
@@ -158,12 +164,23 @@ export const styles = {
   logItem: { lineHeight: 1.5, display: 'flex', alignItems: 'flex-start' },
   logTime: { opacity: 0.5, fontSize: 10, marginRight: 8, width: 45, display: 'inline-block', color: '#ccc' },
   
-  tableHeader: { padding: '20px 40px', display: 'flex', justifyContent: 'space-between', alignItems:'flex-start', zIndex: 20 },
+  tableHeader: { 
+      // [修改] 顶部栏使用 padding + safe-area，且使用绝对定位确保不被流式布局挤走
+      padding: '10px 40px', 
+      paddingTop: 'calc(10px + env(safe-area-inset-top))', 
+      display: 'flex', 
+      justifyContent: 'space-between', 
+      alignItems:'flex-start', 
+      zIndex: 20,
+      position: 'absolute',
+      top: 0,
+      width: '100%',
+      boxSizing: 'border-box'
+  },
   roomBadge: { background: 'rgba(0,0,0,0.3)', color:'white', padding: '8px 20px', borderRadius: 20, fontSize: 16, border: '1px solid rgba(255,255,255,0.1)', fontWeight: 'bold' },
   
   scoreBoard: { position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.5)', padding: '10px 50px', borderRadius: 20, textAlign: 'center', color: 'white', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' },
   
-  // 增加通用按钮样式，方便复用
   glassButton: { background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 20px', borderRadius: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: 14, transition: 'background 0.2s' },
   sortButton: { background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 20px', borderRadius: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: 14, transition: 'background 0.2s' },
   
