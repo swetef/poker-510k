@@ -1,4 +1,4 @@
-// 基础UI组件 - 修复点击跳动问题 + 优化移动端显示
+// 基础UI组件 - 修复移动端点击无效、双重触发问题
 import React, { useEffect, useRef } from 'react';
 import { Coins, History, Trophy, Flag } from 'lucide-react'; 
 import { getCardDisplay } from '../utils/cardLogic';
@@ -8,31 +8,44 @@ import CountDownTimer from './CountDownTimer';
 export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacing }) => {
     const { suit, text, color, isScore } = getCardDisplay(cardVal);
     
-    // 专门处理触摸开始，阻止后续的鼠标事件
-    const handleTouchStart = (e) => {
-        // [关键修复] 阻止默认事件，防止触发后续的 mousedown/click 导致双重触发
-        if (e.cancelable) e.preventDefault(); 
+    // [关键修复] 使用 Pointer Events 代替 Touch/Mouse 事件
+    // PointerDown 能同时响应鼠标按下和手指按下，且响应速度快，无 300ms 延迟
+    const handlePointerDown = (e) => {
+        // 只有左键点击(0)或触摸时触发
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
+        
+        // 阻止默认行为，防止触发后续的兼容性鼠标事件
+        // 但注意：在某些浏览器中这可能阻止滚动，所以 CSS 的 touch-action: none 配合很重要
+        // e.preventDefault(); 
         e.stopPropagation();
+        
+        // 如果是触摸设备，直接由这里触发点击逻辑
         onClick(cardVal);
     };
 
     return (
         <div 
-            onTouchStart={handleTouchStart}
-            onMouseDown={(e) => {
-                // PC 端逻辑保持不变
-                onClick(cardVal);
+            // 移除 onTouchStart 和 onMouseDown，统一使用 onPointerDown
+            onPointerDown={handlePointerDown}
+            
+            // 保留 MouseEnter 用于 PC 端拖拽滑选（移动端不支持 hover 所以不会触发）
+            onMouseEnter={(e) => {
+                if (e.pointerType === 'mouse') {
+                     onMouseEnter(cardVal);
+                }
             }}
-            onMouseEnter={() => onMouseEnter(cardVal)}
+            
             style={{
                 ...styles.card, 
                 color, 
                 left: index * spacing, 
                 zIndex: index,
                 // [优化] 选中时上浮高度增加，手机上更容易看清
-                transform: isSelected ? 'translateY(-40px)' : 'translateY(0)',
+                transform: isSelected ? 'translateY(-45px)' : 'translateY(0)',
                 borderColor: isSelected ? '#3498db' : (isScore ? '#f1c40f' : '#bdc3c7'),
                 boxShadow: isSelected ? '0 0 15px rgba(52, 152, 219, 0.6)' : (isScore ? '0 0 8px rgba(241, 196, 15, 0.4)' : '0 -2px 5px rgba(0,0,0,0.1)'),
+                // 确保移动端可以接收 Pointer 事件
+                touchAction: 'none' 
             }}
         >
             <div style={{fontSize: 18, fontWeight: 'bold'}}>{text}</div>

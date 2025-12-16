@@ -1,33 +1,55 @@
 /* =========================================
-   全局基础样式 (Base)
+   全局基础样式 (Base & Reset)
    ========================================= */
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
+
+  /* 配色方案 */
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
   background-color: #242424;
+
+  /* 字体渲染优化 */
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   
-  /* 禁止移动端点击高亮 */
+  /* [优化] 禁止移动端点击高亮 */
   -webkit-tap-highlight-color: transparent; 
 }
 
+/* 链接样式 */
 a { font-weight: 500; color: #646cff; text-decoration: inherit; }
 a:hover { color: #535bf2; }
 
-body {
+/* Body 基础设置 */
+html, body {
   margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  /* [关键修复] 彻底禁止浏览器的下拉刷新和回弹效果 */
+  overscroll-behavior: none;
+  overflow: hidden; /* 锁死 Body 滚动，只允许内部元素滚动 */
+  position: fixed;  /* 强制固定，防止 iOS Safari 地址栏因为页面滚动而忽隐忽现 */
+}
+
+body {
   display: flex;
   place-items: center;
   min-width: 320px;
-  min-height: 100vh;
-  /* 防止 iOS 左右滑动切换历史记录 */
-  overscroll-behavior-x: none; 
+}
+
+/* [优化] 针对根容器优化触摸体验 */
+#root, .App {
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  /* 允许内部正常的点击和滚动 */
+  touch-action: manipulation;
 }
 
 h1 { font-size: 3.2em; line-height: 1.1; }
@@ -58,22 +80,12 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
    ========================================= */
 
 /* --- 1. 横屏引导遮罩 --- */
-/* 修正逻辑：不再无脑显示遮罩，避免挡住登录页。
-   建议在 GameScreen 的最外层 div 加一个 id="game-root"，
-   然后这里改成 #game-root .landscape-hint { ... }
-   或者直接允许竖屏游玩（当前布局已支持）。
-*/
-@media screen and (orientation: portrait) and (max-width: 768px) {
-    /* 如果你确实希望在游戏里强制横屏，请取消下面这行的注释，并配合 JS 类名 */
-    /* .game-active .landscape-hint { display: flex !important; } */
-}
-
 .landscape-hint {
     display: none; 
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(30, 39, 46, 0.95);
-    z-index: 9999;
+    z-index: 9999; 
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -82,8 +94,10 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
     backdrop-filter: blur(10px);
     touch-action: none; 
 }
+
 .phone-rotate-icon {
-    width: 60px; height: 100px; border: 3px solid white; border-radius: 10px; margin-bottom: 20px;
+    width: 60px; height: 100px; 
+    border: 3px solid white; border-radius: 10px; margin-bottom: 20px;
     animation: rotate-phone 2s infinite ease-in-out;
 }
 @keyframes rotate-phone {
@@ -93,48 +107,43 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
 }
 
 
-/* --- 2. 移动端竖屏布局优化 (Portrait) --- */
+/* --- 2. 移动端竖屏布局优化 (Portrait Core) --- */
 
 @media (max-width: 768px) {
   
-  /* 隐藏滚动条但保留功能 */
   ::-webkit-scrollbar { width: 0px; background: transparent; }
 
-  /* [核心修复] 强制覆盖 styles.js 里的 width: 1000px 等固定宽度 
-     以及解决 body/container 的 overflow 问题
-  */
-  body > div { /* 选中 #root */
-    width: 100%;
-    overflow-x: hidden;
-  }
-  
-  /* 通用列布局容器修正 */
+  /* 通用列容器 */
   .mobile-layout-column {
     display: flex !important;
     flex-direction: column !important;
-    width: 95% !important;     /* 留一点边距 */
-    max-width: none !important; /* 取消 styles.js 的最大宽度限制 */
+    width: 95% !important;     
+    max-width: none !important; 
     height: auto !important;
+    
+    /* 使用 dvh 适配动态地址栏 */
     min-height: 85vh !important; 
-    max-height: 95vh !important; /* 限制高度防止撑破屏幕 */
+    min-height: 85dvh !important; 
+    
+    max-height: 95dvh !important; 
     margin: 10px auto !important; 
-    overflow: hidden !important; /* 内部滚动 */
-    padding: 0 !important;      /* 清除 styles.js 的 padding */
+    overflow: hidden !important; 
+    padding: 0 !important;      
   }
 
-  /* --- 登录页 (Login) --- */
+  /* --- 2.1 登录页 (Login) --- */
   .mobile-login-left {
     flex: 0 0 auto !important; 
     width: 100% !important;
     padding: 30px 20px !important; 
     border-radius: 0 0 24px 24px !important; 
-    background-color: #242424; /* 确保背景色 */
+    background-color: #242424; 
     min-height: auto !important;
-    align-items: center !important; /* 内容居中 */
+    align-items: center !important; 
     text-align: center !important;
+    padding-top: max(30px, env(safe-area-inset-top)) !important;
   }
   
-  /* 适配登录页左侧内容 */
   .mobile-login-left h1 { font-size: 2.5em !important; margin-bottom: 10px !important; }
   .mobile-login-left .logoCircle { width: 70px !important; height: 70px !important; margin-bottom: 15px !important; }
   .mobile-login-left .logoText { font-size: 22px !important; }
@@ -145,21 +154,21 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
     padding: 30px 20px !important;
     background: white;
     border-radius: 24px 24px 0 0 !important; 
-    margin-top: -20px; /* 视觉重叠 */
+    margin-top: -20px; 
     position: relative;
     z-index: 2;
-    overflow-y: auto !important; /* 允许表单滚动 */
+    overflow-y: auto !important;
     display: flex !important;
     flex-direction: column !important;
+    padding-bottom: max(30px, env(safe-area-inset-bottom)) !important;
   }
   
-  /* 隐藏 PC 端特性的列表 */
   .hide-on-mobile { display: none !important; }
 
 
-  /* --- 大厅页 (Lobby) --- */
+  /* --- 2.2 大厅页 (Lobby) --- */
   .lobbyCard.mobile-layout-column {
-      height: 92vh !important; /* 大厅稍微高一点 */
+      height: 92dvh !important; 
       position: relative;
       background: white !important;
   }
@@ -176,22 +185,22 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
       flex: 0 0 auto;
       padding: 15px !important;
       padding-top: calc(15px + env(safe-area-inset-top)) !important; 
+      background: #f8f9fa; 
   }
-  .lobbyHeader h2 { font-size: 20px !important; }
+  .lobbyHeader h2 { font-size: 20px !important; margin: 0 !important; }
 
   .mobile-lobby-grid {
       flex: 1 !important; 
       overflow-y: auto !important; 
       padding: 10px !important;
       display: grid !important;
-      grid-template-columns: repeat(2, 1fr) !important; /* 手机上一行两个 */
+      grid-template-columns: repeat(2, 1fr) !important; 
       align-content: start !important;
       gap: 10px !important;
       -webkit-overflow-scrolling: touch; 
-      padding-bottom: 80px !important; /* 避开底部按钮 */
+      padding-bottom: 100px !important; 
   }
   
-  /* 玩家卡片缩小一点 */
   .mobile-lobby-grid > div { padding: 15px !important; gap: 10px !important; }
   .mobile-lobby-grid .avatar-large { width: 50px !important; height: 50px !important; font-size: 20px !important; }
 
@@ -206,142 +215,184 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
       bottom: 0; left: 0; right: 0;
       display: flex !important;
       justify-content: space-around !important;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
   }
   
   .mobile-lobby-footer button {
       width: 45% !important;
       padding: 0 !important;
-      height: 44px !important;
+      height: 44px !important; 
       font-size: 14px !important;
       margin: 0 !important;
   }
 
 
-  /* --- 游戏页 (Game Table) --- */
+  /* --- 2.3 游戏页 (Game Table) --- */
   
-  /* 修复：弹窗 (Modal) 在手机上被 styles.js 的 padding:60px 撑爆的问题 */
+  /* 弹窗适配 */
   .modal-content-wrapper {
-      padding: 20px !important; /* 覆盖 JS 的 60px */
-      width: 85% !important;    /* 限制宽度 */
-      max-width: 320px !important;
+      padding: 24px !important; 
+      width: 85% !important;    
+      max-width: 340px !important;
       border-radius: 20px !important;
+      z-index: 1000 !important; 
   }
-  .modal-content-wrapper h2 { font-size: 24px !important; }
-  .modal-content-wrapper div { font-size: 16px !important; }
+  .modal-content-wrapper h2 { font-size: 22px !important; }
+  .modal-content-wrapper div { font-size: 15px !important; line-height: 1.6 !important; }
   
-  /* 隐藏 PC 端日志面板，太占地 */
   .gameLogPanel { display: none !important; }
   
-  /* 顶部信息栏适配 */
-  .tableHeader { padding: 10px !important; padding-top: calc(10px + env(safe-area-inset-top)) !important; }
+  /* 顶部信息栏 */
+  .tableHeader { 
+      padding: 10px !important; 
+      padding-top: calc(10px + env(safe-area-inset-top)) !important; 
+      z-index: 50;
+      /* 确保顶部栏不被遮挡 */
+      position: absolute;
+      top: 0; width: 100%;
+  }
   .tableHeader .roomBadge { padding: 4px 10px !important; font-size: 12px !important; }
-  .tableHeader .scoreBoard { padding: 5px 15px !important; top: 50px !important; } 
-  .tableHeader .scoreBoard div:first-child { display: none; } /* 隐藏 "Table Points" 文字 */
+  .tableHeader .scoreBoard { padding: 5px 15px !important; top: 60px !important; } 
+  .tableHeader .scoreBoard div:first-child { display: none; } 
   
-  /* 玩家头像区域 */
+  /* [优化] 玩家区域位置调整 */
   .mobile-players-area {
-    padding-top: 80px !important; /* 避开分数板 */
+    /* 减少 padding-top，给中间腾出空间 */
+    padding-top: 65px !important; 
     margin-bottom: 0 !important;
     gap: 8px !important;
     width: 100% !important;
     justify-content: center !important;
+    z-index: 40;
+    /* 确保玩家头像在出牌下方（如果不小心重叠），但在背景上方 */
+    position: relative;
   }
-  /* 头像缩放 */
+  
+  /* 玩家头像微调 */
   .mobile-avatar-scale .playerBox { 
-      padding: 5px !important; min-width: 60px !important; 
+      padding: 5px !important; min-width: 60px !important; background: rgba(0,0,0,0.5) !important;
   }
   .mobile-avatar-scale .avatar { 
       width: 40px !important; height: 40px !important; line-height: 40px !important; font-size: 14px !important; 
   }
   
-  /* 出牌区域 (桌面中间) - 关键修复 */
+  /* [核心修复] 桌面出牌区域位置调整 */
   .mobile-table-center {
     display: flex !important;
     align-items: center !important; 
     justify-content: center !important;
     width: 100% !important;
-    /* 使用固定定位或 Flex 调整，防止被底部手牌遮挡 */
     position: absolute !important;
-    top: 45% !important; 
+    /* [修改] 从 42% 上移到 38%，防止被底部手牌遮挡 */
+    top: 38% !important; 
     transform: translateY(-50%);
     padding: 0 !important; 
     margin: 0 !important;
-    z-index: 5; 
+    /* [修改] 提高层级，确保不被侧边玩家遮挡 */
+    z-index: 30 !important; 
+    pointer-events: none; 
+  }
+  .mobile-table-center > * {
+      pointer-events: auto; 
   }
   
-  /* 打出的牌稍微缩小 */
   .mobile-table-center .mini-card {
       padding: 8px 12px !important;
       font-size: 20px !important;
-      min-width: 30px !important;
+      min-width: 36px !important;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
   }
 
-  /* 手牌区域 (Hand) */
+  /* [核心] 手牌区域 */
   .mobile-hand-area {
     width: 100% !important;
+    position: fixed !important; 
     bottom: 0 !important;
-    padding-bottom: calc(5px + env(safe-area-inset-bottom)) !important;
-    height: 140px !important; /* 给够高度 */
-    background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%); /* 增加背景让牌看清 */
+    padding-bottom: calc(10px + env(safe-area-inset-bottom)) !important;
+    /* [修改] 高度稍微减小一点点，留给桌面更多空间 */
+    height: 145px !important; 
+    background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.6) 60%, transparent 100%) !important;
     z-index: 100 !important;
+    touch-action: none;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
   }
   
-  /* 操作栏 (Play/Pass) */
+  /* 操作栏 */
   .action-bar-container {
-      bottom: 140px !important; /* 提上来，在手牌上面 */
+      position: fixed !important;
+      bottom: calc(150px + env(safe-area-inset-bottom)) !important;
+      left: 0; right: 0;
       height: 60px !important;
       background: none !important;
-      z-index: 90 !important;
+      z-index: 110 !important; 
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      pointer-events: none; 
   }
   .action-bar-container button {
-      padding: 10px 30px !important;
+      pointer-events: auto; 
+      padding: 0 32px !important;
       font-size: 16px !important;
-      height: 44px !important;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
+      height: 48px !important;
+      border-radius: 24px !important; 
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4) !important;
+      background-color: #646cff !important; 
+      color: white !important;
+      border: 2px solid rgba(255,255,255,0.2) !important;
+  }
+  .action-bar-container button:disabled {
+      background-color: #555 !important;
+      opacity: 0.6;
   }
 }
 
 
-/* --- 3. 移动端横屏适配 (Landscape) --- */
-/* 如果用户旋转手机，布局自动变为横向，利用屏幕宽度 */
+/* --- 3. 移动端横屏适配 (Landscape Overrides) --- */
 @media (max-width: 896px) and (orientation: landscape) {
+    
     .mobile-layout-column {
         flex-direction: row !important;
-        height: 100vh !important; 
+        height: 100dvh !important; 
         max-height: none !important;
         width: 100% !important;
         margin: 0 !important;
-        padding-left: env(safe-area-inset-left); 
-        padding-right: env(safe-area-inset-right); 
+        padding-left: max(15px, env(safe-area-inset-left)) !important; 
+        padding-right: max(15px, env(safe-area-inset-right)) !important; 
     }
 
-    /* 登录页横屏左右分栏 */
     .mobile-login-left { 
-        width: 200px !important; flex: 0 0 200px !important; 
+        width: 240px !important; flex: 0 0 240px !important; 
         height: 100% !important; border-radius: 0 !important; 
         justify-content: center !important;
+        padding-top: 0 !important;
     }
     .mobile-login-right { 
         border-radius: 0 !important; margin-top: 0 !important; 
         justify-content: center !important; 
+        padding-bottom: 20px !important;
     }
 
-    /* 游戏页横屏优化 */
     .mobile-players-area {
       padding-top: 10px !important;
       flex-wrap: nowrap !important;
       justify-content: flex-start !important;
       overflow-x: auto !important;
       gap: 15px !important;
+      scrollbar-width: none; 
     }
     
     .mobile-table-center {
-        top: 40% !important;
+        top: 50% !important;
     }
     
     .mobile-hand-area {
         height: 100px !important;
+        padding-bottom: 5px !important;
     }
+    
     .action-bar-container {
         bottom: 110px !important;
     }
