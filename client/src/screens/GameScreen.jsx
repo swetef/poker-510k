@@ -16,8 +16,7 @@ export const GameScreen = ({
     const isMyTurn = currentTurnId === mySocketId;
     const amIHost = players.find(p => p.id === mySocketId)?.isHost;
     
-    // 手牌区域宽度 (留出左边的头像位置)
-    const handAreaWidth = window.innerWidth - 100; 
+    const handAreaWidth = window.innerWidth - 80; 
     const cardSpacing = calculateCardSpacing(myHand.length, handAreaWidth);
     
     const myInfo = (playersInfo && playersInfo[mySocketId]) || {};
@@ -62,62 +61,73 @@ export const GameScreen = ({
 
     // --- 玩家位置计算逻辑 ---
     // 目标：自己(左下)，其他人(左 -> 上 -> 右)
+    // 约束：左右最多2个，不能重叠，剩下放上面
     const renderPlayers = () => {
         const myIndex = players.findIndex(p => p.id === mySocketId);
-        // 如果找不到自己（观战模式？），默认第一个视角
         const safeMyIndex = myIndex === -1 ? 0 : myIndex;
         
-        // 重新排序数组，把自己放在第一个，然后依次是下家、下下家...
-        // 但为了布局 "左 -> 上 -> 右"，我们需要重新映射
-        // 假设 players 是 [我, A, B, C]
-        // 我们需要把 A, B, C 分配到 左, 上, 右
-        
+        // 1. 获取除自己以外的对手列表，按顺序排列
         const otherPlayers = [];
         for (let i = 1; i < players.length; i++) {
             const idx = (safeMyIndex + i) % players.length;
             otherPlayers.push(players[idx]);
         }
 
-        // 简单的分配逻辑
         const layoutConfig = [];
-        const totalOthers = otherPlayers.length;
-        
-        // 只有1个对手 -> 上
-        if (totalOthers === 1) {
-            layoutConfig.push({ p: otherPlayers[0], pos: { top: 10, left: '50%', transform: 'translateX(-50%)' } });
-        } 
-        // 2个对手 -> 左, 右 (或者 左, 上) -> 用户说 "左边 上面 右边"，那应该是顺时针
-        else if (totalOthers === 2) {
-            layoutConfig.push({ p: otherPlayers[0], pos: { top: '40%', right: 10, transform: 'translateY(-50%)' } }); // 下家在右
-            layoutConfig.push({ p: otherPlayers[1], pos: { top: '40%', left: 10, transform: 'translateY(-50%)' } });  // 上家在左
-        }
-        // 3个及以上 -> 分三组
+        const total = otherPlayers.length;
+
+        // 2. 决定各区域人数
+        // 左边 (Left), 上面 (Top), 右边 (Right)
+        let countL = 0, countT = 0, countR = 0;
+
+        if (total === 1) { countT = 1; }
+        else if (total === 2) { countL = 1; countR = 1; } // 铁三角布局
+        else if (total === 3) { countL = 1; countT = 1; countR = 1; } // 矩形布局
+        else if (total === 4) { countL = 1; countT = 2; countR = 1; } // 避免侧边拥挤，上方放2个
+        else if (total === 5) { countL = 2; countT = 1; countR = 2; } // 侧边开始放2个
         else {
-            const part = Math.ceil(totalOthers / 3);
-            const rightGroup = otherPlayers.slice(0, part); // 下家们 -> 右边
-            const topGroup = otherPlayers.slice(part, totalOthers - part); // 对家们 -> 上边
-            const leftGroup = otherPlayers.slice(totalOthers - part); // 上家们 -> 左边
-
-            // 右边组 (从下往上排，或者垂直居中)
-            rightGroup.forEach((p, i) => {
-                const step = 80;
-                const startY = 50 - ((rightGroup.length - 1) * step / 2 / window.innerHeight * 100); 
-                layoutConfig.push({ p, pos: { top: `${40 - (i * 15)}%`, right: 10, transform: 'translateY(-50%)' } });
-            });
-
-            // 上边组 (水平居中分布)
-            topGroup.forEach((p, i) => {
-                // 简单的基于百分比分布
-                const center = 50;
-                const offset = (i - (topGroup.length - 1) / 2) * 15; // 间距 15%
-                layoutConfig.push({ p, pos: { top: 10, left: `${center + offset}%`, transform: 'translateX(-50%)' } });
-            });
-
-            // 左边组
-            leftGroup.forEach((p, i) => {
-                 layoutConfig.push({ p, pos: { top: `${40 - (i * 15)}%`, left: 10, transform: 'translateY(-50%)' } });
-            });
+            // 人数 >= 6：侧边锁死2个，剩下的全去上面
+            countL = 2;
+            countR = 2;
+            countT = total - 4;
         }
+
+        // 3. 切分数组
+        const leftGroup = otherPlayers.slice(0, countL);
+        const topGroup = otherPlayers.slice(countL, countL + countT);
+        const rightGroup = otherPlayers.slice(countL + countT);
+
+        // 4. 生成坐标
+        // 左侧组：垂直分布
+        leftGroup.forEach((p, i) => {
+            // 如果只有1个，放中间(40%)；如果有2个，放35%和55%
+            const topPos = countL === 1 ? '40%' : (i === 0 ? '35%' : '55%');
+            layoutConfig.push({ p, pos: { top: topPos, left: 10, transform: 'translateY(-50%)' } });
+        });
+
+        // 顶部组：水平分布
+        topGroup.forEach((p, i) => {
+            // 基于中心点扩散
+            // 如果只有1个，50%；多个则均匀分布在 20%~80% 之间
+            let leftPos;
+            if (countT === 1) {
+                leftPos = '50%';
+            } else {
+                // 间距计算
+                const start = 20; 
+                const end = 80;
+                const step = (end - start) / (countT - 1);
+                leftPos = `${start + i * step}%`;
+            }
+            layoutConfig.push({ p, pos: { top: 10, left: leftPos, transform: 'translateX(-50%)' } });
+        });
+
+        // 右侧组：垂直分布 (同左侧)
+        rightGroup.forEach((p, i) => {
+            // 这里注意顺序，通常希望和左侧对称，或者从上往下排
+            const topPos = countR === 1 ? '40%' : (i === 0 ? '35%' : '55%');
+            layoutConfig.push({ p, pos: { top: topPos, right: 10, transform: 'translateY(-50%)' } });
+        });
 
         // 添加自己 (固定在左下角)
         const me = players[safeMyIndex];

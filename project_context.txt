@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/16 19:18:36
+Project Context Generated at 2025/12/16 19:30:07
 
 
 ================================================================================
@@ -911,113 +911,9 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
   .modal-content-wrapper h2 { font-size: 22px !important; }
   .modal-content-wrapper div { font-size: 15px !important; line-height: 1.6 !important; }
   
-  .gameLogPanel { display: none !important; }
+  /* [修改] 移除旧的布局强制覆盖代码，因为新的 styles.js 已经原生支持了绝对定位布局 */
+  /* .gameLogPanel { display: none !important; } */
   
-  /* 顶部信息栏 */
-  .tableHeader { 
-      padding: 10px !important; 
-      padding-top: calc(10px + env(safe-area-inset-top)) !important; 
-      z-index: 50;
-      /* 确保顶部栏不被遮挡 */
-      position: absolute;
-      top: 0; width: 100%;
-  }
-  .tableHeader .roomBadge { padding: 4px 10px !important; font-size: 12px !important; }
-  .tableHeader .scoreBoard { padding: 5px 15px !important; top: 60px !important; } 
-  .tableHeader .scoreBoard div:first-child { display: none; } 
-  
-  /* [优化] 玩家区域位置调整 */
-  .mobile-players-area {
-    /* 减少 padding-top，给中间腾出空间 */
-    padding-top: 65px !important; 
-    margin-bottom: 0 !important;
-    gap: 8px !important;
-    width: 100% !important;
-    justify-content: center !important;
-    z-index: 40;
-    /* 确保玩家头像在出牌下方（如果不小心重叠），但在背景上方 */
-    position: relative;
-  }
-  
-  /* 玩家头像微调 */
-  .mobile-avatar-scale .playerBox { 
-      padding: 5px !important; min-width: 60px !important; background: rgba(0,0,0,0.5) !important;
-  }
-  .mobile-avatar-scale .avatar { 
-      width: 40px !important; height: 40px !important; line-height: 40px !important; font-size: 14px !important; 
-  }
-  
-  /* [核心修复] 桌面出牌区域位置调整 */
-  .mobile-table-center {
-    display: flex !important;
-    align-items: center !important; 
-    justify-content: center !important;
-    width: 100% !important;
-    position: absolute !important;
-    /* [修改] 从 42% 上移到 38%，防止被底部手牌遮挡 */
-    top: 38% !important; 
-    transform: translateY(-50%);
-    padding: 0 !important; 
-    margin: 0 !important;
-    /* [修改] 提高层级，确保不被侧边玩家遮挡 */
-    z-index: 30 !important; 
-    pointer-events: none; 
-  }
-  .mobile-table-center > * {
-      pointer-events: auto; 
-  }
-  
-  .mobile-table-center .mini-card {
-      padding: 8px 12px !important;
-      font-size: 20px !important;
-      min-width: 36px !important;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-  }
-
-  /* [核心] 手牌区域 */
-  .mobile-hand-area {
-    width: 100% !important;
-    position: fixed !important; 
-    bottom: 0 !important;
-    padding-bottom: calc(10px + env(safe-area-inset-bottom)) !important;
-    /* [修改] 高度稍微减小一点点，留给桌面更多空间 */
-    height: 145px !important; 
-    background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.6) 60%, transparent 100%) !important;
-    z-index: 100 !important;
-    touch-action: none;
-    display: flex;
-    justify-content: center;
-    align-items: flex-end;
-  }
-  
-  /* 操作栏 */
-  .action-bar-container {
-      position: fixed !important;
-      bottom: calc(150px + env(safe-area-inset-bottom)) !important;
-      left: 0; right: 0;
-      height: 60px !important;
-      background: none !important;
-      z-index: 110 !important; 
-      display: flex;
-      justify-content: center;
-      gap: 20px;
-      pointer-events: none; 
-  }
-  .action-bar-container button {
-      pointer-events: auto; 
-      padding: 0 32px !important;
-      font-size: 16px !important;
-      height: 48px !important;
-      border-radius: 24px !important; 
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4) !important;
-      background-color: #646cff !important; 
-      color: white !important;
-      border: 2px solid rgba(255,255,255,0.2) !important;
-  }
-  .action-bar-container button:disabled {
-      background-color: #555 !important;
-      opacity: 0.6;
-  }
 }
 
 
@@ -1045,30 +941,7 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
         justify-content: center !important; 
         padding-bottom: 20px !important;
     }
-
-    .mobile-players-area {
-      padding-top: 10px !important;
-      flex-wrap: nowrap !important;
-      justify-content: flex-start !important;
-      overflow-x: auto !important;
-      gap: 15px !important;
-      scrollbar-width: none; 
-    }
-    
-    .mobile-table-center {
-        top: 50% !important;
-    }
-    
-    .mobile-hand-area {
-        height: 100px !important;
-        padding-bottom: 5px !important;
-    }
-    
-    .action-bar-container {
-        bottom: 110px !important;
-    }
 }
-
 
 ================================================================================
 FILE PATH: client\src\main.jsx
@@ -1105,7 +978,10 @@ export const GameScreen = ({
 }) => {
     const isMyTurn = currentTurnId === mySocketId;
     const amIHost = players.find(p => p.id === mySocketId)?.isHost;
-    const cardSpacing = calculateCardSpacing(myHand.length, window.innerWidth);
+    
+    // 手牌区域宽度 (留出左边的头像位置)
+    const handAreaWidth = window.innerWidth - 100; 
+    const cardSpacing = calculateCardSpacing(myHand.length, handAreaWidth);
     
     const myInfo = (playersInfo && playersInfo[mySocketId]) || {};
     const amIAutoPlay = myInfo.isAutoPlay;
@@ -1114,47 +990,130 @@ export const GameScreen = ({
     const avatarScale = isCrowded ? 0.85 : 1;
     const avatarStyleOverride = isCrowded ? { transform: `scale(${avatarScale})`, margin: -5 } : {};
 
-    // [新增] 本地状态用于显示全屏提示
     const [localInfo, setLocalInfo] = useState('');
     const displayMessage = localInfo || serverInfoMessage;
 
-    // [新增] 全屏状态控制
     const [isFullScreen, setIsFullScreen] = useState(false);
 
-    // [修改] 增强版全屏切换逻辑
     const toggleFullScreen = () => {
         const doc = window.document;
         const docEl = doc.documentElement;
-
-        // 各种浏览器的全屏请求方法
         const requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
-        // 退出全屏方法
         const cancelFullScreen = doc.exitFullscreen || doc.mozCancelFullScreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
 
         if (!doc.fullscreenElement && !doc.mozFullScreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) {
-            // 尝试进入全屏
             if (requestFullScreen) {
                 requestFullScreen.call(docEl)
                     .then(() => setIsFullScreen(true))
                     .catch(err => {
                         console.warn("全屏请求被拒绝:", err);
-                        // iOS Safari 可能会拒绝
                         setLocalInfo("⚠️ 您的浏览器不支持网页全屏，请使用'添加到主屏幕'功能");
                         setTimeout(() => setLocalInfo(''), 3000);
                     });
             } else {
-                // 通常是 iOS Safari，根本没有这个 API
                 setLocalInfo("⚠️ iOS请在Safari菜单选择'添加到主屏幕'以全屏游玩");
                 setTimeout(() => setLocalInfo(''), 3000);
             }
         } else {
-            // 退出全屏
             if (cancelFullScreen) {
                 cancelFullScreen.call(doc)
                     .then(() => setIsFullScreen(false))
                     .catch(err => console.error(err));
             }
         }
+    };
+
+    // --- 玩家位置计算逻辑 ---
+    // 目标：自己(左下)，其他人(左 -> 上 -> 右)
+    const renderPlayers = () => {
+        const myIndex = players.findIndex(p => p.id === mySocketId);
+        // 如果找不到自己（观战模式？），默认第一个视角
+        const safeMyIndex = myIndex === -1 ? 0 : myIndex;
+        
+        // 重新排序数组，把自己放在第一个，然后依次是下家、下下家...
+        // 但为了布局 "左 -> 上 -> 右"，我们需要重新映射
+        // 假设 players 是 [我, A, B, C]
+        // 我们需要把 A, B, C 分配到 左, 上, 右
+        
+        const otherPlayers = [];
+        for (let i = 1; i < players.length; i++) {
+            const idx = (safeMyIndex + i) % players.length;
+            otherPlayers.push(players[idx]);
+        }
+
+        // 简单的分配逻辑
+        const layoutConfig = [];
+        const totalOthers = otherPlayers.length;
+        
+        // 只有1个对手 -> 上
+        if (totalOthers === 1) {
+            layoutConfig.push({ p: otherPlayers[0], pos: { top: 10, left: '50%', transform: 'translateX(-50%)' } });
+        } 
+        // 2个对手 -> 左, 右 (或者 左, 上) -> 用户说 "左边 上面 右边"，那应该是顺时针
+        else if (totalOthers === 2) {
+            layoutConfig.push({ p: otherPlayers[0], pos: { top: '40%', right: 10, transform: 'translateY(-50%)' } }); // 下家在右
+            layoutConfig.push({ p: otherPlayers[1], pos: { top: '40%', left: 10, transform: 'translateY(-50%)' } });  // 上家在左
+        }
+        // 3个及以上 -> 分三组
+        else {
+            const part = Math.ceil(totalOthers / 3);
+            const rightGroup = otherPlayers.slice(0, part); // 下家们 -> 右边
+            const topGroup = otherPlayers.slice(part, totalOthers - part); // 对家们 -> 上边
+            const leftGroup = otherPlayers.slice(totalOthers - part); // 上家们 -> 左边
+
+            // 右边组 (从下往上排，或者垂直居中)
+            rightGroup.forEach((p, i) => {
+                const step = 80;
+                const startY = 50 - ((rightGroup.length - 1) * step / 2 / window.innerHeight * 100); 
+                layoutConfig.push({ p, pos: { top: `${40 - (i * 15)}%`, right: 10, transform: 'translateY(-50%)' } });
+            });
+
+            // 上边组 (水平居中分布)
+            topGroup.forEach((p, i) => {
+                // 简单的基于百分比分布
+                const center = 50;
+                const offset = (i - (topGroup.length - 1) / 2) * 15; // 间距 15%
+                layoutConfig.push({ p, pos: { top: 10, left: `${center + offset}%`, transform: 'translateX(-50%)' } });
+            });
+
+            // 左边组
+            leftGroup.forEach((p, i) => {
+                 layoutConfig.push({ p, pos: { top: `${40 - (i * 15)}%`, left: 10, transform: 'translateY(-50%)' } });
+            });
+        }
+
+        // 添加自己 (固定在左下角)
+        const me = players[safeMyIndex];
+        const allItems = [
+            { p: me, pos: { bottom: 25, left: 10, zIndex: 100 } }, // 提高层级
+            ...layoutConfig
+        ];
+
+        return allItems.map(({ p, pos }, i) => {
+            const info = (playersInfo && playersInfo[p.id]) || {};
+            const isBot = info.isBot || p.isBot;
+            const isAuto = info.isAutoPlay;
+            const rankIndex = finishedRank ? finishedRank.indexOf(p.id) : -1;
+            const finishedRankVal = rankIndex !== -1 ? rankIndex + 1 : null;
+
+            return (
+                <div key={p.id} style={{...avatarStyleOverride, position: 'absolute', ...pos}}> 
+                    <PlayerAvatar 
+                        player={p} 
+                        isTurn={p.id === currentTurnId} 
+                        score={playerScores[p.id] || 0} 
+                        targetScore={roomConfig.targetScore} 
+                        isMySocket={p.id === mySocketId}
+                        remainingSeconds={turnRemaining}
+                        rank={finishedRankVal}
+                    />
+                    <div style={{position: 'absolute', top: -10, right: -10, display: 'flex', gap: 5}}>
+                        {isBot && <div style={styles.statusBadgeBot}><Bot size={12}/> AI</div>}
+                        {isAuto && <div style={styles.statusBadgeAuto}><Zap size={12}/> 托管</div>}
+                    </div>
+                </div>
+            );
+        });
     };
 
     return (
@@ -1165,14 +1124,10 @@ export const GameScreen = ({
 
             <div style={styles.tableHeader}>
                 <div style={styles.roomBadge}>Room {roomId}</div>
-                <div style={styles.scoreBoard}>
-                    <div style={{fontSize: 12, opacity: 0.8, textTransform:'uppercase'}}>Table Points</div>
-                    <div style={{fontSize: 32, fontWeight: 'bold', color: '#f1c40f', display:'flex', alignItems:'center', gap:8}}><Coins size={28} /> {pendingPoints}</div>
-                </div>
+                {/* 计分板已移到中心，Header只留 Room 和 按钮 */}
                 
-                {/* [修改] 右上角按钮组 */}
-                <div style={{display:'flex', gap: 10}}>
-                    {/* [新增] 全屏按钮 */}
+                {/* 右上角按钮组 */}
+                <div style={{display:'flex', gap: 10, marginLeft: 'auto'}}>
                     <button 
                         style={{...styles.glassButton, padding: '8px 12px', pointerEvents: 'auto'}} 
                         onClick={toggleFullScreen}
@@ -1187,12 +1142,19 @@ export const GameScreen = ({
                 </div>
             </div>
 
+            {/* 新的中间计分板位置 */}
+            <div style={styles.scoreBoard}>
+                <div style={{fontSize: 10, opacity: 0.8, textTransform:'uppercase'}}>POINTS</div>
+                <div style={{fontSize: 24, fontWeight: 'bold', color: '#f1c40f', display:'flex', alignItems:'center', justifyContent:'center', gap:5}}>
+                    <Coins size={20} /> {pendingPoints}
+                </div>
+            </div>
+
             <div style={styles.infoMessage}>{displayMessage}</div>
 
             {/* 弹窗区域 */}
             {(winner || roundResult || grandResult) && (
                 <div style={styles.modalOverlay}>
-                    {/* [修正] 这里的 className 之前有语法错误，已修正 */}
                     <div className="modal-content-wrapper" style={styles.modalContent}>
                         {grandResult ? (
                             <>
@@ -1223,44 +1185,20 @@ export const GameScreen = ({
                 </div>
             )}
 
-            <div style={styles.tableCenter} className="mobile-table-center">
+            {/* 出牌区 - 绝对居中 */}
+            <div style={styles.tableCenter}>
                 {lastPlayed.length > 0 && (
                     <div style={{animation: 'popIn 0.3s'}}>
                         <div style={styles.playerNameTag}>{lastPlayerName}</div>
-                        <div style={styles.playedRow} className="mini-card-container"> 
+                        <div style={styles.playedRow}> 
                             {lastPlayed.map((c, i) => <MiniCard key={i} cardVal={c} index={i} />)}
                         </div>
                     </div>
                 )}
             </div>
 
-            <div style={styles.playersArea} className="mobile-players-area">
-                {players.map((p, i) => {
-                    const info = (playersInfo && playersInfo[p.id]) || {};
-                    const isBot = info.isBot || p.isBot;
-                    const isAuto = info.isAutoPlay;
-                    const rankIndex = finishedRank ? finishedRank.indexOf(p.id) : -1;
-                    const finishedRankVal = rankIndex !== -1 ? rankIndex + 1 : null;
-
-                    return (
-                        <div key={i} style={{...avatarStyleOverride, position:'relative'}} className="mobile-avatar-scale"> 
-                            <PlayerAvatar 
-                                player={p} 
-                                isTurn={p.id === currentTurnId} 
-                                score={playerScores[p.id] || 0} 
-                                targetScore={roomConfig.targetScore} 
-                                isMySocket={p.id === mySocketId}
-                                remainingSeconds={turnRemaining}
-                                rank={finishedRankVal}
-                            />
-                            <div style={{position: 'absolute', top: -10, right: -10, display: 'flex', gap: 5}}>
-                                {isBot && <div style={styles.statusBadgeBot}><Bot size={12}/> AI</div>}
-                                {isAuto && <div style={styles.statusBadgeAuto}><Zap size={12}/> 托管</div>}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
+            {/* 玩家区域 - 绝对定位 */}
+            {renderPlayers()}
 
             <div 
                 style={{
@@ -1269,16 +1207,15 @@ export const GameScreen = ({
                     filter: amIAutoPlay ? 'grayscale(0.6)' : 'none',
                     pointerEvents: amIAutoPlay ? 'none' : 'auto' 
                 }}
-                className="mobile-hand-area"
             >
                 {amIAutoPlay && (
                     <div style={{
-                        position: 'absolute', top: -50, left: '50%', transform: 'translateX(-50%)',
-                        background: 'rgba(230, 126, 34, 0.9)', color: 'white', padding: '5px 15px', 
-                        borderRadius: 20, fontSize: 14, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 5,
+                        position: 'absolute', top: -40, left: 20,
+                        background: 'rgba(230, 126, 34, 0.9)', color: 'white', padding: '5px 10px', 
+                        borderRadius: 20, fontSize: 12, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 5,
                         boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 50
                     }}>
-                        <Bot size={16} /> 系统代打中...
+                        <Bot size={14} /> 系统代打中
                     </div>
                 )}
                 
@@ -1287,7 +1224,7 @@ export const GameScreen = ({
                 ))}
             </div>
 
-            <div style={styles.actionBar} className="action-bar-container">
+            <div style={styles.actionBar}>
                 {!winner && !roundResult && !grandResult && (
                     <div style={{display:'flex', alignItems: 'center', gap: 20}}>
                         {amIAutoPlay ? (
@@ -1295,12 +1232,13 @@ export const GameScreen = ({
                                 style={{
                                     ...styles.playButton, 
                                     background: '#e74c3c', 
-                                    width: 220,
+                                    width: 180,
+                                    fontSize: 16,
                                     display: 'flex', justifyContent: 'center', alignItems: 'center'
                                 }} 
                                 onClick={handleToggleAutoPlay}
                             >
-                                <Zap size={22} style={{marginRight:8}}/> 取消托管
+                                <Zap size={18} style={{marginRight:8}}/> 取消托管
                             </button>
                         ) : (
                             <>
@@ -1320,19 +1258,19 @@ export const GameScreen = ({
                                         border: '1px solid rgba(255,255,255,0.3)',
                                         color: '#ecf0f1',
                                         borderRadius: 30, 
-                                        padding: '0 20px',
-                                        height: 50,
+                                        padding: '0 15px',
+                                        height: 40,
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         cursor: 'pointer',
-                                        marginLeft: 20,
-                                        fontSize: 16,
+                                        marginLeft: 10,
+                                        fontSize: 14,
                                         fontWeight: 'bold',
                                         transition: 'all 0.2s'
                                     }}
                                     onClick={handleToggleAutoPlay}
                                     title="点击开启系统托管"
                                 >
-                                    <Zap size={20} style={{marginRight: 6}} />
+                                    <Zap size={16} style={{marginRight: 4}} />
                                     托管
                                 </button>
                             </>
@@ -1862,26 +1800,16 @@ export const styles = {
       paddingBottom: 'env(safe-area-inset-bottom)'
   },
   
-  // Players Area: 调整位置，避免被顶部 Header 遮挡
+  // [修改] 移除之前的 playersArea Flex 布局，因为现在是绝对定位
   playersArea: { 
-      display: 'flex', 
-      justifyContent: 'center', 
-      alignContent: 'center', 
-      flexWrap: 'wrap',       
-      gap: '10px',            
-      // [修改] 增加顶部 padding，给 Header 留出空间
-      paddingTop: 80,         
-      marginBottom: 200,      
-      width: '98%',           
-      maxWidth: 1600,         
-      margin: '0 auto 200px', 
-      pointerEvents: 'none',  
+      position: 'absolute',
+      top: 0, left: 0, right: 0, bottom: 0,
+      pointerEvents: 'none',
       zIndex: 10
   },
   
   playerBox: { 
       pointerEvents: 'auto',
-      // [修改] 缩小内边距和最小宽度 (原: 10px 15px, 90px)
       padding: '5px 8px',   
       borderRadius: 12, 
       textAlign: 'center', 
@@ -1889,10 +1817,12 @@ export const styles = {
       color:'white', 
       border: '2px solid transparent', 
       transition: 'all 0.3s', 
-      position: 'relative' 
+      position: 'relative',
+      // [新增] 加上背景模糊，防止和背景混在一起
+      backdropFilter: 'blur(5px)',
+      boxShadow: '0 4px 15px rgba(0,0,0,0.3)'
   },
 
-  // [修改] 缩小头像尺寸 (原: 70px)
   avatar: { 
       width: 45, 
       height: 45, 
@@ -1906,7 +1836,7 @@ export const styles = {
       border: '2px solid rgba(255,255,255,0.2)', 
       boxShadow: '0 4px 10px rgba(0,0,0,0.2)' 
   },
-  // [修改] 缩小字体 (原: 14px)
+
   playerName: { 
       fontSize: 12, 
       fontWeight: 'bold', 
@@ -1917,15 +1847,14 @@ export const styles = {
       maxWidth: 70 
   },
   
-  gameLogPanel: { position: 'absolute', top: 20, left: 20, width: 250, bottom: 280, background: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: 20, display: 'flex', flexDirection: 'column', zIndex: 5, backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)' },
-  logHeader: { display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: 10 },
-  logList: { flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13, scrollbarWidth: 'thin' },
-  logItem: { lineHeight: 1.5, display: 'flex', alignItems: 'flex-start' },
-  logTime: { opacity: 0.5, fontSize: 10, marginRight: 8, width: 45, display: 'inline-block', color: '#ccc' },
+  gameLogPanel: { position: 'absolute', top: 50, left: 10, width: 200, height: 150, background: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: 10, display: 'flex', flexDirection: 'column', zIndex: 5, backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)', pointerEvents:'none' },
+  logHeader: { display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 5, borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: 5, fontSize: 12 },
+  logList: { flex: 1, overflowY: 'hidden', display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12 },
+  logItem: { lineHeight: 1.2, display: 'flex', alignItems: 'flex-start' },
+  logTime: { opacity: 0.5, fontSize: 10, marginRight: 5, display: 'none' }, // 隐藏时间节省空间
   
   tableHeader: { 
-      // [修改] 顶部栏使用 padding + safe-area，且使用绝对定位确保不被流式布局挤走
-      padding: '10px 40px', 
+      padding: '10px 20px', 
       paddingTop: 'calc(10px + env(safe-area-inset-top))', 
       display: 'flex', 
       justifyContent: 'space-between', 
@@ -1934,38 +1863,64 @@ export const styles = {
       position: 'absolute',
       top: 0,
       width: '100%',
-      boxSizing: 'border-box'
+      boxSizing: 'border-box',
+      pointerEvents: 'none' // 让点击穿透到下面的玩家
   },
-  roomBadge: { background: 'rgba(0,0,0,0.3)', color:'white', padding: '8px 20px', borderRadius: 20, fontSize: 16, border: '1px solid rgba(255,255,255,0.1)', fontWeight: 'bold' },
+  roomBadge: { background: 'rgba(0,0,0,0.3)', color:'white', padding: '4px 10px', borderRadius: 20, fontSize: 12, border: '1px solid rgba(255,255,255,0.1)', fontWeight: 'bold' },
   
-  scoreBoard: { position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.5)', padding: '10px 50px', borderRadius: 20, textAlign: 'center', color: 'white', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' },
+  // [修改] 计分板移到中间偏上，且变小
+  scoreBoard: { 
+      position: 'absolute', 
+      top: '40%', // 出牌区上方一点
+      left: '50%', 
+      transform: 'translate(-50%, -100%) scale(0.8)', 
+      background: 'rgba(0,0,0,0.6)', 
+      padding: '5px 20px', 
+      borderRadius: 20, 
+      textAlign: 'center', 
+      color: 'white', 
+      border: '1px solid rgba(255,255,255,0.2)', 
+      backdropFilter: 'blur(5px)', 
+      boxShadow: '0 5px 15px rgba(0,0,0,0.3)',
+      zIndex: 5 
+  },
   
-  glassButton: { background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 20px', borderRadius: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: 14, transition: 'background 0.2s' },
-  sortButton: { background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 20px', borderRadius: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: 14, transition: 'background 0.2s' },
+  glassButton: { pointerEvents: 'auto', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 20px', borderRadius: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: 14, transition: 'background 0.2s' },
+  sortButton: { pointerEvents: 'auto', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 20px', borderRadius: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: 14, transition: 'background 0.2s' },
   
   infoMessage: { position: 'absolute', top: '25%', width: '100%', textAlign: 'center', color: '#f1c40f', fontSize: 40, fontWeight: 'bold', textShadow: '0 5px 15px rgba(0,0,0,0.5)', pointerEvents: 'none', zIndex: 50, letterSpacing: 2 },
   
-  tableCenter: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', paddingBottom: 100 },
-  playerNameTag: { color: 'white', textAlign: 'center', marginBottom: 15, textShadow: '0 2px 4px rgba(0,0,0,0.5)', fontSize: 18, fontWeight: 'bold', background: 'rgba(0,0,0,0.3)', padding: '5px 20px', borderRadius: 20, display: 'inline-block' },
+  // [修改] 出牌区绝对居中
+  tableCenter: { 
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      zIndex: 1
+  },
+  
+  playerNameTag: { color: 'white', textAlign: 'center', marginBottom: 5, textShadow: '0 2px 4px rgba(0,0,0,0.5)', fontSize: 14, fontWeight: 'bold', background: 'rgba(0,0,0,0.3)', padding: '2px 10px', borderRadius: 20, display: 'inline-block' },
   playedRow: { display: 'flex', gap: -10, filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.3))' }, 
-  miniCard: { background: 'white', padding: '15px 20px', borderRadius: 10, fontWeight: 'bold', fontSize: 28, minWidth: 50, textAlign:'center' },
+  miniCard: { background: 'white', padding: '10px 15px', borderRadius: 8, fontWeight: 'bold', fontSize: 24, minWidth: 40, textAlign:'center' },
   
   scoreBarBg: { width:'100%', height:6, background:'rgba(0,0,0,0.5)', borderRadius:3, marginTop:2, overflow:'hidden' },
   scoreBarFill: { height:'100%', transition:'width 0.5s' },
-  // [修改] 缩小字体 (原: 13px)
   playerScore: { fontSize: 11, color: '#f1c40f', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 2 },
   turnProgress: { position: 'absolute', bottom: 0, left: 0, height: 4, background: '#f1c40f', width: '100%', animation: 'progress 15s linear forwards' },
   
+  // [修改] 手牌区域：不再居中，而是靠左下角头像右侧
   handArea: { 
       position: 'absolute', 
-      bottom: 20,             
-      left: '50%', 
-      transform: 'translateX(-50%)', 
-      height: 110, // [保持] 从上一步继承的 110
-      width: '100%',          
-      maxWidth: 1600, 
+      bottom: 10,             
+      left: 90, // 给左下角头像留出空间 (头像宽70-80左右)
+      right: 10, // 撑满右边
+      height: 110, 
       display: 'flex', 
-      justifyContent:'center', 
+      justifyContent:'flex-start', // 靠左排列，紧挨着头像
+      alignItems: 'flex-end',
       zIndex: 20 
   },
   
@@ -1977,16 +1932,15 @@ export const styles = {
       cursor: 'pointer', 
       display: 'flex', 
       flexDirection: 'column', 
-      // [修改] 移除 padding，由内部布局控制
       padding: 5,            
       transition: 'transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1)', 
       width: 80,             
-      height: 70 // [保持] 从上一步继承的 90
+      height: 90 
   },
   
-  actionBar: { position: 'absolute', bottom: 0, width: '100%', height: 120, background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)', display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', zIndex: 30 }, 
-  playButton: { pointerEvents: 'auto', padding: '15px 60px', background: 'linear-gradient(to bottom, #f1c40f, #f39c12)', border: 'none', borderRadius: 40, fontWeight: 'bold', cursor: 'pointer', marginLeft: 20, fontSize: 20, boxShadow: '0 8px 20px rgba(243, 156, 18, 0.4)', color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.2)', transition: 'transform 0.1s' },
-  passButton: { pointerEvents: 'auto', padding: '15px 40px', background: '#7f8c8d', border: 'none', borderRadius: 40, fontWeight: 'bold', cursor: 'pointer', fontSize: 18, color: 'white', boxShadow: '0 5px 15px rgba(0,0,0,0.3)' },
+  actionBar: { position: 'absolute', bottom: 120, width: '100%', height: 60, display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', zIndex: 30 }, 
+  playButton: { pointerEvents: 'auto', padding: '10px 40px', background: 'linear-gradient(to bottom, #f1c40f, #f39c12)', border: 'none', borderRadius: 40, fontWeight: 'bold', cursor: 'pointer', marginLeft: 20, fontSize: 18, boxShadow: '0 8px 20px rgba(243, 156, 18, 0.4)', color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.2)', transition: 'transform 0.1s' },
+  passButton: { pointerEvents: 'auto', padding: '10px 30px', background: '#7f8c8d', border: 'none', borderRadius: 40, fontWeight: 'bold', cursor: 'pointer', fontSize: 16, color: 'white', boxShadow: '0 5px 15px rgba(0,0,0,0.3)' },
   waitingBadge: { color: 'rgba(255,255,255,0.7)', fontSize: 16, display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(0,0,0,0.3)', padding: '10px 20px', borderRadius: 30 },
   modalOverlay: { position: 'fixed', top:0, left:0, right:0, bottom:0, background: 'rgba(0,0,0,0.85)', display:'flex', justifyContent:'center', alignItems:'center', zIndex: 99, backdropFilter: 'blur(8px)' },
   modalContent: { background: 'white', padding: 60, borderRadius: 30, textAlign: 'center', boxShadow: '0 30px 80px rgba(0,0,0,0.6)', animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)' },
