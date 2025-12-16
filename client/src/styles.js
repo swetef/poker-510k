@@ -145,18 +145,41 @@ export const styles = {
   
   playerBox: { 
       pointerEvents: 'auto',
-      padding: '10px 15px',   
-      borderRadius: 16, 
+      // [修改] 缩小内边距和最小宽度 (原: 10px 15px, 90px)
+      padding: '5px 8px',   
+      borderRadius: 12, 
       textAlign: 'center', 
-      minWidth: 90,           
+      minWidth: 70,           
       color:'white', 
       border: '2px solid transparent', 
       transition: 'all 0.3s', 
       position: 'relative' 
   },
 
-  avatar: { width: 70, height: 70, background: '#ecf0f1', borderRadius: '50%', margin: '0 auto 8px', lineHeight: '70px', color:'#333', fontWeight:'bold', fontSize: 24, border: '2px solid rgba(255,255,255,0.2)', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' },
-  playerName: { fontSize: 14, fontWeight: 'bold', marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 90 },
+  // [修改] 缩小头像尺寸 (原: 70px)
+  avatar: { 
+      width: 45, 
+      height: 45, 
+      background: '#ecf0f1', 
+      borderRadius: '50%', 
+      margin: '0 auto 4px', 
+      lineHeight: '45px', 
+      color:'#333', 
+      fontWeight:'bold', 
+      fontSize: 18, 
+      border: '2px solid rgba(255,255,255,0.2)', 
+      boxShadow: '0 4px 10px rgba(0,0,0,0.2)' 
+  },
+  // [修改] 缩小字体 (原: 14px)
+  playerName: { 
+      fontSize: 12, 
+      fontWeight: 'bold', 
+      marginBottom: 2, 
+      whiteSpace: 'nowrap', 
+      overflow: 'hidden', 
+      textOverflow: 'ellipsis', 
+      maxWidth: 70 
+  },
   
   gameLogPanel: { position: 'absolute', top: 20, left: 20, width: 250, bottom: 280, background: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: 20, display: 'flex', flexDirection: 'column', zIndex: 5, backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)' },
   logHeader: { display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: 10 },
@@ -191,9 +214,10 @@ export const styles = {
   playedRow: { display: 'flex', gap: -10, filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.3))' }, 
   miniCard: { background: 'white', padding: '15px 20px', borderRadius: 10, fontWeight: 'bold', fontSize: 28, minWidth: 50, textAlign:'center' },
   
-  scoreBarBg: { width:'100%', height:6, background:'rgba(0,0,0,0.5)', borderRadius:3, marginTop:5, overflow:'hidden' },
+  scoreBarBg: { width:'100%', height:6, background:'rgba(0,0,0,0.5)', borderRadius:3, marginTop:2, overflow:'hidden' },
   scoreBarFill: { height:'100%', transition:'width 0.5s' },
-  playerScore: { fontSize: 13, color: '#f1c40f', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 5 },
+  // [修改] 缩小字体 (原: 13px)
+  playerScore: { fontSize: 11, color: '#f1c40f', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 2 },
   turnProgress: { position: 'absolute', bottom: 0, left: 0, height: 4, background: '#f1c40f', width: '100%', animation: 'progress 15s linear forwards' },
   
   handArea: { 
@@ -201,7 +225,7 @@ export const styles = {
       bottom: 20,             
       left: '50%', 
       transform: 'translateX(-50%)', 
-      height: 140, 
+      height: 110, // [保持] 从上一步继承的 110
       width: '100%',          
       maxWidth: 1600, 
       display: 'flex', 
@@ -217,10 +241,11 @@ export const styles = {
       cursor: 'pointer', 
       display: 'flex', 
       flexDirection: 'column', 
+      // [修改] 移除 padding，由内部布局控制
       padding: 5,            
       transition: 'transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1)', 
       width: 80,             
-      height: 110            
+      height: 70 // [保持] 从上一步继承的 90
   },
   
   actionBar: { position: 'absolute', bottom: 0, width: '100%', height: 120, background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)', display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', zIndex: 30 }, 

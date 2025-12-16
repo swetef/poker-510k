@@ -7,7 +7,7 @@ import { calculateCardSpacing } from '../utils/cardLogic.js';
 
 export const GameScreen = ({ 
     roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
-    infoMessage, winner, playerScores, playersInfo, pendingPoints, gameLogs, sortMode,
+    infoMessage: serverInfoMessage, winner, playerScores, playersInfo, pendingPoints, gameLogs, sortMode,
     mySocketId, roundResult, grandResult, roomConfig,
     turnRemaining, finishedRank = [], 
     toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
@@ -24,23 +24,46 @@ export const GameScreen = ({
     const avatarScale = isCrowded ? 0.85 : 1;
     const avatarStyleOverride = isCrowded ? { transform: `scale(${avatarScale})`, margin: -5 } : {};
 
+    // [新增] 本地状态用于显示全屏提示
+    const [localInfo, setLocalInfo] = useState('');
+    const displayMessage = localInfo || serverInfoMessage;
+
     // [新增] 全屏状态控制
     const [isFullScreen, setIsFullScreen] = useState(false);
 
-    // [新增] 切换全屏逻辑
+    // [修改] 增强版全屏切换逻辑
     const toggleFullScreen = () => {
-        if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen()
-                .then(() => setIsFullScreen(true))
-                .catch(err => {
-                    console.error("全屏启用失败:", err);
-                    // 很多 iPhone 不支持 requestFullscreen，这里可以给个提示或者静默失败
-                    // 但有了 PWA 方案作为后备，这里静默即可
-                });
+        const doc = window.document;
+        const docEl = doc.documentElement;
+
+        // 各种浏览器的全屏请求方法
+        const requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
+        // 退出全屏方法
+        const cancelFullScreen = doc.exitFullscreen || doc.mozCancelFullScreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
+
+        if (!doc.fullscreenElement && !doc.mozFullScreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) {
+            // 尝试进入全屏
+            if (requestFullScreen) {
+                requestFullScreen.call(docEl)
+                    .then(() => setIsFullScreen(true))
+                    .catch(err => {
+                        console.warn("全屏请求被拒绝:", err);
+                        // iOS Safari 可能会拒绝
+                        setLocalInfo("⚠️ 您的浏览器不支持网页全屏，请使用'添加到主屏幕'功能");
+                        setTimeout(() => setLocalInfo(''), 3000);
+                    });
+            } else {
+                // 通常是 iOS Safari，根本没有这个 API
+                setLocalInfo("⚠️ iOS请在Safari菜单选择'添加到主屏幕'以全屏游玩");
+                setTimeout(() => setLocalInfo(''), 3000);
+            }
         } else {
-            document.exitFullscreen()
-                .then(() => setIsFullScreen(false))
-                .catch(err => console.error(err));
+            // 退出全屏
+            if (cancelFullScreen) {
+                cancelFullScreen.call(doc)
+                    .then(() => setIsFullScreen(false))
+                    .catch(err => console.error(err));
+            }
         }
     };
 
@@ -61,7 +84,7 @@ export const GameScreen = ({
                 <div style={{display:'flex', gap: 10}}>
                     {/* [新增] 全屏按钮 */}
                     <button 
-                        style={{...styles.glassButton, padding: '8px 12px'}} 
+                        style={{...styles.glassButton, padding: '8px 12px', pointerEvents: 'auto'}} 
                         onClick={toggleFullScreen}
                         title={isFullScreen ? "退出全屏" : "进入全屏"}
                     >
@@ -74,13 +97,13 @@ export const GameScreen = ({
                 </div>
             </div>
 
-            <div style={styles.infoMessage}>{infoMessage}</div>
+            <div style={styles.infoMessage}>{displayMessage}</div>
 
             {/* 弹窗区域 */}
             {(winner || roundResult || grandResult) && (
                 <div style={styles.modalOverlay}>
-                    {className="modal-content-wrapper"}    
-                    <div style={styles.modalContent}>
+                    {/* [修正] 这里的 className 之前有语法错误，已修正 */}
+                    <div className="modal-content-wrapper" style={styles.modalContent}>
                         {grandResult ? (
                             <>
                                 <Crown size={80} color="#e74c3c" style={{marginBottom: 20}} />
