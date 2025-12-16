@@ -11,6 +11,9 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* --- 新增：禁止移动端点击的高亮背景色，提升质感 --- */
+  -webkit-tap-highlight-color: transparent; 
 }
 
 a {
@@ -28,6 +31,8 @@ body {
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  /* --- 新增：防止移动端左右滑动触发浏览器后退 --- */
+  overscroll-behavior-x: none; 
 }
 
 h1 {
@@ -67,10 +72,13 @@ button:focus-visible {
   }
 }
 
-/* --- 移动端适配与横屏引导 --- */
+/* =========================================
+   移动端适配核心区
+   ========================================= */
 
-/* 1. 横屏引导遮罩 (仅在手机竖屏时显示) */
+/* --- 1. 横屏引导遮罩 --- */
 @media screen and (orientation: portrait) and (max-width: 768px) {
+    /* 只要是竖屏且宽度小于768px，就显示遮罩 */
     .landscape-hint {
         display: flex !important;
     }
@@ -88,6 +96,8 @@ button:focus-visible {
     color: white;
     text-align: center;
     backdrop-filter: blur(10px);
+    /* 禁止遮罩层下的页面滚动 */
+    touch-action: none; 
 }
 
 .phone-rotate-icon {
@@ -105,109 +115,153 @@ button:focus-visible {
     100% { transform: rotate(0deg); }
 }
 
-/* 2. 移动端通用覆盖样式 */
+
+/* --- 2. 移动端竖屏布局优化 --- */
+
 @media (max-width: 768px) {
   
-  /* --- 通用容器修正 --- */
+  /* 全局滚动条隐藏 (看起来更像 App) */
+  ::-webkit-scrollbar {
+    width: 0px;
+    background: transparent;
+  }
+
   .mobile-layout-column {
     display: flex !important;
     flex-direction: column !important;
-    width: 95% !important;
-    /* 关键修正：限制高度并防止溢出，配合 flex 实现内部滚动 */
-    height: 85vh !important; 
-    max-height: 85vh !important;
-    margin: 20px auto !important;
-    overflow: hidden !important; 
-    border-radius: 16px !important;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3) !important;
+    width: 100% !important; /* 改为 100% 避免边缘留白 */
+    height: auto !important;
+    min-height: 100vh !important; /* 铺满全屏 */
+    margin: 0 !important; /* 去除 margin */
+    overflow: hidden !important;
   }
 
-  /* --- 登录页 (Login) --- */
-  
-  /* 登录左侧：品牌区 */
+  /* --- 登录页 --- */
   .mobile-login-left {
-    flex: 0 0 auto !important; /* 固定高度，不伸缩 */
-    padding: 20px !important;
-    min-height: 100px !important; /* 减小最小高度 */
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+    flex: 0 0 auto !important; 
+    padding: 40px 20px 20px !important; /* 顶部增加 padding 避开刘海屏 */
+    border-radius: 0 0 24px 24px !important; /* 上面直角，下面圆角连接 */
+    background-color: #242424; /* 确保有背景色 */
   }
 
-  /* 登录右侧：表单区 */
   .mobile-login-right {
-    flex: 1 !important; /* 占据剩余所有空间 */
-    padding: 20px !important;
-    overflow-y: auto !important; /* 开启内部滚动，防止键盘遮挡 */
-    -webkit-overflow-scrolling: touch;
+    flex: 1 !important; 
+    padding: 30px 20px !important;
     background: white;
+    border-radius: 24px 24px 0 0 !important; /* 圆角逻辑翻转 */
+    margin-top: -20px; /* 视觉重叠效果，增加层次感 */
+    position: relative;
+    z-index: 2;
   }
 
-  /* --- 特殊处理：手机横屏模式 --- */
-  @media (orientation: landscape) {
-      .mobile-layout-column {
-          flex-direction: row !important; /* 横屏时恢复左右结构 */
-          height: 92vh !important;
-          max-height: 92vh !important;
-          margin: 10px auto !important;
-      }
-      /* 横屏时直接隐藏左侧品牌区，只显示登录框，解决高度不够的问题 */
-      .mobile-login-left {
-          display: none !important; 
-      }
-      .mobile-login-right {
-          border-radius: 16px !important;
-      }
-  }
-
-  /* --- 大厅页 (Lobby) --- */
+  /* --- 大厅页 (关键修复) --- */
   
-  /* 强制 Flex 结构：头(固定) + 列表(滚动) + 脚(固定) */
+  /* 确保铺满，并设置为相对定位 */
+  .lobbyCard.mobile-layout-column {
+      height: 100vh !important; 
+      position: relative;
+  }
+
   .mobile-lobby-content {
       display: flex !important;
       flex-direction: column !important;
       height: 100% !important;
+      width: 100%;
       overflow: hidden !important;
   }
   
-  /* 头部自适应 */
   .lobbyHeader { 
-      flex: 0 0 auto; 
+      flex: 0 0 auto;
+      /* 适配顶部刘海安全区域 */
+      padding-top: env(safe-area-inset-top) !important; 
   }
 
-  /* 列表区域：占据中间所有剩余空间，并可滚动 */
   .mobile-lobby-grid {
       flex: 1 !important; 
       overflow-y: auto !important; 
       padding: 10px !important;
-      margin-bottom: 0 !important; /* 去除 margin，防止撑开 */
-      -webkit-overflow-scrolling: touch;
+      -webkit-overflow-scrolling: touch; /* iOS 惯性滚动 */
+      /* 关键：防止内容被底部固定栏遮挡，预留足够的底部空间 */
+      padding-bottom: 80px !important; 
   }
 
-  /* 底部按钮区：固定在底部，确保可见 */
+  /* --- 底部按钮区 (严重修正) --- */
   .mobile-lobby-footer {
-      flex: 0 0 auto !important; /* 不许压缩 */
+      flex: 0 0 auto !important;
       padding: 12px !important;
       background: white;
       border-top: 1px solid #eee;
       z-index: 10;
-      box-shadow: 0 -5px 15px rgba(0,0,0,0.05);
+      
+      /* --- 核心修正：适配 iPhone 底部黑条 --- */
+      padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important; 
+      /* 固定在底部 */
+      position: absolute; 
+      bottom: 0;
+      width: 100%;
+      box-sizing: border-box;
   }
 
   /* --- 游戏页 --- */
   .mobile-hand-area {
     width: 100% !important;
     bottom: 0 !important;
-    padding-bottom: 5px !important;
-    height: 130px !important; /* 稍微调高，给手势条留空 */
+    /* 同样适配底部安全区，防止牌被黑条遮挡 */
+    padding-bottom: calc(5px + env(safe-area-inset-bottom)) !important;
+    height: calc(130px + env(safe-area-inset-bottom)) !important; 
   }
+  
   .mobile-avatar-scale {
     transform: scale(0.85);
     margin: -5px;
   }
   
-  /* 辅助类 */
   .hide-on-mobile {
     display: none !important;
   }
+}
+
+/* --- 3. 移动端横屏适配 --- */
+@media (max-width: 768px) and (orientation: landscape) {
+    /* 横屏时，我们通常需要避开左右两侧的安全区域（刘海/灵动岛） */
+    .mobile-layout-column {
+        flex-direction: row !important;
+        height: 100vh !important; 
+        margin: 0 !important;
+        /* 左右两侧避让 */
+        padding-left: env(safe-area-inset-left); 
+        padding-right: env(safe-area-inset-right); 
+    }
+
+    .mobile-login-left {
+        width: 150px !important;
+        flex: 0 0 150px !important;
+        padding: 10px !important;
+        justify-content: center;
+        border-radius: 0 !important; /* 横屏不需要圆角 */
+        margin-top: 0 !important;
+        height: 100% !important;
+    }
+    
+    .mobile-login-right {
+        border-radius: 0 !important;
+        margin-top: 0 !important;
+        overflow-y: auto !important;
+    }
+    
+    /* 调整 Logo 大小 */
+    .mobile-login-left .logoCircle {
+        width: 50px !important;
+        height: 50px !important;
+        margin-bottom: 10px !important;
+    }
+    .mobile-login-left .logoText {
+        font-size: 16px !important;
+    }
+    .mobile-login-left h1 {
+        font-size: 20px !important;
+    }
+    .mobile-login-left .brandSubtitle {
+        display: none !important;
+    }
 }
