@@ -1,4 +1,4 @@
-// 统一样式文件 - 移动端适配版
+// 统一样式文件 - 移动端适配版 (布局优化修复版)
 // 增加了 viewport 安全区支持，防止刘海遮挡
 export const styles = {
   // 全局容器
@@ -119,7 +119,6 @@ export const styles = {
       display: 'flex', 
       flexDirection: 'column', 
       userSelect: 'none',
-      // [关键修改] 增加 safe-area-inset 适配刘海屏
       paddingTop: 'env(safe-area-inset-top)',
       paddingLeft: 'env(safe-area-inset-left)',
       paddingRight: 'env(safe-area-inset-right)',
@@ -133,7 +132,6 @@ export const styles = {
       alignContent: 'center', 
       flexWrap: 'wrap',       
       gap: '10px',            
-      // [修改] 增加顶部 padding，给 Header 留出空间
       paddingTop: 80,         
       marginBottom: 200,      
       width: '98%',           
@@ -165,7 +163,6 @@ export const styles = {
   logTime: { opacity: 0.5, fontSize: 10, marginRight: 8, width: 45, display: 'inline-block', color: '#ccc' },
   
   tableHeader: { 
-      // [修改] 顶部栏使用 padding + safe-area，且使用绝对定位确保不被流式布局挤走
       padding: '10px 40px', 
       paddingTop: 'calc(10px + env(safe-area-inset-top))', 
       display: 'flex', 
@@ -209,6 +206,7 @@ export const styles = {
       zIndex: 20 
   },
   
+  // [调整] 卡牌默认样式 - 略微缩小以适配更广泛的场景
   card: { 
       background: 'white', 
       borderRadius: 8,       
@@ -217,10 +215,10 @@ export const styles = {
       cursor: 'pointer', 
       display: 'flex', 
       flexDirection: 'column', 
-      padding: 5,            
+      padding: 4,            
       transition: 'transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1)', 
-      width: 80,             
-      height: 110            
+      width: 68,     // 原 80        
+      height: 94     // 原 110       
   },
   
   actionBar: { position: 'absolute', bottom: 0, width: '100%', height: 120, background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)', display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', zIndex: 30 }, 
@@ -239,3 +237,14 @@ export const styles = {
   hostBadge: { position: 'absolute', top: 10, right: 10, background: '#f1c40f', color: '#333', fontSize: 12, padding: '4px 8px', borderRadius: 4, fontWeight: 'bold' },
   lobbyFooter: { marginTop: 'auto', borderTop: '1px solid #eee', paddingTop: 20, display: 'flex', justifyContent: 'center' },
 };
+
+/* =========================================
+   移动端适配核心区 (Mobile Overrides)
+   将 CSS 字符串插入到全局 styles 中
+   注意：由于这是 JS 对象，我们需要在 index.css 中处理大部分 Media Queries
+   但这里保留了一些行内样式的动态逻辑，以下内容需配合 css 文件
+   ========================================= */
+
+/* * 提示：以下样式逻辑主要反映了您 index.css 中的 Media Query 部分
+ * 针对问题进行针对性修改
+ */

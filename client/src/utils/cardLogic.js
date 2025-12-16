@@ -50,16 +50,16 @@ export const calculateCardSpacing = (count, screenWidth) => {
     
     // [修改] 适配手机：如果屏幕很窄，增加可用宽度的比例
     const isMobile = screenWidth < 768;
-    const padding = isMobile ? 20 : 100; // 手机端留白少一点
+    const padding = isMobile ? 10 : 80; // 进一步减少留白
     
     const w = Math.min(screenWidth - padding, 1400); 
     
     // [修改] 卡牌实际渲染宽度 (对应 styles.js 里的 card.width)
-    // 之前是100，改成了80来适配
-    const cardWidth = 80; 
+    // 从 80 调整为 68 以匹配新样式
+    const cardWidth = 68; 
     
     // 最大间距：牌少的时候不要分太开
-    const maxGap = 50; 
+    const maxGap = isMobile ? 40 : 50; 
     
     const neededWidth = (count - 1) * maxGap + cardWidth;
     
