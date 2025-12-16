@@ -107,54 +107,99 @@ button:focus-visible {
 
 /* 2. 移动端通用覆盖样式 */
 @media (max-width: 768px) {
-  /* Login & Lobby 通用卡片容器 */
+  
+  /* --- 通用容器修正 --- */
   .mobile-layout-column {
+    display: flex !important;
     flex-direction: column !important;
     width: 95% !important;
-    height: 90vh !important; /* 固定高度，内部滚动 */
-    max-height: 90vh !important;
-    min-height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: hidden !important; /* 防止整个卡片撑开页面 */
+    /* 关键修正：限制高度并防止溢出，配合 flex 实现内部滚动 */
+    height: 85vh !important; 
+    max-height: 85vh !important;
+    margin: 20px auto !important;
+    overflow: hidden !important; 
+    border-radius: 16px !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3) !important;
   }
 
-  /* 登录页 */
-  .mobile-login-left {
-    flex: 0 0 auto !important;
-    padding: 20px !important;
-    min-height: auto !important;
-  }
-  .mobile-login-right {
-    flex: 1 !important;
-    padding: 20px !important;
-    overflow-y: auto !important; /* 让表单区域可以滚动 */
-  }
+  /* --- 登录页 (Login) --- */
   
-  /* 大厅页 (解决按钮看不见的问题) */
+  /* 登录左侧：品牌区 */
+  .mobile-login-left {
+    flex: 0 0 auto !important; /* 固定高度，不伸缩 */
+    padding: 20px !important;
+    min-height: 100px !important; /* 减小最小高度 */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  /* 登录右侧：表单区 */
+  .mobile-login-right {
+    flex: 1 !important; /* 占据剩余所有空间 */
+    padding: 20px !important;
+    overflow-y: auto !important; /* 开启内部滚动，防止键盘遮挡 */
+    -webkit-overflow-scrolling: touch;
+    background: white;
+  }
+
+  /* --- 特殊处理：手机横屏模式 --- */
+  @media (orientation: landscape) {
+      .mobile-layout-column {
+          flex-direction: row !important; /* 横屏时恢复左右结构 */
+          height: 92vh !important;
+          max-height: 92vh !important;
+          margin: 10px auto !important;
+      }
+      /* 横屏时直接隐藏左侧品牌区，只显示登录框，解决高度不够的问题 */
+      .mobile-login-left {
+          display: none !important; 
+      }
+      .mobile-login-right {
+          border-radius: 16px !important;
+      }
+  }
+
+  /* --- 大厅页 (Lobby) --- */
+  
+  /* 强制 Flex 结构：头(固定) + 列表(滚动) + 脚(固定) */
   .mobile-lobby-content {
       display: flex !important;
       flex-direction: column !important;
       height: 100% !important;
+      overflow: hidden !important;
   }
-  .mobile-lobby-grid {
-      flex: 1 !important; /* 占据剩余空间 */
-      overflow-y: auto !important; /* 内容多了可以滚动 */
-      padding: 10px !important;
-      margin-bottom: 10px !important;
-  }
-  .mobile-lobby-footer {
-      flex-shrink: 0 !important; /* 禁止被压缩 */
-      padding: 15px !important;
-      background: white;
-      border-top: 1px solid #eee;
+  
+  /* 头部自适应 */
+  .lobbyHeader { 
+      flex: 0 0 auto; 
   }
 
-  /* 游戏页 */
+  /* 列表区域：占据中间所有剩余空间，并可滚动 */
+  .mobile-lobby-grid {
+      flex: 1 !important; 
+      overflow-y: auto !important; 
+      padding: 10px !important;
+      margin-bottom: 0 !important; /* 去除 margin，防止撑开 */
+      -webkit-overflow-scrolling: touch;
+  }
+
+  /* 底部按钮区：固定在底部，确保可见 */
+  .mobile-lobby-footer {
+      flex: 0 0 auto !important; /* 不许压缩 */
+      padding: 12px !important;
+      background: white;
+      border-top: 1px solid #eee;
+      z-index: 10;
+      box-shadow: 0 -5px 15px rgba(0,0,0,0.05);
+  }
+
+  /* --- 游戏页 --- */
   .mobile-hand-area {
     width: 100% !important;
     bottom: 0 !important;
-    padding-bottom: 10px;
+    padding-bottom: 5px !important;
+    height: 130px !important; /* 稍微调高，给手势条留空 */
   }
   .mobile-avatar-scale {
     transform: scale(0.85);
