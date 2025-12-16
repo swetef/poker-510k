@@ -1,4 +1,4 @@
-// 统一样式文件 - 移动端适配版 (布局优化修复版)
+// 统一样式文件 - 移动端适配版 (布局优化修复版 V2)
 // 增加了 viewport 安全区支持，防止刘海遮挡
 export const styles = {
   // 全局容器
@@ -20,13 +20,12 @@ export const styles = {
       borderRadius: 24, 
       width: '95%', 
       maxWidth: '1100px', 
-      // [修改] 移除强制的 minHeight，避免小屏幕被撑出屏幕外
+      // [修改] 移除强制 minHeight，防止小屏手机横屏被撑爆
       minHeight: 'auto', 
-      // [修改] 保持最大高度，但在CSS中我们通常会覆盖它为100%或自适应
-      maxHeight: '90vh',
+      // [修改] 限制最大高度，配合 overflow 确保内容在框内滚动
+      maxHeight: '92dvh',
       display: 'flex', 
       boxShadow: '0 50px 100px -20px rgba(0,0,0,0.7)',
-      // [保留] 圆角需要 hidden，但如果内容依然缺失，请确保 index.css 中的 .mobile-layout-column 覆盖了 overflow
       overflow: 'hidden',
       animation: 'popIn 0.5s ease-out'
   },
@@ -35,8 +34,8 @@ export const styles = {
   loginLeft: { 
       flex: 0.8, 
       background: 'linear-gradient(135deg, #27ae60 0%, #2ecc71 100%)', 
-      // [关键修改] 大幅减小 Padding，防止在手机上占满屏幕导致右侧内容消失
-      padding: '40px 30px', 
+      // [关键修改] 进一步减小 Padding，横屏时空间寸土寸金
+      padding: '30px', 
       display:'flex', 
       flexDirection:'column', 
       justifyContent:'center', 
@@ -45,36 +44,38 @@ export const styles = {
       position: 'relative',
       overflow: 'hidden'
   },
-  logoCircle: { width: 70, height: 70, background: 'rgba(255,255,255,0.2)', borderRadius: 20, display:'flex', alignItems:'center', justifyContent:'center', marginBottom: 20, backdropFilter: 'blur(10px)' },
-  logoText: { fontSize: 24, fontWeight: '900', color: 'white' },
-  brandTitle: { fontSize: 36, fontWeight: '800', margin: '0 0 10px 0', letterSpacing: -1 },
-  brandSubtitle: { fontSize: 16, opacity: 0.9, marginBottom: 30, fontWeight: '500' },
-  featureList: { marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 },
-  featureItem: { fontSize: 14, opacity: 0.95, display:'flex', alignItems:'center', fontWeight: '500' },
+  // [修改] 缩小 Logo 尺寸
+  logoCircle: { width: 60, height: 60, background: 'rgba(255,255,255,0.2)', borderRadius: 18, display:'flex', alignItems:'center', justifyContent:'center', marginBottom: 15, backdropFilter: 'blur(10px)' },
+  logoText: { fontSize: 22, fontWeight: '900', color: 'white' },
+  brandTitle: { fontSize: 32, fontWeight: '800', margin: '0 0 8px 0', letterSpacing: -1 },
+  brandSubtitle: { fontSize: 14, opacity: 0.9, marginBottom: 20, fontWeight: '500' },
+  featureList: { marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 8 },
+  featureItem: { fontSize: 13, opacity: 0.95, display:'flex', alignItems:'center', fontWeight: '500' },
 
   // 右侧表单区
   loginRight: { 
       flex: 1.2, 
-      // [关键修改] 减小 Padding，给内容更多空间
-      padding: '30px 30px', 
+      // [关键修改] 减小 Padding，防止横屏时右侧被挤压
+      padding: '25px', 
       display: 'flex',
       flexDirection: 'column',
       background: '#ffffff',
       overflowY: 'auto' 
   },
   
-  tabs: { display: 'flex', gap: 35, marginBottom: 25, borderBottom: '2px solid #f1f2f6' },
-  tabBtn: { padding: '12px 0', fontSize: 16, fontWeight: 'bold', color: '#95a5a6', background: 'none', border: 'none', cursor: 'pointer', transition: 'all 0.3s', borderBottom: '3px solid transparent', marginBottom: -3 },
-  tabBtnActive: { padding: '12px 0', fontSize: 16, fontWeight: 'bold', color: '#2c3e50', background: 'none', border: 'none', cursor: 'pointer', transition: 'all 0.3s', borderBottom: '3px solid #27ae60', marginBottom: -3 },
+  tabs: { display: 'flex', gap: 25, marginBottom: 20, borderBottom: '2px solid #f1f2f6' },
+  tabBtn: { padding: '10px 0', fontSize: 16, fontWeight: 'bold', color: '#95a5a6', background: 'none', border: 'none', cursor: 'pointer', transition: 'all 0.3s', borderBottom: '3px solid transparent', marginBottom: -3 },
+  tabBtnActive: { padding: '10px 0', fontSize: 16, fontWeight: 'bold', color: '#2c3e50', background: 'none', border: 'none', cursor: 'pointer', transition: 'all 0.3s', borderBottom: '3px solid #27ae60', marginBottom: -3 },
   
   formContent: { flex: 1, display: 'flex', flexDirection: 'column' },
 
-  inputGroup: { display: 'flex', alignItems: 'center', background: '#f8f9fa', borderRadius: 14, padding: '0 15px', marginBottom: 15, border: '1px solid #e1e4e8', height: 50, transition: 'all 0.2s' },
-  input: { padding: '10px', border: 'none', background: 'transparent', flex: 1, outline:'none', fontSize: 16, color: '#2c3e50', fontWeight: '500' },
+  // [修改] 减小输入框高度
+  inputGroup: { display: 'flex', alignItems: 'center', background: '#f8f9fa', borderRadius: 12, padding: '0 15px', marginBottom: 12, border: '1px solid #e1e4e8', height: 46, transition: 'all 0.2s' },
+  input: { padding: '8px', border: 'none', background: 'transparent', flex: 1, outline:'none', fontSize: 15, color: '#2c3e50', fontWeight: '500' },
 
   // 高级配置面板
   advancedConfigPanel: { 
-      marginTop: 15, 
+      marginTop: 10, 
       background: '#fff', 
       borderRadius: 12,
       animation: 'fadeIn 0.4s ease'
@@ -82,32 +83,32 @@ export const styles = {
   configGrid: {
       display: 'grid',
       gridTemplateColumns: '1fr 1fr', 
-      gap: '15px 20px'
+      gap: '12px 15px'
   },
-  configItem: { display: 'flex', flexDirection: 'column', gap: 8 },
-  configLabel: { display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#7f8c8d', fontWeight: '600' },
+  configItem: { display: 'flex', flexDirection: 'column', gap: 5 },
+  configLabel: { display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#7f8c8d', fontWeight: '600' },
   configValue: { color: '#27ae60', fontWeight: 'bold' },
   
-  rangeInput: { width: '100%', cursor: 'pointer', accentColor: '#27ae60', height: 6 },
+  rangeInput: { width: '100%', cursor: 'pointer', accentColor: '#27ae60', height: 4 },
 
-  radioGroup: { display: 'flex', gap: 10 },
-  radioBtn: { flex: 1, padding: '8px 0', borderRadius: 8, border: '1px solid #e1e4e8', background: 'white', color: '#7f8c8d', fontSize: 12, cursor: 'pointer', transition: 'all 0.2s' },
-  radioBtnActive: { flex: 1, padding: '8px 0', borderRadius: 8, border: '1px solid #27ae60', background: '#eafaf1', color: '#27ae60', fontSize: 12, fontWeight: 'bold', cursor: 'pointer' },
+  radioGroup: { display: 'flex', gap: 8 },
+  radioBtn: { flex: 1, padding: '6px 0', borderRadius: 6, border: '1px solid #e1e4e8', background: 'white', color: '#7f8c8d', fontSize: 12, cursor: 'pointer', transition: 'all 0.2s' },
+  radioBtnActive: { flex: 1, padding: '6px 0', borderRadius: 6, border: '1px solid #27ae60', background: '#eafaf1', color: '#27ae60', fontSize: 12, fontWeight: 'bold', cursor: 'pointer' },
 
   primaryButton: { 
-      marginTop: 20, 
+      marginTop: 15, 
       width: '100%', 
-      height: 55, 
+      height: 50, // [修改] 按钮高度减小
       background: '#2c3e50', 
       color: 'white', 
       border: 'none', 
-      borderRadius: 14, 
+      borderRadius: 12, 
       fontWeight: 'bold', 
       cursor: 'pointer', 
       display: 'flex', 
       justifyContent: 'center', 
       alignItems: 'center', 
-      fontSize: 18, 
+      fontSize: 17, 
       transition: 'all 0.2s', 
       boxShadow: '0 10px 25px rgba(44, 62, 80, 0.25)' 
   },
@@ -242,14 +243,3 @@ export const styles = {
   hostBadge: { position: 'absolute', top: 10, right: 10, background: '#f1c40f', color: '#333', fontSize: 12, padding: '4px 8px', borderRadius: 4, fontWeight: 'bold' },
   lobbyFooter: { marginTop: 'auto', borderTop: '1px solid #eee', paddingTop: 20, display: 'flex', justifyContent: 'center' },
 };
-
-/* =========================================
-   移动端适配核心区 (Mobile Overrides)
-   将 CSS 字符串插入到全局 styles 中
-   注意：由于这是 JS 对象，我们需要在 index.css 中处理大部分 Media Queries
-   但这里保留了一些行内样式的动态逻辑，以下内容需配合 css 文件
-   ========================================= */
-
-/* * 提示：以下样式逻辑主要反映了您 index.css 中的 Media Query 部分
- * 针对问题进行针对性修改
- */
