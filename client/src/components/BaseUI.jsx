@@ -9,36 +9,48 @@ export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacin
     const { suit, text, color, isScore } = getCardDisplay(cardVal);
     
     // [关键修复] 使用 Pointer Events 代替 Touch/Mouse 事件
+    // PointerDown 能同时响应鼠标按下和手指按下，且响应速度快，无 300ms 延迟
     const handlePointerDown = (e) => {
+        // 只有左键点击(0)或触摸时触发
         if (e.button !== 0 && e.pointerType === 'mouse') return;
+        
+        // 阻止默认行为，防止触发后续的兼容性鼠标事件
+        // 但注意：在某些浏览器中这可能阻止滚动，所以 CSS 的 touch-action: none 配合很重要
+        // e.preventDefault(); 
         e.stopPropagation();
+        
+        // 如果是触摸设备，直接由这里触发点击逻辑
         onClick(cardVal);
     };
 
     return (
         <div 
+            // 移除 onTouchStart 和 onMouseDown，统一使用 onPointerDown
             onPointerDown={handlePointerDown}
+            
+            // 保留 MouseEnter 用于 PC 端拖拽滑选（移动端不支持 hover 所以不会触发）
             onMouseEnter={(e) => {
                 if (e.pointerType === 'mouse') {
                      onMouseEnter(cardVal);
                 }
             }}
+            
             style={{
                 ...styles.card, 
                 color, 
                 left: index * spacing, 
                 zIndex: index,
-                // [优化] 选中时上浮高度调整
-                transform: isSelected ? 'translateY(-35px)' : 'translateY(0)',
+                // [优化] 选中时上浮高度增加，手机上更容易看清
+                transform: isSelected ? 'translateY(-45px)' : 'translateY(0)',
                 borderColor: isSelected ? '#3498db' : (isScore ? '#f1c40f' : '#bdc3c7'),
                 boxShadow: isSelected ? '0 0 15px rgba(52, 152, 219, 0.6)' : (isScore ? '0 0 8px rgba(241, 196, 15, 0.4)' : '0 -2px 5px rgba(0,0,0,0.1)'),
+                // 确保移动端可以接收 Pointer 事件
                 touchAction: 'none' 
             }}
         >
-            {/* [修改] 字体大小缩小适配新尺寸 */}
-            <div style={{fontSize: 16, fontWeight: 'bold'}}>{text}</div>
-            <div style={{fontSize: 28, alignSelf: 'center', marginTop: 5}}>{suit}</div>
-            {isScore && <div style={{position:'absolute', bottom:2, right:2, fontSize:12, color:'#f1c40f'}}>★</div>}
+            <div style={{fontSize: 18, fontWeight: 'bold'}}>{text}</div>
+            <div style={{fontSize: 36, alignSelf: 'center', marginTop: 5}}>{suit}</div>
+            {isScore && <div style={{position:'absolute', bottom:2, right:2, fontSize:14, color:'#f1c40f'}}>★</div>}
         </div>
     );
 };
