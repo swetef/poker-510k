@@ -67,45 +67,101 @@ button:focus-visible {
   }
 }
 
-/* --- 移动端适配 (手机屏幕 < 768px) --- */
+/* --- 移动端适配与横屏引导 --- */
+
+/* 1. 横屏引导遮罩 (仅在手机竖屏时显示) */
+@media screen and (orientation: portrait) and (max-width: 768px) {
+    .landscape-hint {
+        display: flex !important;
+    }
+}
+
+.landscape-hint {
+    display: none; /* 默认隐藏 */
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(30, 39, 46, 0.95);
+    z-index: 9999;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    text-align: center;
+    backdrop-filter: blur(10px);
+}
+
+.phone-rotate-icon {
+    width: 60px;
+    height: 100px;
+    border: 3px solid white;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    animation: rotate-phone 2s infinite ease-in-out;
+}
+
+@keyframes rotate-phone {
+    0% { transform: rotate(0deg); }
+    50% { transform: rotate(90deg); }
+    100% { transform: rotate(0deg); }
+}
+
+/* 2. 移动端通用覆盖样式 */
 @media (max-width: 768px) {
-  /* 强制将登录卡片改为竖向排列，高度自动 */
+  /* Login & Lobby 通用卡片容器 */
   .mobile-layout-column {
     flex-direction: column !important;
-    height: auto !important;
-    min-height: 0 !important;
     width: 95% !important;
-    overflow-y: auto !important; 
+    height: 90vh !important; /* 固定高度，内部滚动 */
     max-height: 90vh !important;
-    margin: 20px 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important; /* 防止整个卡片撑开页面 */
   }
 
-  /* 登录页左侧品牌区：减小高度和内边距 */
+  /* 登录页 */
   .mobile-login-left {
     flex: 0 0 auto !important;
-    padding: 30px 20px !important;
-    min-height: 180px;
+    padding: 20px !important;
+    min-height: auto !important;
   }
-
-  /* 登录页右侧表单区：调整内边距 */
   .mobile-login-right {
-    padding: 20px 15px !important;
     flex: 1 !important;
+    padding: 20px !important;
+    overflow-y: auto !important; /* 让表单区域可以滚动 */
   }
   
-  /* 游戏内手牌区域：手机上需要更靠下，防止遮挡 */
-  .mobile-hand-area {
-    width: 100% !important;
-    bottom: 10px !important;
+  /* 大厅页 (解决按钮看不见的问题) */
+  .mobile-lobby-content {
+      display: flex !important;
+      flex-direction: column !important;
+      height: 100% !important;
+  }
+  .mobile-lobby-grid {
+      flex: 1 !important; /* 占据剩余空间 */
+      overflow-y: auto !important; /* 内容多了可以滚动 */
+      padding: 10px !important;
+      margin-bottom: 10px !important;
+  }
+  .mobile-lobby-footer {
+      flex-shrink: 0 !important; /* 禁止被压缩 */
+      padding: 15px !important;
+      background: white;
+      border-top: 1px solid #eee;
   }
 
-  /* 调整头像大小防止太挤 */
+  /* 游戏页 */
+  .mobile-hand-area {
+    width: 100% !important;
+    bottom: 0 !important;
+    padding-bottom: 10px;
+  }
   .mobile-avatar-scale {
     transform: scale(0.85);
     margin: -5px;
   }
-
-  /* 隐藏或缩小一些不重要的装饰元素 */
+  
+  /* 辅助类 */
   .hide-on-mobile {
     display: none !important;
   }

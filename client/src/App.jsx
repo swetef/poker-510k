@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
+import { Smartphone } from 'lucide-react'; // [新增] 图标
 
 import { sortHand } from './utils/cardLogic.js';
 import SoundManager from './utils/SoundManager.js';
@@ -49,7 +50,7 @@ export default function App() {
   const [grandResult, setGrandResult] = useState(null); 
   const [playerScores, setPlayerScores] = useState({});
   const [playersInfo, setPlayersInfo] = useState({});
-  const [finishedRank, setFinishedRank] = useState([]); // [新增] 存储已完成玩家的 ID 列表
+  const [finishedRank, setFinishedRank] = useState([]); 
   
   const [pendingPoints, setPendingPoints] = useState(0);
   const [gameLogs, setGameLogs] = useState([]);
@@ -125,7 +126,7 @@ export default function App() {
         setRoundResult(null);
         setGrandResult(null);
         setPendingPoints(0);
-        setFinishedRank([]); // [新增] 新的一局开始，清空排名
+        setFinishedRank([]); 
         if (data.grandScores) setPlayerScores(data.grandScores);
         setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: '🏁 新一局开始！' }]); 
         setGameState('GAME');
@@ -155,7 +156,6 @@ export default function App() {
         if (data.scores) setPlayerScores(data.scores);
         if (data.playersInfo) setPlayersInfo(data.playersInfo);
         
-        // [新增] 接收 finishedRank
         if (data.finishedRank) setFinishedRank(data.finishedRank);
 
         if (data.pendingPoints !== undefined) setPendingPoints(data.pendingPoints);
@@ -246,28 +246,54 @@ export default function App() {
     setSelectedCards([]);
   };
 
-  if (gameState === 'LOGIN') return <LoginScreen {...{
-      username, setUsername, 
-      roomId, setRoomId, 
-      roomConfig, setRoomConfig, 
-      isCreatorMode, setIsCreatorMode, 
-      handleRoomAction, 
-      isLoading,
-      isConnected 
-  }} />;
-  
-  if (gameState === 'LOBBY') return <LobbyScreen {...{
-      roomId, roomConfig, players, mySocketId, 
-      handleStartGame, 
-      handleAddBot 
-  }} />;
-  
-  return <GameScreen {...{
-      roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
-      infoMessage, winner: null, playerScores, playersInfo, pendingPoints, gameLogs, sortMode, 
-      mySocketId, roundResult, grandResult, roomConfig,
-      turnRemaining, finishedRank, // [新增] 传递 finishedRank
-      toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
-      handleToggleAutoPlay 
-  }} />;
+  // --- Render Helpers ---
+
+  // 横屏引导层
+  const renderLandscapeHint = () => (
+      <div className="landscape-hint">
+          <div className="phone-rotate-icon"></div>
+          <h3 style={{marginBottom: 10, fontSize: 18}}>建议使用横屏游玩</h3>
+          <p style={{fontSize: 14, opacity: 0.8, maxWidth: 250}}>
+              510K 需要较大的展示空间。<br/>
+              请旋转您的手机以获得最佳体验。
+          </p>
+          <button 
+            style={{marginTop: 20, padding: '8px 20px', background: 'rgba(255,255,255,0.2)', color:'white', border:'1px solid white'}}
+            onClick={(e) => { e.currentTarget.parentElement.style.display = 'none'; }}
+          >
+              我非要竖屏玩
+          </button>
+      </div>
+  );
+
+  return (
+    <>
+      {renderLandscapeHint()}
+      
+      {gameState === 'LOGIN' && <LoginScreen {...{
+          username, setUsername, 
+          roomId, setRoomId, 
+          roomConfig, setRoomConfig, 
+          isCreatorMode, setIsCreatorMode, 
+          handleRoomAction, 
+          isLoading,
+          isConnected 
+      }} />}
+      
+      {gameState === 'LOBBY' && <LobbyScreen {...{
+          roomId, roomConfig, players, mySocketId, 
+          handleStartGame, 
+          handleAddBot 
+      }} />}
+      
+      {gameState === 'GAME' && <GameScreen {...{
+          roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
+          infoMessage, winner: null, playerScores, playersInfo, pendingPoints, gameLogs, sortMode, 
+          mySocketId, roundResult, grandResult, roomConfig,
+          turnRemaining, finishedRank,
+          toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
+          handleToggleAutoPlay 
+      }} />}
+    </>
+  );
 }
