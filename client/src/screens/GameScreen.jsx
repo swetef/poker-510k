@@ -31,6 +31,10 @@ export const GameScreen = ({
 
     const [isFullScreen, setIsFullScreen] = useState(false);
 
+    // [修改] 获取当前正在操作的玩家名字，用于显示“等待 xxx”
+    const currentTurnPlayer = players.find(p => p.id === currentTurnId);
+    const waitingText = currentTurnPlayer ? `等待 ${currentTurnPlayer.name}...` : '等待中...';
+
     const toggleFullScreen = () => {
         const doc = window.document;
         const docEl = doc.documentElement;
@@ -98,45 +102,42 @@ export const GameScreen = ({
         const rightGroup = otherPlayers.slice(countL + countT);
 
         // 4. 生成坐标
-        // 左侧组：垂直分布
+        // [修改] 增加 timerPos 参数，告诉 Avatar 倒计时应该在哪里
+
+        // 左侧组：垂直分布，倒计时在右侧
         leftGroup.forEach((p, i) => {
-            // 如果只有1个，放中间(40%)；如果有2个，放35%和55%
             const topPos = countL === 1 ? '40%' : (i === 0 ? '35%' : '55%');
-            layoutConfig.push({ p, pos: { top: topPos, left: 10, transform: 'translateY(-50%)' } });
+            layoutConfig.push({ p, pos: { top: topPos, left: 10, transform: 'translateY(-50%)' }, timerPos: 'right' });
         });
 
-        // 顶部组：水平分布
+        // 顶部组：水平分布，倒计时在下方
         topGroup.forEach((p, i) => {
-            // 基于中心点扩散
-            // 如果只有1个，50%；多个则均匀分布在 20%~80% 之间
             let leftPos;
             if (countT === 1) {
                 leftPos = '50%';
             } else {
-                // 间距计算
                 const start = 20; 
                 const end = 80;
                 const step = (end - start) / (countT - 1);
                 leftPos = `${start + i * step}%`;
             }
-            layoutConfig.push({ p, pos: { top: 10, left: leftPos, transform: 'translateX(-50%)' } });
+            layoutConfig.push({ p, pos: { top: 10, left: leftPos, transform: 'translateX(-50%)' }, timerPos: 'bottom' });
         });
 
-        // 右侧组：垂直分布 (同左侧)
+        // 右侧组：垂直分布，倒计时在左侧
         rightGroup.forEach((p, i) => {
-            // 这里注意顺序，通常希望和左侧对称，或者从上往下排
             const topPos = countR === 1 ? '40%' : (i === 0 ? '35%' : '55%');
-            layoutConfig.push({ p, pos: { top: topPos, right: 10, transform: 'translateY(-50%)' } });
+            layoutConfig.push({ p, pos: { top: topPos, right: 10, transform: 'translateY(-50%)' }, timerPos: 'left' });
         });
 
-        // 添加自己 (固定在左下角)
+        // 添加自己 (固定在左下角)，倒计时在头顶右侧
         const me = players[safeMyIndex];
         const allItems = [
-            { p: me, pos: { bottom: 25, left: 10, zIndex: 100 } }, // 提高层级
+            { p: me, pos: { bottom: 25, left: 10, zIndex: 100 }, timerPos: 'top-right' }, // [修改] 自己倒计时位置
             ...layoutConfig
         ];
 
-        return allItems.map(({ p, pos }, i) => {
+        return allItems.map(({ p, pos, timerPos }, i) => {
             const info = (playersInfo && playersInfo[p.id]) || {};
             const isBot = info.isBot || p.isBot;
             const isAuto = info.isAutoPlay;
@@ -153,6 +154,7 @@ export const GameScreen = ({
                         isMySocket={p.id === mySocketId}
                         remainingSeconds={turnRemaining}
                         rank={finishedRankVal}
+                        timerPosition={timerPos} // [新增] 传入位置
                     />
                     <div style={{position: 'absolute', top: -10, right: -10, display: 'flex', gap: 5}}>
                         {isBot && <div style={styles.statusBadgeBot}><Bot size={12}/> AI</div>}
@@ -170,9 +172,34 @@ export const GameScreen = ({
             </div>
 
             <div style={styles.tableHeader}>
-                <div style={styles.roomBadge}>Room {roomId}</div>
-                {/* 计分板已移到中心，Header只留 Room 和 按钮 */}
-                
+                {/* [修改] 左上角区域：房间号 + 托管按钮 */}
+                <div style={styles.roomBadgeContainer}>
+                    <div style={styles.roomBadge}>Room {roomId}</div>
+                    
+                    {/* [移动] 托管按钮移到这里 */}
+                    <button 
+                        style={{
+                            pointerEvents: 'auto', 
+                            background: amIAutoPlay ? '#e67e22' : 'rgba(255,255,255,0.1)', 
+                            border: '1px solid rgba(255,255,255,0.3)',
+                            color: '#ecf0f1',
+                            borderRadius: 15, 
+                            padding: '4px 8px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: 'pointer',
+                            fontSize: 11,
+                            fontWeight: 'bold',
+                            transition: 'all 0.2s',
+                            whiteSpace: 'nowrap'
+                        }}
+                        onClick={handleToggleAutoPlay}
+                        title="点击开启/关闭系统托管"
+                    >
+                        <Zap size={12} style={{marginRight: 4}} fill={amIAutoPlay ? "currentColor" : "none"}/>
+                        {amIAutoPlay ? '托管中' : '托管'}
+                    </button>
+                </div>
+
                 {/* 右上角按钮组 */}
                 <div style={{display:'flex', gap: 10, marginLeft: 'auto'}}>
                     <button 
@@ -295,31 +322,11 @@ export const GameScreen = ({
                                         <button style={styles.playButton} onClick={handlePlayCards}>出牌</button>
                                     </>
                                 ) : (
-                                    <div style={styles.waitingBadge}><Clock size={20} className="spin" /> 等待对方...</div>
+                                    // [修改] 显示具体的等待人名
+                                    <div style={styles.waitingBadge}><Clock size={20} className="spin" /> {waitingText}</div>
                                 )}
                                 
-                                <button 
-                                    style={{
-                                        pointerEvents: 'auto', 
-                                        background: 'rgba(255,255,255,0.1)', 
-                                        border: '1px solid rgba(255,255,255,0.3)',
-                                        color: '#ecf0f1',
-                                        borderRadius: 30, 
-                                        padding: '0 15px',
-                                        height: 40,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        cursor: 'pointer',
-                                        marginLeft: 10,
-                                        fontSize: 14,
-                                        fontWeight: 'bold',
-                                        transition: 'all 0.2s'
-                                    }}
-                                    onClick={handleToggleAutoPlay}
-                                    title="点击开启系统托管"
-                                >
-                                    <Zap size={16} style={{marginRight: 4}} />
-                                    托管
-                                </button>
+                                {/* 托管按钮已移除，移至左上角 */}
                             </>
                         )}
                     </div>

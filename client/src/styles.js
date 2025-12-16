@@ -119,10 +119,10 @@ export const styles = {
       display: 'flex', 
       flexDirection: 'column', 
       userSelect: 'none',
-      // [关键修改] 增加 safe-area-inset 适配刘海屏
+      // [关键修改] 修复左侧被吞掉的问题：使用 max 确保至少有 15px 的安全边距
       paddingTop: 'env(safe-area-inset-top)',
-      paddingLeft: 'env(safe-area-inset-left)',
-      paddingRight: 'env(safe-area-inset-right)',
+      paddingLeft: 'max(15px, env(safe-area-inset-left))',
+      paddingRight: 'max(15px, env(safe-area-inset-right))',
       paddingBottom: 'env(safe-area-inset-bottom)'
   },
   
@@ -135,11 +135,9 @@ export const styles = {
   
   playerBox: { 
       pointerEvents: 'auto',
-      // [修改] 极简模式：更小的内边距
       padding: '2px 4px',   
       borderRadius: 8, 
       textAlign: 'center', 
-      // [修改] 极简模式：更小的最小宽度
       minWidth: 45,           
       color:'white', 
       border: '1px solid transparent', 
@@ -149,7 +147,6 @@ export const styles = {
       boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
   },
 
-  // [修改] 极简模式：超小头像 (30px)
   avatar: { 
       width: 30, 
       height: 30, 
@@ -164,7 +161,6 @@ export const styles = {
       boxShadow: '0 2px 5px rgba(0,0,0,0.2)' 
   },
 
-  // [修改] 极简模式：超小字体
   playerName: { 
       fontSize: 10, 
       fontWeight: 'bold', 
@@ -175,33 +171,33 @@ export const styles = {
       maxWidth: 50 
   },
   
-  // [修改] 对局记录改为透明，去掉背景和边框，防止遮挡
   gameLogPanel: { 
       position: 'absolute', 
-      top: 50, 
+      top: 60,  // 稍微下移一点，避免和新的左上角按钮冲突
       left: 10, 
       width: 180, 
       height: 120, 
-      background: 'transparent', // 透明背景
+      background: 'transparent', 
       borderRadius: 0, 
       padding: 5, 
       display: 'flex', 
       flexDirection: 'column', 
       zIndex: 5, 
-      backdropFilter: 'none', // 去掉模糊
-      border: 'none', // 去掉边框
+      backdropFilter: 'none', 
+      border: 'none', 
       pointerEvents: 'none',
-      // 给文字加阴影，确保在任何背景下都能看见
       textShadow: '0 1px 2px rgba(0,0,0,0.8)' 
   },
-  logHeader: { display: 'none' }, // 隐藏标题，直接显示记录节省空间
+  logHeader: { display: 'none' }, 
   logList: { flex: 1, overflowY: 'hidden', display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11 },
   logItem: { lineHeight: 1.2, display: 'flex', alignItems: 'flex-start', color: 'rgba(255,255,255,0.7)' },
   logTime: { display: 'none' },
   
   tableHeader: { 
       padding: '10px 20px', 
+      // [修复] 确保 Header 也受到安全区保护
       paddingTop: 'calc(10px + env(safe-area-inset-top))', 
+      paddingLeft: 'max(15px, env(safe-area-inset-left))',
       display: 'flex', 
       justifyContent: 'space-between', 
       alignItems:'flex-start', 
@@ -212,7 +208,25 @@ export const styles = {
       boxSizing: 'border-box',
       pointerEvents: 'none' 
   },
-  roomBadge: { background: 'rgba(0,0,0,0.3)', color:'white', padding: '4px 8px', borderRadius: 15, fontSize: 11, border: '1px solid rgba(255,255,255,0.1)', fontWeight: 'bold' },
+  
+  // [修改] 左上角房间徽章容器，改为 Flex 布局以容纳托管按钮
+  roomBadgeContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    pointerEvents: 'auto'
+  },
+
+  roomBadge: { 
+    background: 'rgba(0,0,0,0.3)', 
+    color:'white', 
+    padding: '4px 8px', 
+    borderRadius: 15, 
+    fontSize: 11, 
+    border: '1px solid rgba(255,255,255,0.1)', 
+    fontWeight: 'bold',
+    whiteSpace: 'nowrap'
+  },
   
   scoreBoard: { 
       position: 'absolute', 
@@ -252,16 +266,15 @@ export const styles = {
   
   scoreBarBg: { width:'100%', height:4, background:'rgba(0,0,0,0.5)', borderRadius:2, marginTop:2, overflow:'hidden' },
   scoreBarFill: { height:'100%', transition:'width 0.5s' },
-  // [修改] 极简模式：分数文字更小
   playerScore: { fontSize: 9, color: '#f1c40f', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, marginTop: 1 },
   turnProgress: { position: 'absolute', bottom: 0, left: 0, height: 4, background: '#f1c40f', width: '100%', animation: 'progress 15s linear forwards' },
   
   handArea: { 
       position: 'absolute', 
       bottom: 10,             
-      left: 65, // [修改] 头像变小了，手牌可以再往左靠一点 (原75)
+      left: 65,
       right: 10, 
-      height: 90, // [修改] 配合卡牌高度减小 (原110)
+      height: 90, 
       display: 'flex', 
       justifyContent:'flex-start', 
       alignItems: 'flex-end',
@@ -270,7 +283,7 @@ export const styles = {
   
   card: { 
       background: 'white', 
-      borderRadius: 6, // 圆角稍微小一点适应小尺寸      
+      borderRadius: 6,      
       border: '1px solid #999', 
       position: 'absolute', 
       cursor: 'pointer', 
@@ -278,8 +291,8 @@ export const styles = {
       flexDirection: 'column', 
       padding: 4,            
       transition: 'transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1)', 
-      width: 55, // [修改] 宽度缩小适配高度 (原80)           
-      height: 70 // [修改] 高度改为70 (原90)
+      width: 55,         
+      height: 70 
   },
   
   actionBar: { position: 'absolute', bottom: 100, width: '100%', height: 60, display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', zIndex: 30 }, 

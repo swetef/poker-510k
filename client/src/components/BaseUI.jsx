@@ -34,24 +34,24 @@ export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacin
                 touchAction: 'none' 
             }}
         >
-            {/* [修改] 卡牌内容布局：固定在左上角 */}
+            {/* [修改] 卡牌内容布局：数字更小，更靠左上角 */}
             <div style={{
                 position: 'absolute',
-                top: 3, 
-                left: 3,
+                top: 0, // 紧贴顶部
+                left: 1, // 紧贴左边
                 display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'center', // 数字和花色水平居中对齐
-                lineHeight: 1
+                alignItems: 'center',
+                lineHeight: 0.9
             }}>
-                {/* 数字 */}
-                <div style={{fontSize: 20, fontWeight: '900'}}>{text}</div>
-                {/* 花色 - 紧挨着数字下方 */}
-                <div style={{fontSize: 20, marginTop: -2}}>{suit}</div>
+                {/* 数字 - [修改] 缩小字体 */}
+                <div style={{fontSize: 16, fontWeight: '900', letterSpacing: -1}}>{text}</div>
+                {/* 花色 - [修改] 缩小字体并紧挨数字 */}
+                <div style={{fontSize: 14, marginTop: -1}}>{suit}</div>
             </div>
 
             {/* 分数标记保持在右下角 */}
-            {isScore && <div style={{position:'absolute', bottom:2, right:2, fontSize:12, color:'#f1c40f'}}>★</div>}
+            {isScore && <div style={{position:'absolute', bottom:1, right:2, fontSize:10, color:'#f1c40f'}}>★</div>}
         </div>
     );
 };
@@ -70,7 +70,7 @@ export const MiniCard = ({ cardVal, index }) => {
     );
 };
 
-export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, remainingSeconds, rank }) => {
+export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, remainingSeconds, rank, timerPosition }) => {
     const progress = Math.min((score / targetScore) * 100, 100);
     const containerOpacity = rank ? 0.75 : 1; 
 
@@ -87,7 +87,7 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
             {rank && (
                 <div style={{
                     position: 'absolute',
-                    top: -12, // 调整排名标签位置
+                    top: -12,
                     left: '50%',
                     transform: 'translateX(-50%)',
                     background: rank === 1 ? '#f1c40f' : (rank === 2 ? '#bdc3c7' : '#e67e22'), 
@@ -116,10 +116,12 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
             </div>
             <div style={styles.playerScore}><Coins size={10} color="#f1c40f"/> {score}</div>
             
+            {/* [修改] 传递 timerPosition 参数控制倒计时位置 */}
             {isTurn && !rank && (
                 <CountDownTimer 
                     initialSeconds={remainingSeconds} 
                     totalSeconds={60} 
+                    position={timerPosition}
                 />
             )}
         </div>
