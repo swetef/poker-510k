@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Coins, Layers, Crown, Clock, Bot, Zap, Maximize, Minimize } from 'lucide-react';
 import { styles } from '../styles.js'; 
 import { Card, MiniCard, PlayerAvatar, GameLogPanel } from '../components/BaseUI.jsx';
+import TimerComponent from '../components/CountDownTimer.jsx'; // 修正导入路径
 import { calculateCardSpacing } from '../utils/cardLogic.js';
 
 export const GameScreen = ({ 
@@ -71,6 +72,8 @@ export const GameScreen = ({
         const safeMyIndex = myIndex === -1 ? 0 : myIndex;
         
         // 1. 获取除自己以外的对手列表，按顺序排列
+        // 注意：这里为了界面布局稳定，仍然按数组顺序取，
+        // 但实际的游戏出牌顺序(逻辑)是由后端控制的(逆时针)，前端只负责显示谁在操作。
         const otherPlayers = [];
         for (let i = 1; i < players.length; i++) {
             const idx = (safeMyIndex + i) % players.length;
@@ -102,12 +105,19 @@ export const GameScreen = ({
         const rightGroup = otherPlayers.slice(countL + countT);
 
         // 4. 生成坐标
-        // [修改] 增加 timerPos 参数，告诉 Avatar 倒计时应该在哪里
-
+        // [修复] 左侧被吞掉：加大 left 值 (原10 -> 30)
+        
         // 左侧组：垂直分布，倒计时在右侧
         leftGroup.forEach((p, i) => {
-            const topPos = countL === 1 ? '40%' : (i === 0 ? '35%' : '55%');
-            layoutConfig.push({ p, pos: { top: topPos, left: 10, transform: 'translateY(-50%)' }, timerPos: 'right' });
+            // [关键修改] 逆时针出牌顺序下，出牌顺序是 C(index=1) -> B(index=0)。
+            // 为了视觉上从上往下流转 (Top -> Left-Top -> Left-Bottom -> Me)，
+            // 我们需要把后出牌的人(i=0)放在下面，先出牌的人(i=1)放在上面。
+            
+            // 原逻辑: i=0 -> 35% (上), i=1 -> 55% (下)。 视觉: 下->上 (逆流)
+            // 新逻辑: i=0 -> 55% (下), i=1 -> 35% (上)。 视觉: 上->下 (顺流)
+            
+            const topPos = countL === 1 ? '40%' : (i === 0 ? '55%' : '35%'); 
+            layoutConfig.push({ p, pos: { top: topPos, left: 30, transform: 'translateY(-50%)' }, timerPos: 'right' });
         });
 
         // 顶部组：水平分布，倒计时在下方
@@ -125,19 +135,20 @@ export const GameScreen = ({
         });
 
         // 右侧组：垂直分布，倒计时在左侧
+        // 右侧本身在逆时针下就是从下往上流转的 (Right-Bottom -> Right-Top)，这符合圆桌趋势，所以不需要改
         rightGroup.forEach((p, i) => {
             const topPos = countR === 1 ? '40%' : (i === 0 ? '35%' : '55%');
             layoutConfig.push({ p, pos: { top: topPos, right: 10, transform: 'translateY(-50%)' }, timerPos: 'left' });
         });
 
-        // 添加自己 (固定在左下角)，倒计时在头顶右侧
+        // 添加自己 (固定在左下角)，[修改] hideTimer=true 因为要在按钮中间显示
         const me = players[safeMyIndex];
         const allItems = [
-            { p: me, pos: { bottom: 25, left: 10, zIndex: 100 }, timerPos: 'top-right' }, // [修改] 自己倒计时位置
+            { p: me, pos: { bottom: 25, left: 20, zIndex: 100 }, hideTimer: true }, // [修改] 自己不显示头像倒计时
             ...layoutConfig
         ];
 
-        return allItems.map(({ p, pos, timerPos }, i) => {
+        return allItems.map(({ p, pos, timerPos, hideTimer }, i) => {
             const info = (playersInfo && playersInfo[p.id]) || {};
             const isBot = info.isBot || p.isBot;
             const isAuto = info.isAutoPlay;
@@ -154,7 +165,8 @@ export const GameScreen = ({
                         isMySocket={p.id === mySocketId}
                         remainingSeconds={turnRemaining}
                         rank={finishedRankVal}
-                        timerPosition={timerPos} // [新增] 传入位置
+                        timerPosition={timerPos}
+                        hideTimer={hideTimer} // [新增]
                     />
                     <div style={{position: 'absolute', top: -10, right: -10, display: 'flex', gap: 5}}>
                         {isBot && <div style={styles.statusBadgeBot}><Bot size={12}/> AI</div>}
@@ -176,7 +188,6 @@ export const GameScreen = ({
                 <div style={styles.roomBadgeContainer}>
                     <div style={styles.roomBadge}>Room {roomId}</div>
                     
-                    {/* [移动] 托管按钮移到这里 */}
                     <button 
                         style={{
                             pointerEvents: 'auto', 
@@ -319,14 +330,16 @@ export const GameScreen = ({
                                 {isMyTurn ? (
                                     <>
                                         <button style={styles.passButton} onClick={handlePass}>不要</button>
+                                        
+                                        {/* [修改] 自己的倒计时放在这里 (使用 inline 模式) */}
+                                        <TimerComponent initialSeconds={turnRemaining} totalSeconds={60} position="inline" />
+                                        
                                         <button style={styles.playButton} onClick={handlePlayCards}>出牌</button>
                                     </>
                                 ) : (
                                     // [修改] 显示具体的等待人名
                                     <div style={styles.waitingBadge}><Clock size={20} className="spin" /> {waitingText}</div>
                                 )}
-                                
-                                {/* 托管按钮已移除，移至左上角 */}
                             </>
                         )}
                     </div>

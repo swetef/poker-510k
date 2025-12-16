@@ -117,14 +117,19 @@ class GameManager {
 
             const sortedHand = [...hand].sort((a,b) => CardRules.getPoint(a) - CardRules.getPoint(b));
             
-            const cardsToPlay = BotLogic.decideMove(sortedHand, cardsToBeat, this.config.deckCount);
+            // 尝试获取出牌策略
+            let cardsToPlay = null;
+            try {
+                cardsToPlay = BotLogic.decideMove(sortedHand, cardsToBeat, this.config.deckCount);
+            } catch (err) {
+                console.error("[Bot Error] Logic crashed:", err);
+            }
 
             if (cardsToPlay) {
                 console.log(`[Bot/Auto] ${botPlayer.name} plays ${cardsToPlay.length} cards.`);
                 const result = this.playCards(botPlayer.id, cardsToPlay);
                 
                 if (result.success) {
-                    // [修复] 关键修复：如果是真实玩家托管，必须发送手牌更新事件，否则客户端看不到牌少了
                     if (!botPlayer.isBot) {
                         this.io.to(botPlayer.id).emit('hand_update', this.gameState.hands[botPlayer.id]);
                     }
@@ -137,19 +142,45 @@ class GameManager {
                     }
                 } else {
                     console.error(`[Bot Error] Play failed: ${result.error}`);
-                    if (!isNewRound) this.passTurn(botPlayer.id);
+                    // [修复] 如果出牌失败（可能是逻辑判断错误），且不是新回合，强制过牌
+                    if (!isNewRound) {
+                        this._forcePass(botPlayer);
+                    }
                 }
             } else {
-                console.log(`[Bot/Auto] ${botPlayer.name} passes.`);
-                const result = this.passTurn(botPlayer.id);
-                if (result.success) {
-                    const publicState = this.getPublicState();
-                    publicState.infoText = isNewRound ? '' : 'PASS';
-                    this.io.to(this.roomId).emit('game_state_update', publicState);
+                // AI 决定过牌 (或者逻辑返回 null)
+                if (isNewRound) {
+                    // [修复] 如果是新回合（必须出牌），但 AI 返回 null（异常），强制出一张最小的牌
+                    console.warn(`[Bot Fix] AI tried to pass on new round. Forcing min card.`);
+                    const minCard = [sortedHand[0]];
+                    this.playCards(botPlayer.id, minCard);
+                    this.io.to(this.roomId).emit('game_state_update', this.getPublicState());
+                    if (!botPlayer.isBot) this.io.to(botPlayer.id).emit('hand_update', this.gameState.hands[botPlayer.id]);
+                } else {
+                    // 正常过牌
+                    console.log(`[Bot/Auto] ${botPlayer.name} passes.`);
+                    this._forcePass(botPlayer);
                 }
             }
         } catch (error) {
             console.error(`[Bot Error] Exception in _executeBotTurn:`, error);
+            // 兜底：防止死循环，直接跳过
+            this._advanceTurn();
+            this._resetTimer();
+            this._checkAndRunBot();
+        }
+    }
+    
+    // [新增] 强制过牌辅助函数，处理逻辑更统一
+    _forcePass(botPlayer) {
+        const result = this.passTurn(botPlayer.id);
+        if (result.success) {
+            const publicState = this.getPublicState();
+            publicState.infoText = 'PASS';
+            this.io.to(this.roomId).emit('game_state_update', publicState);
+        } else {
+            // 如果连过牌都失败了（例如必须出牌但没出），由于上面已处理 isNewRound，理论上不该走到这
+            console.error("[Bot Critical] Failed to pass turn:", result.error);
         }
     }
 
@@ -343,13 +374,17 @@ class GameManager {
         const playerCount = this.players.length;
         let nextIndex = this.gameState.currentTurnIndex;
         let attempts = 0;
+        
+        // [修改] 逆时针出牌逻辑 (Counter-Clockwise)
+        // 索引减 1，如果小于0则加总数取模
         do {
-            nextIndex = (nextIndex + 1) % playerCount;
+            nextIndex = (nextIndex - 1 + playerCount) % playerCount;
             attempts++;
         } while (
             this.gameState.hands[this.players[nextIndex].id].length === 0 && 
             attempts < playerCount 
         );
+        
         this.gameState.currentTurnIndex = nextIndex;
     }
 

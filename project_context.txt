@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/16 20:00:28
+Project Context Generated at 2025/12/16 20:41:56
 
 
 ================================================================================
@@ -487,24 +487,24 @@ export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacin
                 touchAction: 'none' 
             }}
         >
-            {/* [修改] 卡牌内容布局：固定在左上角 */}
+            {/* [修改] 卡牌内容布局：数字更小，更靠左上角 */}
             <div style={{
                 position: 'absolute',
-                top: 3, 
-                left: 3,
+                top: 0, // 紧贴顶部
+                left: 1, // 紧贴左边
                 display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'center', // 数字和花色水平居中对齐
-                lineHeight: 1
+                alignItems: 'center',
+                lineHeight: 0.9
             }}>
-                {/* 数字 */}
-                <div style={{fontSize: 20, fontWeight: '900'}}>{text}</div>
-                {/* 花色 - 紧挨着数字下方 */}
-                <div style={{fontSize: 20, marginTop: -2}}>{suit}</div>
+                {/* 数字 - [修改] 缩小字体 */}
+                <div style={{fontSize: 16, fontWeight: '900', letterSpacing: -1}}>{text}</div>
+                {/* 花色 - [修改] 缩小字体并紧挨数字 */}
+                <div style={{fontSize: 14, marginTop: -1}}>{suit}</div>
             </div>
 
             {/* 分数标记保持在右下角 */}
-            {isScore && <div style={{position:'absolute', bottom:2, right:2, fontSize:12, color:'#f1c40f'}}>★</div>}
+            {isScore && <div style={{position:'absolute', bottom:1, right:2, fontSize:10, color:'#f1c40f'}}>★</div>}
         </div>
     );
 };
@@ -523,7 +523,7 @@ export const MiniCard = ({ cardVal, index }) => {
     );
 };
 
-export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, remainingSeconds, rank }) => {
+export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, remainingSeconds, rank, timerPosition }) => {
     const progress = Math.min((score / targetScore) * 100, 100);
     const containerOpacity = rank ? 0.75 : 1; 
 
@@ -540,7 +540,7 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
             {rank && (
                 <div style={{
                     position: 'absolute',
-                    top: -12, // 调整排名标签位置
+                    top: -12,
                     left: '50%',
                     transform: 'translateX(-50%)',
                     background: rank === 1 ? '#f1c40f' : (rank === 2 ? '#bdc3c7' : '#e67e22'), 
@@ -569,10 +569,12 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
             </div>
             <div style={styles.playerScore}><Coins size={10} color="#f1c40f"/> {score}</div>
             
+            {/* [修改] 传递 timerPosition 参数控制倒计时位置 */}
             {isTurn && !rank && (
                 <CountDownTimer 
                     initialSeconds={remainingSeconds} 
                     totalSeconds={60} 
+                    position={timerPosition}
                 />
             )}
         </div>
@@ -607,7 +609,8 @@ FILE PATH: client\src\components\CountDownTimer.jsx
 import React, { useState, useEffect } from 'react';
 import { Clock } from 'lucide-react';
 
-const CountDownTimer = ({ initialSeconds, totalSeconds = 60 }) => {
+// [修改] 增加 position 参数 ('top', 'bottom', 'left', 'right', 'top-right')
+const CountDownTimer = ({ initialSeconds, totalSeconds = 60, position = 'top' }) => {
     const [seconds, setSeconds] = useState(initialSeconds);
 
     useEffect(() => {
@@ -626,32 +629,52 @@ const CountDownTimer = ({ initialSeconds, totalSeconds = 60 }) => {
     const color = isUrgent ? '#ff4d4d' : '#ffffff';
     const bgColor = isUrgent ? 'rgba(231, 76, 60, 0.9)' : 'rgba(0, 0, 0, 0.7)';
 
+    // 根据位置参数生成样式
+    let posStyle = {};
+    const commonTransform = 'translate(0, 0)';
+
+    switch (position) {
+        case 'bottom':
+            posStyle = { top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: 5 };
+            break;
+        case 'left':
+            posStyle = { right: '100%', top: '50%', transform: 'translateY(-50%)', marginRight: 8 };
+            break;
+        case 'right':
+            posStyle = { left: '100%', top: '50%', transform: 'translateY(-50%)', marginLeft: 8 };
+            break;
+        case 'top-right': // 专门给底部自己用的，放在头像右上角/右侧
+            posStyle = { left: '100%', top: -20, marginLeft: 5 };
+            break;
+        case 'top':
+        default:
+            posStyle = { bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 5 };
+            break;
+    }
+
     return (
         <div style={{
             position: 'absolute',
-            // [修改] 显示在头顶上方，避开下方内容
-            top: -60, 
-            left: '50%',
-            transform: 'translateX(-50%)',
+            ...posStyle,
             
             // 样式调整：气泡风格
             background: bgColor,
-            padding: '4px 12px',
+            padding: '2px 8px', // 稍微缩小一点
             borderRadius: 20,
             display: 'flex',
             alignItems: 'center',
-            gap: 5,
+            gap: 3,
             whiteSpace: 'nowrap',
             boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
             border: '1px solid rgba(255,255,255,0.2)',
             zIndex: 30,
             transition: 'all 0.3s'
         }}>
-            <Clock size={14} color={color} className={isUrgent ? 'spin' : ''} />
+            <Clock size={12} color={color} className={isUrgent ? 'spin' : ''} />
             <span style={{ 
                 color: color, 
                 fontWeight: 'bold', 
-                fontSize: 16,
+                fontSize: 12,
                 fontFamily: 'monospace'
             }}>
                 {seconds}s
@@ -994,6 +1017,10 @@ export const GameScreen = ({
 
     const [isFullScreen, setIsFullScreen] = useState(false);
 
+    // [修改] 获取当前正在操作的玩家名字，用于显示“等待 xxx”
+    const currentTurnPlayer = players.find(p => p.id === currentTurnId);
+    const waitingText = currentTurnPlayer ? `等待 ${currentTurnPlayer.name}...` : '等待中...';
+
     const toggleFullScreen = () => {
         const doc = window.document;
         const docEl = doc.documentElement;
@@ -1061,45 +1088,42 @@ export const GameScreen = ({
         const rightGroup = otherPlayers.slice(countL + countT);
 
         // 4. 生成坐标
-        // 左侧组：垂直分布
+        // [修改] 增加 timerPos 参数，告诉 Avatar 倒计时应该在哪里
+
+        // 左侧组：垂直分布，倒计时在右侧
         leftGroup.forEach((p, i) => {
-            // 如果只有1个，放中间(40%)；如果有2个，放35%和55%
             const topPos = countL === 1 ? '40%' : (i === 0 ? '35%' : '55%');
-            layoutConfig.push({ p, pos: { top: topPos, left: 10, transform: 'translateY(-50%)' } });
+            layoutConfig.push({ p, pos: { top: topPos, left: 10, transform: 'translateY(-50%)' }, timerPos: 'right' });
         });
 
-        // 顶部组：水平分布
+        // 顶部组：水平分布，倒计时在下方
         topGroup.forEach((p, i) => {
-            // 基于中心点扩散
-            // 如果只有1个，50%；多个则均匀分布在 20%~80% 之间
             let leftPos;
             if (countT === 1) {
                 leftPos = '50%';
             } else {
-                // 间距计算
                 const start = 20; 
                 const end = 80;
                 const step = (end - start) / (countT - 1);
                 leftPos = `${start + i * step}%`;
             }
-            layoutConfig.push({ p, pos: { top: 10, left: leftPos, transform: 'translateX(-50%)' } });
+            layoutConfig.push({ p, pos: { top: 10, left: leftPos, transform: 'translateX(-50%)' }, timerPos: 'bottom' });
         });
 
-        // 右侧组：垂直分布 (同左侧)
+        // 右侧组：垂直分布，倒计时在左侧
         rightGroup.forEach((p, i) => {
-            // 这里注意顺序，通常希望和左侧对称，或者从上往下排
             const topPos = countR === 1 ? '40%' : (i === 0 ? '35%' : '55%');
-            layoutConfig.push({ p, pos: { top: topPos, right: 10, transform: 'translateY(-50%)' } });
+            layoutConfig.push({ p, pos: { top: topPos, right: 10, transform: 'translateY(-50%)' }, timerPos: 'left' });
         });
 
-        // 添加自己 (固定在左下角)
+        // 添加自己 (固定在左下角)，倒计时在头顶右侧
         const me = players[safeMyIndex];
         const allItems = [
-            { p: me, pos: { bottom: 25, left: 10, zIndex: 100 } }, // 提高层级
+            { p: me, pos: { bottom: 25, left: 10, zIndex: 100 }, timerPos: 'top-right' }, // [修改] 自己倒计时位置
             ...layoutConfig
         ];
 
-        return allItems.map(({ p, pos }, i) => {
+        return allItems.map(({ p, pos, timerPos }, i) => {
             const info = (playersInfo && playersInfo[p.id]) || {};
             const isBot = info.isBot || p.isBot;
             const isAuto = info.isAutoPlay;
@@ -1116,6 +1140,7 @@ export const GameScreen = ({
                         isMySocket={p.id === mySocketId}
                         remainingSeconds={turnRemaining}
                         rank={finishedRankVal}
+                        timerPosition={timerPos} // [新增] 传入位置
                     />
                     <div style={{position: 'absolute', top: -10, right: -10, display: 'flex', gap: 5}}>
                         {isBot && <div style={styles.statusBadgeBot}><Bot size={12}/> AI</div>}
@@ -1133,9 +1158,34 @@ export const GameScreen = ({
             </div>
 
             <div style={styles.tableHeader}>
-                <div style={styles.roomBadge}>Room {roomId}</div>
-                {/* 计分板已移到中心，Header只留 Room 和 按钮 */}
-                
+                {/* [修改] 左上角区域：房间号 + 托管按钮 */}
+                <div style={styles.roomBadgeContainer}>
+                    <div style={styles.roomBadge}>Room {roomId}</div>
+                    
+                    {/* [移动] 托管按钮移到这里 */}
+                    <button 
+                        style={{
+                            pointerEvents: 'auto', 
+                            background: amIAutoPlay ? '#e67e22' : 'rgba(255,255,255,0.1)', 
+                            border: '1px solid rgba(255,255,255,0.3)',
+                            color: '#ecf0f1',
+                            borderRadius: 15, 
+                            padding: '4px 8px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: 'pointer',
+                            fontSize: 11,
+                            fontWeight: 'bold',
+                            transition: 'all 0.2s',
+                            whiteSpace: 'nowrap'
+                        }}
+                        onClick={handleToggleAutoPlay}
+                        title="点击开启/关闭系统托管"
+                    >
+                        <Zap size={12} style={{marginRight: 4}} fill={amIAutoPlay ? "currentColor" : "none"}/>
+                        {amIAutoPlay ? '托管中' : '托管'}
+                    </button>
+                </div>
+
                 {/* 右上角按钮组 */}
                 <div style={{display:'flex', gap: 10, marginLeft: 'auto'}}>
                     <button 
@@ -1258,31 +1308,11 @@ export const GameScreen = ({
                                         <button style={styles.playButton} onClick={handlePlayCards}>出牌</button>
                                     </>
                                 ) : (
-                                    <div style={styles.waitingBadge}><Clock size={20} className="spin" /> 等待对方...</div>
+                                    // [修改] 显示具体的等待人名
+                                    <div style={styles.waitingBadge}><Clock size={20} className="spin" /> {waitingText}</div>
                                 )}
                                 
-                                <button 
-                                    style={{
-                                        pointerEvents: 'auto', 
-                                        background: 'rgba(255,255,255,0.1)', 
-                                        border: '1px solid rgba(255,255,255,0.3)',
-                                        color: '#ecf0f1',
-                                        borderRadius: 30, 
-                                        padding: '0 15px',
-                                        height: 40,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        cursor: 'pointer',
-                                        marginLeft: 10,
-                                        fontSize: 14,
-                                        fontWeight: 'bold',
-                                        transition: 'all 0.2s'
-                                    }}
-                                    onClick={handleToggleAutoPlay}
-                                    title="点击开启系统托管"
-                                >
-                                    <Zap size={16} style={{marginRight: 4}} />
-                                    托管
-                                </button>
+                                {/* 托管按钮已移除，移至左上角 */}
                             </>
                         )}
                     </div>
@@ -1803,10 +1833,10 @@ export const styles = {
       display: 'flex', 
       flexDirection: 'column', 
       userSelect: 'none',
-      // [关键修改] 增加 safe-area-inset 适配刘海屏
+      // [关键修改] 修复左侧被吞掉的问题：使用 max 确保至少有 15px 的安全边距
       paddingTop: 'env(safe-area-inset-top)',
-      paddingLeft: 'env(safe-area-inset-left)',
-      paddingRight: 'env(safe-area-inset-right)',
+      paddingLeft: 'max(15px, env(safe-area-inset-left))',
+      paddingRight: 'max(15px, env(safe-area-inset-right))',
       paddingBottom: 'env(safe-area-inset-bottom)'
   },
   
@@ -1819,11 +1849,9 @@ export const styles = {
   
   playerBox: { 
       pointerEvents: 'auto',
-      // [修改] 极简模式：更小的内边距
       padding: '2px 4px',   
       borderRadius: 8, 
       textAlign: 'center', 
-      // [修改] 极简模式：更小的最小宽度
       minWidth: 45,           
       color:'white', 
       border: '1px solid transparent', 
@@ -1833,7 +1861,6 @@ export const styles = {
       boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
   },
 
-  // [修改] 极简模式：超小头像 (30px)
   avatar: { 
       width: 30, 
       height: 30, 
@@ -1848,7 +1875,6 @@ export const styles = {
       boxShadow: '0 2px 5px rgba(0,0,0,0.2)' 
   },
 
-  // [修改] 极简模式：超小字体
   playerName: { 
       fontSize: 10, 
       fontWeight: 'bold', 
@@ -1859,33 +1885,33 @@ export const styles = {
       maxWidth: 50 
   },
   
-  // [修改] 对局记录改为透明，去掉背景和边框，防止遮挡
   gameLogPanel: { 
       position: 'absolute', 
-      top: 50, 
+      top: 60,  // 稍微下移一点，避免和新的左上角按钮冲突
       left: 10, 
       width: 180, 
       height: 120, 
-      background: 'transparent', // 透明背景
+      background: 'transparent', 
       borderRadius: 0, 
       padding: 5, 
       display: 'flex', 
       flexDirection: 'column', 
       zIndex: 5, 
-      backdropFilter: 'none', // 去掉模糊
-      border: 'none', // 去掉边框
+      backdropFilter: 'none', 
+      border: 'none', 
       pointerEvents: 'none',
-      // 给文字加阴影，确保在任何背景下都能看见
       textShadow: '0 1px 2px rgba(0,0,0,0.8)' 
   },
-  logHeader: { display: 'none' }, // 隐藏标题，直接显示记录节省空间
+  logHeader: { display: 'none' }, 
   logList: { flex: 1, overflowY: 'hidden', display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11 },
   logItem: { lineHeight: 1.2, display: 'flex', alignItems: 'flex-start', color: 'rgba(255,255,255,0.7)' },
   logTime: { display: 'none' },
   
   tableHeader: { 
       padding: '10px 20px', 
+      // [修复] 确保 Header 也受到安全区保护
       paddingTop: 'calc(10px + env(safe-area-inset-top))', 
+      paddingLeft: 'max(15px, env(safe-area-inset-left))',
       display: 'flex', 
       justifyContent: 'space-between', 
       alignItems:'flex-start', 
@@ -1896,7 +1922,25 @@ export const styles = {
       boxSizing: 'border-box',
       pointerEvents: 'none' 
   },
-  roomBadge: { background: 'rgba(0,0,0,0.3)', color:'white', padding: '4px 8px', borderRadius: 15, fontSize: 11, border: '1px solid rgba(255,255,255,0.1)', fontWeight: 'bold' },
+  
+  // [修改] 左上角房间徽章容器，改为 Flex 布局以容纳托管按钮
+  roomBadgeContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    pointerEvents: 'auto'
+  },
+
+  roomBadge: { 
+    background: 'rgba(0,0,0,0.3)', 
+    color:'white', 
+    padding: '4px 8px', 
+    borderRadius: 15, 
+    fontSize: 11, 
+    border: '1px solid rgba(255,255,255,0.1)', 
+    fontWeight: 'bold',
+    whiteSpace: 'nowrap'
+  },
   
   scoreBoard: { 
       position: 'absolute', 
@@ -1936,16 +1980,15 @@ export const styles = {
   
   scoreBarBg: { width:'100%', height:4, background:'rgba(0,0,0,0.5)', borderRadius:2, marginTop:2, overflow:'hidden' },
   scoreBarFill: { height:'100%', transition:'width 0.5s' },
-  // [修改] 极简模式：分数文字更小
   playerScore: { fontSize: 9, color: '#f1c40f', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, marginTop: 1 },
   turnProgress: { position: 'absolute', bottom: 0, left: 0, height: 4, background: '#f1c40f', width: '100%', animation: 'progress 15s linear forwards' },
   
   handArea: { 
       position: 'absolute', 
       bottom: 10,             
-      left: 65, // [修改] 头像变小了，手牌可以再往左靠一点 (原75)
+      left: 65,
       right: 10, 
-      height: 90, // [修改] 配合卡牌高度减小 (原110)
+      height: 90, 
       display: 'flex', 
       justifyContent:'flex-start', 
       alignItems: 'flex-end',
@@ -1954,7 +1997,7 @@ export const styles = {
   
   card: { 
       background: 'white', 
-      borderRadius: 6, // 圆角稍微小一点适应小尺寸      
+      borderRadius: 6,      
       border: '1px solid #999', 
       position: 'absolute', 
       cursor: 'pointer', 
@@ -1962,8 +2005,8 @@ export const styles = {
       flexDirection: 'column', 
       padding: 4,            
       transition: 'transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1)', 
-      width: 55, // [修改] 宽度缩小适配高度 (原80)           
-      height: 70 // [修改] 高度改为70 (原90)
+      width: 55,         
+      height: 70 
   },
   
   actionBar: { position: 'absolute', bottom: 100, width: '100%', height: 60, display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', zIndex: 30 }, 
@@ -1982,7 +2025,6 @@ export const styles = {
   hostBadge: { position: 'absolute', top: 10, right: 10, background: '#f1c40f', color: '#333', fontSize: 12, padding: '4px 8px', borderRadius: 4, fontWeight: 'bold' },
   lobbyFooter: { marginTop: 'auto', borderTop: '1px solid #eee', paddingTop: 20, display: 'flex', justifyContent: 'center' },
 };
-
 
 ================================================================================
 FILE PATH: client\src\utils\cardLogic.js
@@ -2619,14 +2661,19 @@ class GameManager {
 
             const sortedHand = [...hand].sort((a,b) => CardRules.getPoint(a) - CardRules.getPoint(b));
             
-            const cardsToPlay = BotLogic.decideMove(sortedHand, cardsToBeat, this.config.deckCount);
+            // 尝试获取出牌策略
+            let cardsToPlay = null;
+            try {
+                cardsToPlay = BotLogic.decideMove(sortedHand, cardsToBeat, this.config.deckCount);
+            } catch (err) {
+                console.error("[Bot Error] Logic crashed:", err);
+            }
 
             if (cardsToPlay) {
                 console.log(`[Bot/Auto] ${botPlayer.name} plays ${cardsToPlay.length} cards.`);
                 const result = this.playCards(botPlayer.id, cardsToPlay);
                 
                 if (result.success) {
-                    // [修复] 关键修复：如果是真实玩家托管，必须发送手牌更新事件，否则客户端看不到牌少了
                     if (!botPlayer.isBot) {
                         this.io.to(botPlayer.id).emit('hand_update', this.gameState.hands[botPlayer.id]);
                     }
@@ -2639,19 +2686,45 @@ class GameManager {
                     }
                 } else {
                     console.error(`[Bot Error] Play failed: ${result.error}`);
-                    if (!isNewRound) this.passTurn(botPlayer.id);
+                    // [修复] 如果出牌失败（可能是逻辑判断错误），且不是新回合，强制过牌
+                    if (!isNewRound) {
+                        this._forcePass(botPlayer);
+                    }
                 }
             } else {
-                console.log(`[Bot/Auto] ${botPlayer.name} passes.`);
-                const result = this.passTurn(botPlayer.id);
-                if (result.success) {
-                    const publicState = this.getPublicState();
-                    publicState.infoText = isNewRound ? '' : 'PASS';
-                    this.io.to(this.roomId).emit('game_state_update', publicState);
+                // AI 决定过牌 (或者逻辑返回 null)
+                if (isNewRound) {
+                    // [修复] 如果是新回合（必须出牌），但 AI 返回 null（异常），强制出一张最小的牌
+                    console.warn(`[Bot Fix] AI tried to pass on new round. Forcing min card.`);
+                    const minCard = [sortedHand[0]];
+                    this.playCards(botPlayer.id, minCard);
+                    this.io.to(this.roomId).emit('game_state_update', this.getPublicState());
+                    if (!botPlayer.isBot) this.io.to(botPlayer.id).emit('hand_update', this.gameState.hands[botPlayer.id]);
+                } else {
+                    // 正常过牌
+                    console.log(`[Bot/Auto] ${botPlayer.name} passes.`);
+                    this._forcePass(botPlayer);
                 }
             }
         } catch (error) {
             console.error(`[Bot Error] Exception in _executeBotTurn:`, error);
+            // 兜底：防止死循环，直接跳过
+            this._advanceTurn();
+            this._resetTimer();
+            this._checkAndRunBot();
+        }
+    }
+    
+    // [新增] 强制过牌辅助函数，处理逻辑更统一
+    _forcePass(botPlayer) {
+        const result = this.passTurn(botPlayer.id);
+        if (result.success) {
+            const publicState = this.getPublicState();
+            publicState.infoText = 'PASS';
+            this.io.to(this.roomId).emit('game_state_update', publicState);
+        } else {
+            // 如果连过牌都失败了（例如必须出牌但没出），由于上面已处理 isNewRound，理论上不该走到这
+            console.error("[Bot Critical] Failed to pass turn:", result.error);
         }
     }
 
@@ -2845,13 +2918,17 @@ class GameManager {
         const playerCount = this.players.length;
         let nextIndex = this.gameState.currentTurnIndex;
         let attempts = 0;
+        
+        // [修改] 逆时针出牌逻辑 (Counter-Clockwise)
+        // 索引减 1，如果小于0则加总数取模
         do {
-            nextIndex = (nextIndex + 1) % playerCount;
+            nextIndex = (nextIndex - 1 + playerCount) % playerCount;
             attempts++;
         } while (
             this.gameState.hands[this.players[nextIndex].id].length === 0 && 
             attempts < playerCount 
         );
+        
         this.gameState.currentTurnIndex = nextIndex;
     }
 
