@@ -1,4 +1,4 @@
-// 游戏主界面
+// 游戏主界面 - 深度适配移动端布局
 import React from 'react';
 import { Coins, Layers, Crown, Clock, Bot, Zap } from 'lucide-react';
 import { styles } from '../styles.js'; 
@@ -9,7 +9,7 @@ export const GameScreen = ({
     roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
     infoMessage, winner, playerScores, playersInfo, pendingPoints, gameLogs, sortMode,
     mySocketId, roundResult, grandResult, roomConfig,
-    turnRemaining, finishedRank = [], // [新增] 接收 finishedRank，默认空数组
+    turnRemaining, finishedRank = [], 
     toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
     handleToggleAutoPlay 
 }) => {
@@ -26,7 +26,10 @@ export const GameScreen = ({
 
     return (
         <div style={styles.gameTable} onMouseUp={() => { /* Global Mouse Up Handled in App */ }}>
-            <GameLogPanel logs={gameLogs} />
+            {/* 增加类名 gameLogPanel 以便在手机上隐藏 */}
+            <div className="gameLogPanel">
+                 <GameLogPanel logs={gameLogs} />
+            </div>
 
             <div style={styles.tableHeader}>
                 <div style={styles.roomBadge}>Room {roomId}</div>
@@ -42,6 +45,7 @@ export const GameScreen = ({
             {/* 弹窗区域 */}
             {(winner || roundResult || grandResult) && (
                 <div style={styles.modalOverlay}>
+                    {className="modal-content-wrapper"}    
                     <div style={styles.modalContent}>
                         {grandResult ? (
                             <>
@@ -72,12 +76,14 @@ export const GameScreen = ({
                 </div>
             )}
 
-            {/* 桌面区域 */}
-            <div style={styles.tableCenter}>
+            {/* 桌面区域 (出牌展示) */}
+            {/* [修改] 增加 mobile-table-center 类名 */}
+            <div style={styles.tableCenter} className="mobile-table-center">
                 {lastPlayed.length > 0 && (
                     <div style={{animation: 'popIn 0.3s'}}>
                         <div style={styles.playerNameTag}>{lastPlayerName}</div>
-                        <div style={styles.playedRow}>
+                        <div style={styles.playedRow} className="mini-card-container"> 
+                            {/* 给 MiniCard 加个父容器类名以便 CSS 控制 */}
                             {lastPlayed.map((c, i) => <MiniCard key={i} cardVal={c} index={i} />)}
                         </div>
                     </div>
@@ -85,13 +91,12 @@ export const GameScreen = ({
             </div>
 
             {/* 玩家区域 */}
-            <div style={styles.playersArea}>
+            {/* [修改] 增加 mobile-players-area 类名 */}
+            <div style={styles.playersArea} className="mobile-players-area">
                 {players.map((p, i) => {
                     const info = (playersInfo && playersInfo[p.id]) || {};
                     const isBot = info.isBot || p.isBot;
                     const isAuto = info.isAutoPlay;
-                    
-                    // [新增] 计算该玩家的名次，没打完就是 -1
                     const rankIndex = finishedRank ? finishedRank.indexOf(p.id) : -1;
                     const finishedRankVal = rankIndex !== -1 ? rankIndex + 1 : null;
 
@@ -104,12 +109,9 @@ export const GameScreen = ({
                                 targetScore={roomConfig.targetScore} 
                                 isMySocket={p.id === mySocketId}
                                 remainingSeconds={turnRemaining}
-                                rank={finishedRankVal} // [新增] 传入名次
+                                rank={finishedRankVal}
                             />
-                            {/* 状态标记 */}
-                            <div style={{
-                                position: 'absolute', top: -10, right: -10, display: 'flex', gap: 5
-                            }}>
+                            <div style={{position: 'absolute', top: -10, right: -10, display: 'flex', gap: 5}}>
                                 {isBot && <div style={styles.statusBadgeBot}><Bot size={12}/> AI</div>}
                                 {isAuto && <div style={styles.statusBadgeAuto}><Zap size={12}/> 托管</div>}
                             </div>
@@ -145,7 +147,8 @@ export const GameScreen = ({
             </div>
 
             {/* 操作栏 */}
-            <div style={styles.actionBar}>
+            {/* [修改] 增加 action-bar-container 类名 */}
+            <div style={styles.actionBar} className="action-bar-container">
                 {!winner && !roundResult && !grandResult && (
                     <div style={{display:'flex', alignItems: 'center', gap: 20}}>
                         {amIAutoPlay ? (

@@ -1,26 +1,36 @@
-// 基础UI组件 - 增加排名显示
+// 基础UI组件 - 修复点击跳动问题 + 优化移动端显示
 import React, { useEffect, useRef } from 'react';
-import { Coins, History, Trophy, Flag } from 'lucide-react'; // [新增] Trophy 和 Flag 图标
+import { Coins, History, Trophy, Flag } from 'lucide-react'; 
 import { getCardDisplay } from '../utils/cardLogic';
 import { styles } from '../styles';
 import CountDownTimer from './CountDownTimer'; 
 
 export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacing }) => {
     const { suit, text, color, isScore } = getCardDisplay(cardVal);
+    
+    // 专门处理触摸开始，阻止后续的鼠标事件
+    const handleTouchStart = (e) => {
+        // [关键修复] 阻止默认事件，防止触发后续的 mousedown/click 导致双重触发
+        if (e.cancelable) e.preventDefault(); 
+        e.stopPropagation();
+        onClick(cardVal);
+    };
+
     return (
         <div 
-            onTouchStart={(e) => { 
-                e.stopPropagation(); 
-                onClick(cardVal); 
+            onTouchStart={handleTouchStart}
+            onMouseDown={(e) => {
+                // PC 端逻辑保持不变
+                onClick(cardVal);
             }}
-            onMouseDown={() => onClick(cardVal)}
             onMouseEnter={() => onMouseEnter(cardVal)}
             style={{
                 ...styles.card, 
                 color, 
                 left: index * spacing, 
                 zIndex: index,
-                transform: isSelected ? 'translateY(-50px)' : 'translateY(0)',
+                // [优化] 选中时上浮高度增加，手机上更容易看清
+                transform: isSelected ? 'translateY(-40px)' : 'translateY(0)',
                 borderColor: isSelected ? '#3498db' : (isScore ? '#f1c40f' : '#bdc3c7'),
                 boxShadow: isSelected ? '0 0 15px rgba(52, 152, 219, 0.6)' : (isScore ? '0 0 8px rgba(241, 196, 15, 0.4)' : '0 -2px 5px rgba(0,0,0,0.1)'),
             }}
@@ -46,11 +56,8 @@ export const MiniCard = ({ cardVal, index }) => {
     );
 };
 
-// [修改] 增加 rank 参数
 export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, remainingSeconds, rank }) => {
     const progress = Math.min((score / targetScore) * 100, 100);
-    
-    // 如果已经完成（rank 有值），稍微降低透明度，让没打完的更显眼
     const containerOpacity = rank ? 0.75 : 1; 
 
     return (
@@ -63,14 +70,13 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
             position: 'relative',
             opacity: containerOpacity
         }}>
-            {/* [新增] 排名徽章 */}
             {rank && (
                 <div style={{
                     position: 'absolute',
                     top: -15,
                     left: '50%',
                     transform: 'translateX(-50%)',
-                    background: rank === 1 ? '#f1c40f' : (rank === 2 ? '#bdc3c7' : '#e67e22'), // 金、银、铜
+                    background: rank === 1 ? '#f1c40f' : (rank === 2 ? '#bdc3c7' : '#e67e22'), 
                     color: '#fff',
                     padding: '3px 12px',
                     borderRadius: 20,
@@ -96,7 +102,6 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
             </div>
             <div style={styles.playerScore}><Coins size={12} color="#f1c40f"/> {score} / {targetScore}</div>
             
-            {/* 如果完成了，就不显示倒计时了，只显示排名 */}
             {isTurn && !rank && (
                 <CountDownTimer 
                     initialSeconds={remainingSeconds} 
