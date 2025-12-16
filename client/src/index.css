@@ -240,9 +240,6 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
   .modal-content-wrapper h2 { font-size: 22px !important; }
   .modal-content-wrapper div { font-size: 15px !important; line-height: 1.6 !important; }
   
-  /* [修改] 移除旧的布局强制覆盖代码，因为新的 styles.js 已经原生支持了绝对定位布局 */
-  /* .gameLogPanel { display: none !important; } */
-  
 }
 
 
@@ -257,6 +254,17 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
         margin: 0 !important;
         padding-left: max(15px, env(safe-area-inset-left)) !important; 
         padding-right: max(15px, env(safe-area-inset-right)) !important; 
+    }
+
+    /* [关键修复] 针对 LobbyScreen (大厅) 强制保持纵向布局，防止全屏/横屏时变成左右结构导致拉伸 */
+    .lobbyCard.mobile-layout-column {
+        flex-direction: column !important;
+        width: 100% !important; /* 确保宽度撑满 */
+    }
+
+    /* [关键修复] 确保横屏下大厅内容容器宽度正常 */
+    .mobile-lobby-content {
+        width: 100% !important;
     }
 
     .mobile-login-left { 

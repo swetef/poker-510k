@@ -9,7 +9,8 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
       {/* [修改] 增加 mobile-layout-column 类名，并重构内部结构以支持 flex 滚动 */}
       <div style={styles.lobbyCard} className="mobile-layout-column">
           
-          <div className="mobile-lobby-content" style={{display:'flex', flexDirection:'column', height:'100%', overflow:'hidden', borderRadius: 20}}>
+          {/* [关键修复] 增加 width: '100%' 确保在任何 flex 布局下都能撑满宽度 */}
+          <div className="mobile-lobby-content" style={{display:'flex', flexDirection:'column', height:'100%', width: '100%', overflow:'hidden', borderRadius: 20}}>
             
             {/* 头部：保持不变，固定在顶部 */}
             <div style={styles.lobbyHeader}>
