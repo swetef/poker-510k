@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/16 18:56:02
+Project Context Generated at 2025/12/16 19:18:36
 
 
 ================================================================================
@@ -454,7 +454,7 @@ FILE PATH: client\src\components\BaseUI.jsx
 // 基础UI组件 - 修复移动端点击无效、双重触发问题
 import React, { useEffect, useRef } from 'react';
 import { Coins, History, Trophy, Flag } from 'lucide-react'; 
-import { getCardDisplay } from '../utils/cardLogic';
+import { getCardDisplay } from '../utils/cardLogic.js';
 import { styles } from '../styles';
 import CountDownTimer from './CountDownTimer'; 
 
@@ -462,48 +462,49 @@ export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacin
     const { suit, text, color, isScore } = getCardDisplay(cardVal);
     
     // [关键修复] 使用 Pointer Events 代替 Touch/Mouse 事件
-    // PointerDown 能同时响应鼠标按下和手指按下，且响应速度快，无 300ms 延迟
     const handlePointerDown = (e) => {
-        // 只有左键点击(0)或触摸时触发
         if (e.button !== 0 && e.pointerType === 'mouse') return;
-        
-        // 阻止默认行为，防止触发后续的兼容性鼠标事件
-        // 但注意：在某些浏览器中这可能阻止滚动，所以 CSS 的 touch-action: none 配合很重要
-        // e.preventDefault(); 
         e.stopPropagation();
-        
-        // 如果是触摸设备，直接由这里触发点击逻辑
         onClick(cardVal);
     };
 
     return (
         <div 
-            // 移除 onTouchStart 和 onMouseDown，统一使用 onPointerDown
             onPointerDown={handlePointerDown}
-            
-            // 保留 MouseEnter 用于 PC 端拖拽滑选（移动端不支持 hover 所以不会触发）
             onMouseEnter={(e) => {
                 if (e.pointerType === 'mouse') {
                      onMouseEnter(cardVal);
                 }
             }}
-            
             style={{
                 ...styles.card, 
                 color, 
                 left: index * spacing, 
                 zIndex: index,
-                // [优化] 选中时上浮高度增加，手机上更容易看清
-                transform: isSelected ? 'translateY(-45px)' : 'translateY(0)',
+                transform: isSelected ? 'translateY(-35px)' : 'translateY(0)',
                 borderColor: isSelected ? '#3498db' : (isScore ? '#f1c40f' : '#bdc3c7'),
                 boxShadow: isSelected ? '0 0 15px rgba(52, 152, 219, 0.6)' : (isScore ? '0 0 8px rgba(241, 196, 15, 0.4)' : '0 -2px 5px rgba(0,0,0,0.1)'),
-                // 确保移动端可以接收 Pointer 事件
                 touchAction: 'none' 
             }}
         >
-            <div style={{fontSize: 18, fontWeight: 'bold'}}>{text}</div>
-            <div style={{fontSize: 36, alignSelf: 'center', marginTop: 5}}>{suit}</div>
-            {isScore && <div style={{position:'absolute', bottom:2, right:2, fontSize:14, color:'#f1c40f'}}>★</div>}
+            {/* [修改] 卡牌内容布局：固定在左上角 */}
+            <div style={{
+                position: 'absolute',
+                top: 3, 
+                left: 3,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center', // 数字和花色水平居中对齐
+                lineHeight: 1
+            }}>
+                {/* 数字 */}
+                <div style={{fontSize: 20, fontWeight: '900'}}>{text}</div>
+                {/* 花色 - 紧挨着数字下方 */}
+                <div style={{fontSize: 20, marginTop: -2}}>{suit}</div>
+            </div>
+
+            {/* 分数标记保持在右下角 */}
+            {isScore && <div style={{position:'absolute', bottom:2, right:2, fontSize:12, color:'#f1c40f'}}>★</div>}
         </div>
     );
 };
@@ -539,24 +540,24 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
             {rank && (
                 <div style={{
                     position: 'absolute',
-                    top: -15,
+                    top: -12, // 调整排名标签位置
                     left: '50%',
                     transform: 'translateX(-50%)',
                     background: rank === 1 ? '#f1c40f' : (rank === 2 ? '#bdc3c7' : '#e67e22'), 
                     color: '#fff',
-                    padding: '3px 12px',
+                    padding: '2px 8px',
                     borderRadius: 20,
-                    fontSize: 13,
+                    fontSize: 11,
                     fontWeight: 'bold',
-                    boxShadow: '0 4px 10px rgba(0,0,0,0.4)',
+                    boxShadow: '0 2px 5px rgba(0,0,0,0.4)',
                     zIndex: 20,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 4,
+                    gap: 3,
                     whiteSpace: 'nowrap',
-                    border: '2px solid white'
+                    border: '1px solid white'
                 }}>
-                    {rank === 1 ? <Trophy size={14} fill="white" /> : <Flag size={14} fill="white"/>}
+                    {rank === 1 ? <Trophy size={10} fill="white" /> : <Flag size={10} fill="white"/>}
                     {rank === 1 ? 'NO.1' : `NO.${rank}`}
                 </div>
             )}
@@ -566,7 +567,7 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
             <div style={styles.scoreBarBg}>
                 <div style={{...styles.scoreBarFill, width:`${progress}%`, background: progress>=100?'#e74c3c':'#2ecc71'}}></div>
             </div>
-            <div style={styles.playerScore}><Coins size={12} color="#f1c40f"/> {score} / {targetScore}</div>
+            <div style={styles.playerScore}><Coins size={10} color="#f1c40f"/> {score}</div>
             
             {isTurn && !rank && (
                 <CountDownTimer 
@@ -599,7 +600,6 @@ export const GameLogPanel = ({ logs }) => {
         </div>
     );
 };
-
 
 ================================================================================
 FILE PATH: client\src\components\CountDownTimer.jsx
@@ -1097,7 +1097,7 @@ import { calculateCardSpacing } from '../utils/cardLogic.js';
 
 export const GameScreen = ({ 
     roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
-    infoMessage, winner, playerScores, playersInfo, pendingPoints, gameLogs, sortMode,
+    infoMessage: serverInfoMessage, winner, playerScores, playersInfo, pendingPoints, gameLogs, sortMode,
     mySocketId, roundResult, grandResult, roomConfig,
     turnRemaining, finishedRank = [], 
     toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
@@ -1114,23 +1114,46 @@ export const GameScreen = ({
     const avatarScale = isCrowded ? 0.85 : 1;
     const avatarStyleOverride = isCrowded ? { transform: `scale(${avatarScale})`, margin: -5 } : {};
 
+    // [新增] 本地状态用于显示全屏提示
+    const [localInfo, setLocalInfo] = useState('');
+    const displayMessage = localInfo || serverInfoMessage;
+
     // [新增] 全屏状态控制
     const [isFullScreen, setIsFullScreen] = useState(false);
 
-    // [新增] 切换全屏逻辑
+    // [修改] 增强版全屏切换逻辑
     const toggleFullScreen = () => {
-        if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen()
-                .then(() => setIsFullScreen(true))
-                .catch(err => {
-                    console.error("全屏启用失败:", err);
-                    // 很多 iPhone 不支持 requestFullscreen，这里可以给个提示或者静默失败
-                    // 但有了 PWA 方案作为后备，这里静默即可
-                });
+        const doc = window.document;
+        const docEl = doc.documentElement;
+
+        // 各种浏览器的全屏请求方法
+        const requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
+        // 退出全屏方法
+        const cancelFullScreen = doc.exitFullscreen || doc.mozCancelFullScreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
+
+        if (!doc.fullscreenElement && !doc.mozFullScreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) {
+            // 尝试进入全屏
+            if (requestFullScreen) {
+                requestFullScreen.call(docEl)
+                    .then(() => setIsFullScreen(true))
+                    .catch(err => {
+                        console.warn("全屏请求被拒绝:", err);
+                        // iOS Safari 可能会拒绝
+                        setLocalInfo("⚠️ 您的浏览器不支持网页全屏，请使用'添加到主屏幕'功能");
+                        setTimeout(() => setLocalInfo(''), 3000);
+                    });
+            } else {
+                // 通常是 iOS Safari，根本没有这个 API
+                setLocalInfo("⚠️ iOS请在Safari菜单选择'添加到主屏幕'以全屏游玩");
+                setTimeout(() => setLocalInfo(''), 3000);
+            }
         } else {
-            document.exitFullscreen()
-                .then(() => setIsFullScreen(false))
-                .catch(err => console.error(err));
+            // 退出全屏
+            if (cancelFullScreen) {
+                cancelFullScreen.call(doc)
+                    .then(() => setIsFullScreen(false))
+                    .catch(err => console.error(err));
+            }
         }
     };
 
@@ -1151,7 +1174,7 @@ export const GameScreen = ({
                 <div style={{display:'flex', gap: 10}}>
                     {/* [新增] 全屏按钮 */}
                     <button 
-                        style={{...styles.glassButton, padding: '8px 12px'}} 
+                        style={{...styles.glassButton, padding: '8px 12px', pointerEvents: 'auto'}} 
                         onClick={toggleFullScreen}
                         title={isFullScreen ? "退出全屏" : "进入全屏"}
                     >
@@ -1164,13 +1187,13 @@ export const GameScreen = ({
                 </div>
             </div>
 
-            <div style={styles.infoMessage}>{infoMessage}</div>
+            <div style={styles.infoMessage}>{displayMessage}</div>
 
             {/* 弹窗区域 */}
             {(winner || roundResult || grandResult) && (
                 <div style={styles.modalOverlay}>
-                    {className="modal-content-wrapper"}    
-                    <div style={styles.modalContent}>
+                    {/* [修正] 这里的 className 之前有语法错误，已修正 */}
+                    <div className="modal-content-wrapper" style={styles.modalContent}>
                         {grandResult ? (
                             <>
                                 <Crown size={80} color="#e74c3c" style={{marginBottom: 20}} />
@@ -1858,18 +1881,41 @@ export const styles = {
   
   playerBox: { 
       pointerEvents: 'auto',
-      padding: '10px 15px',   
-      borderRadius: 16, 
+      // [修改] 缩小内边距和最小宽度 (原: 10px 15px, 90px)
+      padding: '5px 8px',   
+      borderRadius: 12, 
       textAlign: 'center', 
-      minWidth: 90,           
+      minWidth: 70,           
       color:'white', 
       border: '2px solid transparent', 
       transition: 'all 0.3s', 
       position: 'relative' 
   },
 
-  avatar: { width: 70, height: 70, background: '#ecf0f1', borderRadius: '50%', margin: '0 auto 8px', lineHeight: '70px', color:'#333', fontWeight:'bold', fontSize: 24, border: '2px solid rgba(255,255,255,0.2)', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' },
-  playerName: { fontSize: 14, fontWeight: 'bold', marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 90 },
+  // [修改] 缩小头像尺寸 (原: 70px)
+  avatar: { 
+      width: 45, 
+      height: 45, 
+      background: '#ecf0f1', 
+      borderRadius: '50%', 
+      margin: '0 auto 4px', 
+      lineHeight: '45px', 
+      color:'#333', 
+      fontWeight:'bold', 
+      fontSize: 18, 
+      border: '2px solid rgba(255,255,255,0.2)', 
+      boxShadow: '0 4px 10px rgba(0,0,0,0.2)' 
+  },
+  // [修改] 缩小字体 (原: 14px)
+  playerName: { 
+      fontSize: 12, 
+      fontWeight: 'bold', 
+      marginBottom: 2, 
+      whiteSpace: 'nowrap', 
+      overflow: 'hidden', 
+      textOverflow: 'ellipsis', 
+      maxWidth: 70 
+  },
   
   gameLogPanel: { position: 'absolute', top: 20, left: 20, width: 250, bottom: 280, background: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: 20, display: 'flex', flexDirection: 'column', zIndex: 5, backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)' },
   logHeader: { display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: 10 },
@@ -1904,9 +1950,10 @@ export const styles = {
   playedRow: { display: 'flex', gap: -10, filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.3))' }, 
   miniCard: { background: 'white', padding: '15px 20px', borderRadius: 10, fontWeight: 'bold', fontSize: 28, minWidth: 50, textAlign:'center' },
   
-  scoreBarBg: { width:'100%', height:6, background:'rgba(0,0,0,0.5)', borderRadius:3, marginTop:5, overflow:'hidden' },
+  scoreBarBg: { width:'100%', height:6, background:'rgba(0,0,0,0.5)', borderRadius:3, marginTop:2, overflow:'hidden' },
   scoreBarFill: { height:'100%', transition:'width 0.5s' },
-  playerScore: { fontSize: 13, color: '#f1c40f', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 5 },
+  // [修改] 缩小字体 (原: 13px)
+  playerScore: { fontSize: 11, color: '#f1c40f', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 2 },
   turnProgress: { position: 'absolute', bottom: 0, left: 0, height: 4, background: '#f1c40f', width: '100%', animation: 'progress 15s linear forwards' },
   
   handArea: { 
@@ -1914,7 +1961,7 @@ export const styles = {
       bottom: 20,             
       left: '50%', 
       transform: 'translateX(-50%)', 
-      height: 140, 
+      height: 110, // [保持] 从上一步继承的 110
       width: '100%',          
       maxWidth: 1600, 
       display: 'flex', 
@@ -1930,10 +1977,11 @@ export const styles = {
       cursor: 'pointer', 
       display: 'flex', 
       flexDirection: 'column', 
+      // [修改] 移除 padding，由内部布局控制
       padding: 5,            
       transition: 'transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1)', 
       width: 80,             
-      height: 110            
+      height: 70 // [保持] 从上一步继承的 90
   },
   
   actionBar: { position: 'absolute', bottom: 0, width: '100%', height: 120, background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)', display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', zIndex: 30 }, 

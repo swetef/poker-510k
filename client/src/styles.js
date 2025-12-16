@@ -126,26 +126,16 @@ export const styles = {
       paddingBottom: 'env(safe-area-inset-bottom)'
   },
   
-  // Players Area: 调整位置，避免被顶部 Header 遮挡
+  // [修改] 移除之前的 playersArea Flex 布局，因为现在是绝对定位
   playersArea: { 
-      display: 'flex', 
-      justifyContent: 'center', 
-      alignContent: 'center', 
-      flexWrap: 'wrap',       
-      gap: '10px',            
-      // [修改] 增加顶部 padding，给 Header 留出空间
-      paddingTop: 80,         
-      marginBottom: 200,      
-      width: '98%',           
-      maxWidth: 1600,         
-      margin: '0 auto 200px', 
-      pointerEvents: 'none',  
+      position: 'absolute',
+      top: 0, left: 0, right: 0, bottom: 0,
+      pointerEvents: 'none',
       zIndex: 10
   },
   
   playerBox: { 
       pointerEvents: 'auto',
-      // [修改] 缩小内边距和最小宽度 (原: 10px 15px, 90px)
       padding: '5px 8px',   
       borderRadius: 12, 
       textAlign: 'center', 
@@ -153,10 +143,12 @@ export const styles = {
       color:'white', 
       border: '2px solid transparent', 
       transition: 'all 0.3s', 
-      position: 'relative' 
+      position: 'relative',
+      // [新增] 加上背景模糊，防止和背景混在一起
+      backdropFilter: 'blur(5px)',
+      boxShadow: '0 4px 15px rgba(0,0,0,0.3)'
   },
 
-  // [修改] 缩小头像尺寸 (原: 70px)
   avatar: { 
       width: 45, 
       height: 45, 
@@ -170,7 +162,7 @@ export const styles = {
       border: '2px solid rgba(255,255,255,0.2)', 
       boxShadow: '0 4px 10px rgba(0,0,0,0.2)' 
   },
-  // [修改] 缩小字体 (原: 14px)
+
   playerName: { 
       fontSize: 12, 
       fontWeight: 'bold', 
@@ -181,15 +173,14 @@ export const styles = {
       maxWidth: 70 
   },
   
-  gameLogPanel: { position: 'absolute', top: 20, left: 20, width: 250, bottom: 280, background: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: 20, display: 'flex', flexDirection: 'column', zIndex: 5, backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)' },
-  logHeader: { display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: 10 },
-  logList: { flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13, scrollbarWidth: 'thin' },
-  logItem: { lineHeight: 1.5, display: 'flex', alignItems: 'flex-start' },
-  logTime: { opacity: 0.5, fontSize: 10, marginRight: 8, width: 45, display: 'inline-block', color: '#ccc' },
+  gameLogPanel: { position: 'absolute', top: 50, left: 10, width: 200, height: 150, background: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: 10, display: 'flex', flexDirection: 'column', zIndex: 5, backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)', pointerEvents:'none' },
+  logHeader: { display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 5, borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: 5, fontSize: 12 },
+  logList: { flex: 1, overflowY: 'hidden', display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12 },
+  logItem: { lineHeight: 1.2, display: 'flex', alignItems: 'flex-start' },
+  logTime: { opacity: 0.5, fontSize: 10, marginRight: 5, display: 'none' }, // 隐藏时间节省空间
   
   tableHeader: { 
-      // [修改] 顶部栏使用 padding + safe-area，且使用绝对定位确保不被流式布局挤走
-      padding: '10px 40px', 
+      padding: '10px 20px', 
       paddingTop: 'calc(10px + env(safe-area-inset-top))', 
       display: 'flex', 
       justifyContent: 'space-between', 
@@ -198,38 +189,64 @@ export const styles = {
       position: 'absolute',
       top: 0,
       width: '100%',
-      boxSizing: 'border-box'
+      boxSizing: 'border-box',
+      pointerEvents: 'none' // 让点击穿透到下面的玩家
   },
-  roomBadge: { background: 'rgba(0,0,0,0.3)', color:'white', padding: '8px 20px', borderRadius: 20, fontSize: 16, border: '1px solid rgba(255,255,255,0.1)', fontWeight: 'bold' },
+  roomBadge: { background: 'rgba(0,0,0,0.3)', color:'white', padding: '4px 10px', borderRadius: 20, fontSize: 12, border: '1px solid rgba(255,255,255,0.1)', fontWeight: 'bold' },
   
-  scoreBoard: { position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.5)', padding: '10px 50px', borderRadius: 20, textAlign: 'center', color: 'white', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' },
+  // [修改] 计分板移到中间偏上，且变小
+  scoreBoard: { 
+      position: 'absolute', 
+      top: '40%', // 出牌区上方一点
+      left: '50%', 
+      transform: 'translate(-50%, -100%) scale(0.8)', 
+      background: 'rgba(0,0,0,0.6)', 
+      padding: '5px 20px', 
+      borderRadius: 20, 
+      textAlign: 'center', 
+      color: 'white', 
+      border: '1px solid rgba(255,255,255,0.2)', 
+      backdropFilter: 'blur(5px)', 
+      boxShadow: '0 5px 15px rgba(0,0,0,0.3)',
+      zIndex: 5 
+  },
   
-  glassButton: { background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 20px', borderRadius: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: 14, transition: 'background 0.2s' },
-  sortButton: { background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 20px', borderRadius: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: 14, transition: 'background 0.2s' },
+  glassButton: { pointerEvents: 'auto', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 20px', borderRadius: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: 14, transition: 'background 0.2s' },
+  sortButton: { pointerEvents: 'auto', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 20px', borderRadius: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: 14, transition: 'background 0.2s' },
   
   infoMessage: { position: 'absolute', top: '25%', width: '100%', textAlign: 'center', color: '#f1c40f', fontSize: 40, fontWeight: 'bold', textShadow: '0 5px 15px rgba(0,0,0,0.5)', pointerEvents: 'none', zIndex: 50, letterSpacing: 2 },
   
-  tableCenter: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', paddingBottom: 100 },
-  playerNameTag: { color: 'white', textAlign: 'center', marginBottom: 15, textShadow: '0 2px 4px rgba(0,0,0,0.5)', fontSize: 18, fontWeight: 'bold', background: 'rgba(0,0,0,0.3)', padding: '5px 20px', borderRadius: 20, display: 'inline-block' },
+  // [修改] 出牌区绝对居中
+  tableCenter: { 
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      zIndex: 1
+  },
+  
+  playerNameTag: { color: 'white', textAlign: 'center', marginBottom: 5, textShadow: '0 2px 4px rgba(0,0,0,0.5)', fontSize: 14, fontWeight: 'bold', background: 'rgba(0,0,0,0.3)', padding: '2px 10px', borderRadius: 20, display: 'inline-block' },
   playedRow: { display: 'flex', gap: -10, filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.3))' }, 
-  miniCard: { background: 'white', padding: '15px 20px', borderRadius: 10, fontWeight: 'bold', fontSize: 28, minWidth: 50, textAlign:'center' },
+  miniCard: { background: 'white', padding: '10px 15px', borderRadius: 8, fontWeight: 'bold', fontSize: 24, minWidth: 40, textAlign:'center' },
   
   scoreBarBg: { width:'100%', height:6, background:'rgba(0,0,0,0.5)', borderRadius:3, marginTop:2, overflow:'hidden' },
   scoreBarFill: { height:'100%', transition:'width 0.5s' },
-  // [修改] 缩小字体 (原: 13px)
   playerScore: { fontSize: 11, color: '#f1c40f', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 2 },
   turnProgress: { position: 'absolute', bottom: 0, left: 0, height: 4, background: '#f1c40f', width: '100%', animation: 'progress 15s linear forwards' },
   
+  // [修改] 手牌区域：不再居中，而是靠左下角头像右侧
   handArea: { 
       position: 'absolute', 
-      bottom: 20,             
-      left: '50%', 
-      transform: 'translateX(-50%)', 
-      height: 110, // [保持] 从上一步继承的 110
-      width: '100%',          
-      maxWidth: 1600, 
+      bottom: 10,             
+      left: 90, // 给左下角头像留出空间 (头像宽70-80左右)
+      right: 10, // 撑满右边
+      height: 110, 
       display: 'flex', 
-      justifyContent:'center', 
+      justifyContent:'flex-start', // 靠左排列，紧挨着头像
+      alignItems: 'flex-end',
       zIndex: 20 
   },
   
@@ -241,16 +258,15 @@ export const styles = {
       cursor: 'pointer', 
       display: 'flex', 
       flexDirection: 'column', 
-      // [修改] 移除 padding，由内部布局控制
       padding: 5,            
       transition: 'transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1)', 
       width: 80,             
-      height: 70 // [保持] 从上一步继承的 90
+      height: 90 
   },
   
-  actionBar: { position: 'absolute', bottom: 0, width: '100%', height: 120, background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)', display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', zIndex: 30 }, 
-  playButton: { pointerEvents: 'auto', padding: '15px 60px', background: 'linear-gradient(to bottom, #f1c40f, #f39c12)', border: 'none', borderRadius: 40, fontWeight: 'bold', cursor: 'pointer', marginLeft: 20, fontSize: 20, boxShadow: '0 8px 20px rgba(243, 156, 18, 0.4)', color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.2)', transition: 'transform 0.1s' },
-  passButton: { pointerEvents: 'auto', padding: '15px 40px', background: '#7f8c8d', border: 'none', borderRadius: 40, fontWeight: 'bold', cursor: 'pointer', fontSize: 18, color: 'white', boxShadow: '0 5px 15px rgba(0,0,0,0.3)' },
+  actionBar: { position: 'absolute', bottom: 120, width: '100%', height: 60, display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', zIndex: 30 }, 
+  playButton: { pointerEvents: 'auto', padding: '10px 40px', background: 'linear-gradient(to bottom, #f1c40f, #f39c12)', border: 'none', borderRadius: 40, fontWeight: 'bold', cursor: 'pointer', marginLeft: 20, fontSize: 18, boxShadow: '0 8px 20px rgba(243, 156, 18, 0.4)', color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.2)', transition: 'transform 0.1s' },
+  passButton: { pointerEvents: 'auto', padding: '10px 30px', background: '#7f8c8d', border: 'none', borderRadius: 40, fontWeight: 'bold', cursor: 'pointer', fontSize: 16, color: 'white', boxShadow: '0 5px 15px rgba(0,0,0,0.3)' },
   waitingBadge: { color: 'rgba(255,255,255,0.7)', fontSize: 16, display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(0,0,0,0.3)', padding: '10px 20px', borderRadius: 30 },
   modalOverlay: { position: 'fixed', top:0, left:0, right:0, bottom:0, background: 'rgba(0,0,0,0.85)', display:'flex', justifyContent:'center', alignItems:'center', zIndex: 99, backdropFilter: 'blur(8px)' },
   modalContent: { background: 'white', padding: 60, borderRadius: 30, textAlign: 'center', boxShadow: '0 30px 80px rgba(0,0,0,0.6)', animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)' },
