@@ -140,6 +140,40 @@ io.on('connection', (socket) => {
             broadcastGameState(io, roomId, room);
         }
     });
+    
+    // 添加机器人
+    socket.on('add_bot', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+        
+        if (room.players.length >= room.config.maxPlayers) return socket.emit('error_msg', '房间已满');
+        
+        const botId = `bot_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+        const botName = `Robot ${Math.floor(Math.random()*100)}`;
+        
+        room.players.push({ 
+            id: botId, 
+            name: botName, 
+            isHost: false, 
+            online: true,
+            isBot: true 
+        });
+        
+        const currentGrandScores = room.gameManager ? room.gameManager.grandScores : {};
+        currentGrandScores[botId] = 0;
+
+        const data = { roomId, config: room.config, players: room.players, grandScores: currentGrandScores };
+        io.to(roomId).emit('room_info', data);
+    });
+
+    // [新增] 切换托管
+    socket.on('toggle_auto_play', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (!room || !room.gameManager) return;
+
+        room.gameManager.toggleAutoPlay(socket.id);
+        broadcastGameState(io, roomId, room);
+    });
 
     // --- 游戏流程 ---
     const handleGameStart = (roomId, isNextRound) => {
@@ -147,18 +181,19 @@ io.on('connection', (socket) => {
         if (!room) return;
 
         if (!isNextRound || !room.gameManager) {
-            // >>> 关键修改：传入 io 和 roomId，让 GameManager 能发倒计时通知 <<<
             room.gameManager = new GameManager(room.config, room.players, io, roomId);
         }
 
         const startInfo = room.gameManager.startRound(isNextRound);
 
         room.players.forEach((p) => {
-            const hand = startInfo.hands[p.id];
-            io.to(p.id).emit('game_started', { 
-                hand: hand, 
-                grandScores: room.gameManager.grandScores 
-            });
+            if (!p.isBot) { 
+                const hand = startInfo.hands[p.id];
+                io.to(p.id).emit('game_started', { 
+                    hand: hand, 
+                    grandScores: room.gameManager.grandScores 
+                });
+            }
         });
 
         const startPlayerName = room.players[startInfo.startPlayerIndex].name;
@@ -250,14 +285,15 @@ io.on('connection', (socket) => {
                 player.online = false;
                 console.log(`[Disconnect] Game user ${player.name} (${socket.id}) dropped.`);
 
-                const allOffline = r.players.every(p => !p.online);
-                if (allOffline) {
+                const allHumansOffline = r.players.filter(p => !p.isBot).every(p => !p.online);
+                
+                if (allHumansOffline) {
                     console.log(`[Room] Room ${rId} is empty. Scheduling destruction in 60s...`);
                     
                     if (r.destroyTimer) clearTimeout(r.destroyTimer);
                     
                     r.destroyTimer = setTimeout(() => {
-                        if (rooms[rId] && rooms[rId].players.every(p => !p.online)) {
+                        if (rooms[rId] && rooms[rId].players.filter(p => !p.isBot).every(p => !p.online)) {
                             delete rooms[rId];
                             console.log(`[Room] Room ${rId} destroyed due to inactivity (game running).`);
                         }
@@ -267,6 +303,7 @@ io.on('connection', (socket) => {
         });
     });
 });
+
 
 
 // 这一段的意思是：如果是在线上环境，就把 React 打包好的文件(build)发给浏览器

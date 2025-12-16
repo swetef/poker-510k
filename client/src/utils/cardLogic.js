@@ -44,12 +44,28 @@ export const sortHand = (cards, mode = 'POINT') => {
     return [...cards].sort((a, b) => getSortValue(b) - getSortValue(a));
 };
 
-// 计算手牌间距
+// 计算手牌间距 - [修改] 适配移动端
 export const calculateCardSpacing = (count, screenWidth) => {
     if (count <= 1) return 0;
-    const w = Math.min(screenWidth * 0.9, 1400); // 宽屏适配
-    const cardWidth = 100; 
+    
+    // [修改] 适配手机：如果屏幕很窄，增加可用宽度的比例
+    const isMobile = screenWidth < 768;
+    const padding = isMobile ? 20 : 100; // 手机端留白少一点
+    
+    const w = Math.min(screenWidth - padding, 1400); 
+    
+    // [修改] 卡牌实际渲染宽度 (对应 styles.js 里的 card.width)
+    // 之前是100，改成了80来适配
+    const cardWidth = 80; 
+    
+    // 最大间距：牌少的时候不要分太开
     const maxGap = 50; 
+    
     const neededWidth = (count - 1) * maxGap + cardWidth;
-    return neededWidth <= w ? maxGap : (w - cardWidth) / (count - 1);
+    
+    // 如果需要的宽度小于屏幕宽，就用最大间距
+    if (neededWidth <= w) return maxGap;
+    
+    // 否则，挤压牌的间距
+    return (w - cardWidth) / (count - 1);
 };

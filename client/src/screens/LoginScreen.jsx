@@ -1,8 +1,7 @@
-// 登录页 - 重构版
+// 登录页 - 适配移动端
 // 增加了服务器连接状态显示，解决用户不知道服务器是否就绪的问题
 import React from 'react';
-import { User, Monitor, RefreshCw, Plus, LogIn, Settings, Clock, Layers, Users, Target, Wifi, WifiOff } from 'lucide-react';
-// [修复] 显式添加 .js 后缀，确保模块解析正确
+import { User, Monitor, RefreshCw, Plus, LogIn, Settings, Clock, Layers, Users, Target, Wifi, WifiOff, Award } from 'lucide-react';
 import { styles } from '../styles.js';
 
 export const LoginScreen = ({ 
@@ -12,7 +11,7 @@ export const LoginScreen = ({
     isCreatorMode, setIsCreatorMode, 
     handleRoomAction, 
     isLoading,
-    isConnected // 接收连接状态
+    isConnected 
 }) => {
     
     // 渲染配置项的辅助函数
@@ -36,32 +35,33 @@ export const LoginScreen = ({
 
     return (
         <div style={styles.container}>
-            <div style={styles.loginCard}>
-                {/* 左侧：品牌展示区 */}
-                <div style={styles.loginLeft}>
+            {/* [修改] 增加 mobile-layout-column 类名 */}
+            <div style={styles.loginCard} className="mobile-layout-column">
+                {/* 左侧：品牌展示区 - [修改] 增加 mobile-login-left 类名 */}
+                <div style={styles.loginLeft} className="mobile-login-left">
                     <div style={styles.logoCircle}>
                         <div style={styles.logoText}>510K</div>
                     </div>
                     <h1 style={styles.brandTitle}>扑克对战</h1>
                     <div style={styles.brandSubtitle}>多人在线 · 自由规则 · 极速畅玩</div>
                     
-                    <div style={styles.featureList}>
+                    {/* [修改] 在手机上隐藏特性列表，节省空间 */}
+                    <div style={styles.featureList} className="hide-on-mobile">
                         <div style={styles.featureItem}>✨ 支持 2-12 人同台竞技</div>
                         <div style={styles.featureItem}>🚀 只有 1 副牌? 不，现在支持 8 副!</div>
                         <div style={styles.featureItem}>⏱️ 自定义思考时间与获胜目标</div>
                     </div>
                 </div>
 
-                {/* 右侧：操作区 */}
-                <div style={styles.loginRight}>
-                    {/* [新增] 顶部状态栏 */}
+                {/* 右侧：操作区 - [修改] 增加 mobile-login-right 类名 */}
+                <div style={styles.loginRight} className="mobile-login-right">
+                    {/* 顶部状态栏 */}
                     <div style={{
                         display: 'flex', 
                         justifyContent: 'space-between', 
                         alignItems: 'center',
                         marginBottom: 20
                     }}>
-                        {/* [修复] 合并了之前重复的 style 属性 */}
                         <div style={{...styles.tabs, marginBottom: 0, borderBottom: 'none'}}> 
                            {/* 占位，保持布局平衡 */}
                         </div>
@@ -74,7 +74,6 @@ export const LoginScreen = ({
                             fontSize: 12,
                             padding: '6px 12px',
                             borderRadius: 20,
-                            // 根据连接状态改变颜色
                             background: isConnected ? '#eafaf1' : '#fdedec',
                             color: isConnected ? '#27ae60' : '#e74c3c',
                             fontWeight: 'bold',
@@ -151,12 +150,67 @@ export const LoginScreen = ({
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* [新增] 排名赏罚设置区域 */}
+                                <div style={{marginTop: 20, paddingTop: 20, borderTop: '1px solid #f0f0f0'}}>
+                                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 15}}>
+                                        <div style={{display:'flex', alignItems:'center', gap:8, fontWeight:'600', color:'#555', fontSize:14}}>
+                                            <Award size={16} /> 启用排名赏罚 (进贡/抓分)
+                                        </div>
+                                        <label style={{position:'relative', display:'inline-block', width:40, height:20}}>
+                                            <input 
+                                                type="checkbox" 
+                                                style={{opacity:0, width:0, height:0}}
+                                                checked={roomConfig.enableRankPenalty}
+                                                onChange={(e) => setRoomConfig({...roomConfig, enableRankPenalty: e.target.checked})}
+                                            />
+                                            <span style={{
+                                                position:'absolute', cursor:'pointer', top:0, left:0, right:0, bottom:0, 
+                                                backgroundColor: roomConfig.enableRankPenalty ? '#27ae60' : '#ccc', 
+                                                transition:'.4s', borderRadius: 20
+                                            }}>
+                                                <span style={{
+                                                    position:'absolute', content:"", height:16, width:16, left:2, bottom:2, 
+                                                    backgroundColor:'white', transition:'.4s', borderRadius:'50%',
+                                                    transform: roomConfig.enableRankPenalty ? 'translateX(20px)' : 'translateX(0)'
+                                                }}></span>
+                                            </span>
+                                        </label>
+                                    </div>
+
+                                    {/* 如果开启，显示详细分值设置 */}
+                                    {roomConfig.enableRankPenalty && (
+                                        <div style={{background:'#f9f9f9', padding: 15, borderRadius: 8, display:'flex', gap: 20, fontSize: 13}}>
+                                            <div style={{flex:1}}>
+                                                <div style={{marginBottom:5, color:'#7f8c8d'}}>头尾赏罚 (第1名 vs 倒1)</div>
+                                                <input 
+                                                    type="number" style={{...styles.input, background:'white', height: 35, padding: '0 10px'}} 
+                                                    value={roomConfig.rankPenaltyScores[0]}
+                                                    onChange={e => {
+                                                        const val = Math.max(0, parseInt(e.target.value) || 0);
+                                                        setRoomConfig({...roomConfig, rankPenaltyScores: [val, roomConfig.rankPenaltyScores[1]]});
+                                                    }}
+                                                />
+                                            </div>
+                                            <div style={{flex:1}}>
+                                                <div style={{marginBottom:5, color:'#7f8c8d'}}>次级赏罚 (第2名 vs 倒2)</div>
+                                                <input 
+                                                    type="number" style={{...styles.input, background:'white', height: 35, padding: '0 10px'}} 
+                                                    value={roomConfig.rankPenaltyScores[1]}
+                                                    onChange={e => {
+                                                        const val = Math.max(0, parseInt(e.target.value) || 0);
+                                                        setRoomConfig({...roomConfig, rankPenaltyScores: [roomConfig.rankPenaltyScores[0], val]});
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
 
                         <div style={{flex: 1}}></div> {/* 弹簧填充 */}
 
-                        {/* [修改] 按钮逻辑：如果 isLoading 或 !isConnected，都显示加载状态 */}
                         <button 
                             style={{
                                 ...styles.primaryButton,
@@ -173,7 +227,6 @@ export const LoginScreen = ({
                             </span>
                         </button>
                         
-                        {/* 额外提示 Render 休眠 */}
                         {!isConnected && (
                             <div style={{textAlign:'center', marginTop: 15, fontSize: 13, color:'#e74c3c', background:'#fdedec', padding:'8px', borderRadius:8}}>
                                 ⚠️ 首次访问可能需要 30-50秒 唤醒服务器，请耐心等待右上角变为绿色。

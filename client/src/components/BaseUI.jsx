@@ -1,15 +1,18 @@
-// 基础UI组件 (卡牌、头像、日志) - 已添加倒计时支持
-
+// 基础UI组件 - 增加排名显示
 import React, { useEffect, useRef } from 'react';
-import { Coins, History } from 'lucide-react';
+import { Coins, History, Trophy, Flag } from 'lucide-react'; // [新增] Trophy 和 Flag 图标
 import { getCardDisplay } from '../utils/cardLogic';
 import { styles } from '../styles';
-import CountDownTimer from './CountDownTimer'; // <--- 1. 引入组件
+import CountDownTimer from './CountDownTimer'; 
 
 export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacing }) => {
     const { suit, text, color, isScore } = getCardDisplay(cardVal);
     return (
         <div 
+            onTouchStart={(e) => { 
+                e.stopPropagation(); 
+                onClick(cardVal); 
+            }}
             onMouseDown={() => onClick(cardVal)}
             onMouseEnter={() => onMouseEnter(cardVal)}
             style={{
@@ -17,14 +20,14 @@ export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacin
                 color, 
                 left: index * spacing, 
                 zIndex: index,
-                transform: isSelected ? 'translateY(-40px)' : 'translateY(0)',
+                transform: isSelected ? 'translateY(-50px)' : 'translateY(0)',
                 borderColor: isSelected ? '#3498db' : (isScore ? '#f1c40f' : '#bdc3c7'),
                 boxShadow: isSelected ? '0 0 15px rgba(52, 152, 219, 0.6)' : (isScore ? '0 0 8px rgba(241, 196, 15, 0.4)' : '0 -2px 5px rgba(0,0,0,0.1)'),
             }}
         >
-            <div style={{fontSize: 22, fontWeight: 'bold'}}>{text}</div>
-            <div style={{fontSize: 48, alignSelf: 'center', marginTop: 10}}>{suit}</div>
-            {isScore && <div style={{position:'absolute', bottom:5, right:5, fontSize:16, color:'#f1c40f'}}>★</div>}
+            <div style={{fontSize: 18, fontWeight: 'bold'}}>{text}</div>
+            <div style={{fontSize: 36, alignSelf: 'center', marginTop: 5}}>{suit}</div>
+            {isScore && <div style={{position:'absolute', bottom:2, right:2, fontSize:14, color:'#f1c40f'}}>★</div>}
         </div>
     );
 };
@@ -43,9 +46,13 @@ export const MiniCard = ({ cardVal, index }) => {
     );
 };
 
-// <--- 2. 修改 PlayerAvatar 接收 remainingSeconds
-export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, remainingSeconds }) => {
+// [修改] 增加 rank 参数
+export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, remainingSeconds, rank }) => {
     const progress = Math.min((score / targetScore) * 100, 100);
+    
+    // 如果已经完成（rank 有值），稍微降低透明度，让没打完的更显眼
+    const containerOpacity = rank ? 0.75 : 1; 
+
     return (
         <div style={{
             ...styles.playerBox,
@@ -53,8 +60,35 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
             transform: isTurn ? 'scale(1.1)' : 'scale(1)',
             boxShadow: isTurn ? '0 0 25px rgba(241, 196, 15, 0.5)' : 'none',
             background: isTurn ? 'rgba(44, 62, 80, 0.9)' : 'rgba(44, 62, 80, 0.6)',
-            position: 'relative' // 确保子元素(倒计时)绝对定位准确
+            position: 'relative',
+            opacity: containerOpacity
         }}>
+            {/* [新增] 排名徽章 */}
+            {rank && (
+                <div style={{
+                    position: 'absolute',
+                    top: -15,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: rank === 1 ? '#f1c40f' : (rank === 2 ? '#bdc3c7' : '#e67e22'), // 金、银、铜
+                    color: '#fff',
+                    padding: '3px 12px',
+                    borderRadius: 20,
+                    fontSize: 13,
+                    fontWeight: 'bold',
+                    boxShadow: '0 4px 10px rgba(0,0,0,0.4)',
+                    zIndex: 20,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    whiteSpace: 'nowrap',
+                    border: '2px solid white'
+                }}>
+                    {rank === 1 ? <Trophy size={14} fill="white" /> : <Flag size={14} fill="white"/>}
+                    {rank === 1 ? 'NO.1' : `NO.${rank}`}
+                </div>
+            )}
+
             <div style={styles.avatar}>{player.name[0]}</div>
             <div style={styles.playerName}>{player.name} {isMySocket && '(我)'}</div>
             <div style={styles.scoreBarBg}>
@@ -62,8 +96,8 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
             </div>
             <div style={styles.playerScore}><Coins size={12} color="#f1c40f"/> {score} / {targetScore}</div>
             
-            {/* 3. 只有轮到该玩家时，才显示倒计时 */}
-            {isTurn && (
+            {/* 如果完成了，就不显示倒计时了，只显示排名 */}
+            {isTurn && !rank && (
                 <CountDownTimer 
                     initialSeconds={remainingSeconds} 
                     totalSeconds={60} 

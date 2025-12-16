@@ -57,24 +57,54 @@ const CardRules = {
             return { type: 'PAIR', val: points[0], level: 0 };
         }
 
-        // 三张 (不带)
+        // 三张 (不带) - 也可以看作是长度为3的飞机，但为了兼容性保留为 TRIPLE
         if (len === 3 && uniquePoints.length === 1) {
             return { type: 'TRIPLE', val: points[0], level: 0 };
         }
 
-        // 连对 (简化版，核心是偶数张且连续)
+        // 连对 (Liandui)
         if (len >= 4 && len % 2 === 0) {
-            // 简单校验：不含2和王，且点数连续
+            // 简单校验：不含2和王
             if (!points.some(p => p >= 15)) {
                 let isLiandui = true;
                 // 检查是否是连续的对子 (3344, 334455)
-                // 这里简化处理，实际项目可加更严格校验
+                // 条件1: 去重后的数量要是总张数的一半 (说明全是成对的)
                 if (uniquePoints.length === len / 2) {
-                     // 检查 uniquePoints 是否连续
+                     // 条件2: 每张牌必须出现2次 (避免 3333 这种被误判为连对，虽然3333是炸弹逻辑会优先，但以防万一)
+                     for (let p of uniquePoints) {
+                         if (counts[p] !== 2) isLiandui = false;
+                     }
+
+                     // 条件3: 检查 uniquePoints 是否连续
                      for(let i=0; i<uniquePoints.length-1; i++) {
                          if(uniquePoints[i+1] !== uniquePoints[i]+1) isLiandui = false;
                      }
+                     
                      if (isLiandui) return { type: 'LIANDUI', val: points[0], len: len, level: 0 };
+                }
+            }
+        }
+
+        // [新增] 飞机 (Airplane) - 连续的三不带
+        // 规则：至少2个连续的三张 (len >= 6)，且是3的倍数
+        if (len >= 6 && len % 3 === 0) {
+            // 简单校验：不含2和王 (通常顺子类牌型不到2)
+            if (!points.some(p => p >= 15)) {
+                let isAirplane = true;
+                
+                // 条件1: 去重后的数量应该是总张数的 1/3 (例如 333444，6张牌，去重是3,4 两个数)
+                if (uniquePoints.length === len / 3) {
+                    // 条件2: 每个点数必须出现正好3次
+                    for (let p of uniquePoints) {
+                        if (counts[p] !== 3) isAirplane = false;
+                    }
+
+                    // 条件3: 连续性检查
+                    for(let i=0; i<uniquePoints.length-1; i++) {
+                        if(uniquePoints[i+1] !== uniquePoints[i]+1) isAirplane = false;
+                    }
+
+                    if (isAirplane) return { type: 'AIRPLANE', val: points[0], len: len, level: 0 };
                 }
             }
         }
@@ -152,9 +182,13 @@ const CardRules = {
 
         // C. 非炸弹之间 (同牌型比较)
         if (newHand.type === lastHand.type) {
-            if (newHand.type === 'LIANDUI' && newHand.len !== lastHand.len) return false;
+            // 连对和飞机必须张数一致才能比较
+            if ((newHand.type === 'LIANDUI' || newHand.type === 'AIRPLANE') && newHand.len !== lastHand.len) return false;
+            
             // 必须张数一致
             if (newCards.length !== lastCards.length) return false;
+            
+            // 比较最小的那个点数 (val)
             return newHand.val > lastHand.val;
         }
 

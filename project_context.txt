@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/15 16:28:36
+Project Context Generated at 2025/12/16 12:36:15
 
 
 ================================================================================
@@ -140,7 +140,6 @@ FILE PATH: client\src\App.css
 ================================================================================
 FILE PATH: client\src\App.jsx
 ================================================================================
-// 主入口 - 修复了服务器连接地址，支持自动切换线上/本地环境
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 
@@ -150,13 +149,16 @@ import { LoginScreen } from './screens/LoginScreen.jsx';
 import { LobbyScreen } from './screens/LobbyScreen.jsx';
 import { GameScreen } from './screens/GameScreen.jsx';
 
-// [关键修复] 动态获取 Socket 地址
-// 如果是在本地开发(localhost)，连接本地3001端口
-// 如果是在线上(render等)，直接连接当前域名(/)
 const getSocketUrl = () => {
-    const { hostname } = window.location;
-    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
-    return isLocal ? 'http://localhost:3001' : '/';
+    const { hostname, protocol } = window.location;
+    const isLocal = hostname === 'localhost' || 
+                    hostname === '127.0.0.1' || 
+                    hostname.startsWith('192.168.') || 
+                    hostname.startsWith('10.');
+    if (isLocal) {
+        return `${protocol}//${hostname}:3001`;
+    }
+    return '/';
 };
 
 const SOCKET_URL = getSocketUrl();
@@ -166,12 +168,14 @@ export default function App() {
   const [username, setUsername] = useState('');
   const [roomId, setRoomId] = useState('');
   
-  // 初始配置
   const [roomConfig, setRoomConfig] = useState({ 
       deckCount: 2,          
       maxPlayers: 4,         
       targetScore: 1000,     
-      turnTimeout: 60000     
+      turnTimeout: 60000,
+      // [新增] 排名赏罚配置
+      enableRankPenalty: false,    // 是否开启
+      rankPenaltyScores: [30, 15]  // 默认值：第一档30分，第二档15分
   });
   
   const [isCreatorMode, setIsCreatorMode] = useState(false); 
@@ -187,11 +191,13 @@ export default function App() {
   const [roundResult, setRoundResult] = useState(null); 
   const [grandResult, setGrandResult] = useState(null); 
   const [playerScores, setPlayerScores] = useState({});
+  const [playersInfo, setPlayersInfo] = useState({});
+  
   const [pendingPoints, setPendingPoints] = useState(0);
   const [gameLogs, setGameLogs] = useState([]);
 
   const [sortMode, setSortMode] = useState('POINT'); 
-  const [isConnected, setIsConnected] = useState(false);
+  const [isConnected, setIsConnected] = useState(false); 
   const [mySocketId, setMySocketId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -208,9 +214,15 @@ export default function App() {
   useEffect(() => { mySocketIdRef.current = mySocketId; }, [mySocketId]);
 
   useEffect(() => {
-    // 建立连接
-    console.log(`Connecting to server at: ${SOCKET_URL}`);
-    const socket = io(SOCKET_URL, { reconnectionAttempts: 5, timeout: 10000 });
+    console.log(`正在连接服务器: ${SOCKET_URL}`);
+    
+    const socket = io(SOCKET_URL, { 
+        reconnectionAttempts: 10,   
+        reconnectionDelay: 1000,    
+        timeout: 20000,             
+        transports: ['websocket', 'polling'] 
+    });
+    
     socketRef.current = socket;
 
     const initAudio = () => {
@@ -220,15 +232,17 @@ export default function App() {
     window.addEventListener('click', initAudio);
 
     socket.on('connect', () => {
-        console.log("Socket connected!");
-        setIsConnected(true);
+        console.log("Socket 连接成功!");
+        setIsConnected(true); 
     });
     
-    socket.on('disconnect', () => setIsConnected(false));
+    socket.on('disconnect', () => {
+        console.log("Socket 断开连接");
+        setIsConnected(false); 
+    });
     
     socket.on('connect_error', (err) => {
-        console.error("Connection error:", err);
-        setIsLoading(false);
+        console.warn("连接错误:", err);
     });
 
     socket.on('your_id', (id) => {
@@ -246,7 +260,9 @@ export default function App() {
     });
 
     socket.on('game_started', (data) => {
-        setMyHand(sortHand(data.hand, sortModeRef.current));
+        if (data.hand) {
+            setMyHand(sortHand(data.hand, sortModeRef.current));
+        }
         setLastPlayed([]);
         setRoundResult(null);
         setGrandResult(null);
@@ -255,6 +271,7 @@ export default function App() {
         setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: '🏁 新一局开始！' }]); 
         setGameState('GAME');
         setTurnRemaining(60);
+        setPlayersInfo({});
         SoundManager.play('deal');
     });
 
@@ -277,6 +294,8 @@ export default function App() {
             setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: data.infoText }]);
         }
         if (data.scores) setPlayerScores(data.scores);
+        if (data.playersInfo) setPlayersInfo(data.playersInfo);
+        
         if (data.pendingPoints !== undefined) setPendingPoints(data.pendingPoints);
 
         if (data.currentTurnId === mySocketIdRef.current) {
@@ -320,7 +339,7 @@ export default function App() {
   const toggleSort = () => setSortMode(prev => prev === 'POINT' ? 'SUIT' : 'POINT');
   
   const handleRoomAction = () => {
-      if (!isConnected) return alert("连接中，请稍后...");
+      if (!isConnected) return; 
       if (!username || !roomId) return alert("请输入昵称和房间号");
       setIsLoading(true);
       const event = isCreatorMode ? 'create_room' : 'join_room';
@@ -330,7 +349,10 @@ export default function App() {
   
   const handleStartGame = () => socketRef.current.emit('start_game', { roomId });
   const handleNextRound = () => socketRef.current.emit('next_round', { roomId });
+  const handleAddBot = () => socketRef.current.emit('add_bot', { roomId });
   
+  const handleToggleAutoPlay = () => socketRef.current.emit('toggle_auto_play', { roomId });
+
   const updateSelection = (cardVal, forceSelect = null) => {
     setSelectedCards(prev => {
         const isSelected = prev.includes(cardVal);
@@ -362,15 +384,29 @@ export default function App() {
     setSelectedCards([]);
   };
 
-  if (gameState === 'LOGIN') return <LoginScreen {...{username, setUsername, roomId, setRoomId, roomConfig, setRoomConfig, isCreatorMode, setIsCreatorMode, handleRoomAction, isLoading}} />;
-  if (gameState === 'LOBBY') return <LobbyScreen {...{roomId, roomConfig, players, mySocketId, handleStartGame}} />;
+  if (gameState === 'LOGIN') return <LoginScreen {...{
+      username, setUsername, 
+      roomId, setRoomId, 
+      roomConfig, setRoomConfig, 
+      isCreatorMode, setIsCreatorMode, 
+      handleRoomAction, 
+      isLoading,
+      isConnected 
+  }} />;
+  
+  if (gameState === 'LOBBY') return <LobbyScreen {...{
+      roomId, roomConfig, players, mySocketId, 
+      handleStartGame, 
+      handleAddBot 
+  }} />;
   
   return <GameScreen {...{
       roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
-      infoMessage, winner: null, playerScores, pendingPoints, gameLogs, sortMode, 
+      infoMessage, winner: null, playerScores, playersInfo, pendingPoints, gameLogs, sortMode, 
       mySocketId, roundResult, grandResult, roomConfig,
       turnRemaining, 
-      toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame
+      toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
+      handleToggleAutoPlay 
   }} />;
 }
 
@@ -630,28 +666,31 @@ createRoot(document.getElementById('root')).render(
 ================================================================================
 FILE PATH: client\src\screens\GameScreen.jsx
 ================================================================================
-// 游戏主界面 - 完整修复版
+// 游戏主界面 - 完整修复版 (修复了进入房间白屏的 Bug) + 托管功能优化 + 修复按钮点击无效问题
 import React from 'react';
-import { Coins, Layers, Crown, Clock } from 'lucide-react';
-import { styles } from '../styles.js'; // 确保加上 .js 后缀
+import { Coins, Layers, Crown, Clock, Bot, Zap } from 'lucide-react';
+import { styles } from '../styles.js'; 
 import { Card, MiniCard, PlayerAvatar, GameLogPanel } from '../components/BaseUI.jsx';
 import { calculateCardSpacing } from '../utils/cardLogic.js';
 
 export const GameScreen = ({ 
     roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
-    infoMessage, winner, playerScores, pendingPoints, gameLogs, sortMode, 
+    infoMessage, winner, playerScores, playersInfo, pendingPoints, gameLogs, sortMode,
     mySocketId, roundResult, grandResult, roomConfig,
     turnRemaining, 
-    toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame 
+    toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
+    handleToggleAutoPlay 
 }) => {
     const isMyTurn = currentTurnId === mySocketId;
     const amIHost = players.find(p => p.id === mySocketId)?.isHost;
     const cardSpacing = calculateCardSpacing(myHand.length, window.innerWidth);
+    
+    // [修复] 检查我自己是否在托管，增加空值保护
+    const myInfo = (playersInfo && playersInfo[mySocketId]) || {};
+    const amIAutoPlay = myInfo.isAutoPlay;
 
-    // [新增] 动态计算是否需要紧凑模式 (超过6人时缩小显示)
     const isCrowded = players.length > 6;
     const avatarScale = isCrowded ? 0.85 : 1;
-    // 使用 margin 负值来抵消 scale 带来的视觉空白，让排列更紧凑
     const avatarStyleOverride = isCrowded ? { transform: `scale(${avatarScale})`, margin: -5 } : {};
 
     return (
@@ -685,7 +724,17 @@ export const GameScreen = ({
                                 <h2 style={{fontSize: 28}}>小局结束</h2>
                                 <div style={{fontSize: 20}}>胜者: <span style={{color:'#27ae60'}}>{roundResult.roundWinner}</span></div>
                                 <div style={{fontSize: 32, fontWeight:'bold', color:'#f1c40f', margin:'10px 0'}}>+{roundResult.pointsEarned} 分</div>
-                                <div style={{color:'#666', fontSize:14, marginBottom:30}}>{roundResult.detail}</div>
+                                
+                                {/* [修改] 支持多行文本显示 */}
+                                <div style={{
+                                    color:'#666', fontSize:14, marginBottom:30, 
+                                    whiteSpace: 'pre-wrap', lineHeight: '1.6', 
+                                    maxHeight: 200, overflowY: 'auto', textAlign: 'left',
+                                    background: '#f8f9fa', padding: 15, borderRadius: 8
+                                }}>
+                                    {roundResult.detail}
+                                </div>
+
                                 {amIHost ? <button style={styles.primaryButton} onClick={handleNextRound}>下一局</button> : <div style={{color:'#999'}}>等待房主...</div>}
                             </>
                         ) : null}
@@ -705,25 +754,54 @@ export const GameScreen = ({
                 )}
             </div>
 
-            {/* 玩家区域 - 关键修改点 */}
-            {/* 这里的 styles.playersArea 已经在 styles.js 中被修改为 flex-wrap: wrap */}
+            {/* 玩家区域 */}
             <div style={styles.playersArea}>
-                {players.map((p, i) => (
-                    <div key={i} style={avatarStyleOverride}> 
-                        <PlayerAvatar 
-                            player={p} 
-                            isTurn={p.id === currentTurnId} 
-                            score={playerScores[p.id] || 0} 
-                            targetScore={roomConfig.targetScore} 
-                            isMySocket={p.id === mySocketId}
-                            remainingSeconds={turnRemaining}
-                        />
-                    </div>
-                ))}
+                {players.map((p, i) => {
+                    const info = (playersInfo && playersInfo[p.id]) || {};
+                    const isBot = info.isBot || p.isBot;
+                    const isAuto = info.isAutoPlay;
+                    
+                    return (
+                        <div key={i} style={{...avatarStyleOverride, position:'relative'}}> 
+                            <PlayerAvatar 
+                                player={p} 
+                                isTurn={p.id === currentTurnId} 
+                                score={playerScores[p.id] || 0} 
+                                targetScore={roomConfig.targetScore} 
+                                isMySocket={p.id === mySocketId}
+                                remainingSeconds={turnRemaining}
+                            />
+                            {/* 状态标记 */}
+                            <div style={{
+                                position: 'absolute', top: -10, right: -10, display: 'flex', gap: 5
+                            }}>
+                                {isBot && <div style={styles.statusBadgeBot}><Bot size={12}/> AI</div>}
+                                {isAuto && <div style={styles.statusBadgeAuto}><Zap size={12}/> 托管</div>}
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
 
-            {/* 手牌区域 */}
-            <div style={styles.handArea}>
+            {/* 手牌区域 - 托管时置灰 */}
+            <div style={{
+                ...styles.handArea, 
+                opacity: amIAutoPlay ? 0.6 : 1, 
+                filter: amIAutoPlay ? 'grayscale(0.6)' : 'none',
+                pointerEvents: amIAutoPlay ? 'none' : 'auto' // 托管时禁止手动操作
+            }}>
+                {/* 托管状态提示层 */}
+                {amIAutoPlay && (
+                    <div style={{
+                        position: 'absolute', top: -50, left: '50%', transform: 'translateX(-50%)',
+                        background: 'rgba(230, 126, 34, 0.9)', color: 'white', padding: '5px 15px', 
+                        borderRadius: 20, fontSize: 14, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 5,
+                        boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 50
+                    }}>
+                        <Bot size={16} /> 系统代打中...
+                    </div>
+                )}
+                
                 {myHand.map((c, i) => (
                     <Card key={`${c}-${i}`} cardVal={c} index={i} isSelected={selectedCards.includes(c)} onClick={handleMouseDown} onMouseEnter={handleMouseEnter} spacing={cardSpacing} />
                 ))}
@@ -732,18 +810,66 @@ export const GameScreen = ({
             {/* 操作栏 */}
             <div style={styles.actionBar}>
                 {!winner && !roundResult && !grandResult && (
-                    <div style={{display:'flex', gap: 20}}>
-                        {isMyTurn ? (
-                            <>
-                                <button style={styles.passButton} onClick={handlePass}>不要</button>
-                                <button style={styles.playButton} onClick={handlePlayCards}>出牌</button>
-                            </>
+                    <div style={{display:'flex', alignItems: 'center', gap: 20}}>
+                        {/* 如果正在托管，显示醒目的取消按钮 */}
+                        {amIAutoPlay ? (
+                            <button 
+                                style={{
+                                    ...styles.playButton, 
+                                    background: '#e74c3c', 
+                                    width: 220,
+                                    display: 'flex', justifyContent: 'center', alignItems: 'center'
+                                }} 
+                                onClick={handleToggleAutoPlay}
+                            >
+                                <Zap size={22} style={{marginRight:8}}/> 取消托管
+                            </button>
                         ) : (
-                            <div style={styles.waitingBadge}><Clock size={20} className="spin" /> 等待对方...</div>
+                            <>
+                                {/* 正常操作按钮 */}
+                                {isMyTurn ? (
+                                    <>
+                                        <button style={styles.passButton} onClick={handlePass}>不要</button>
+                                        <button style={styles.playButton} onClick={handlePlayCards}>出牌</button>
+                                    </>
+                                ) : (
+                                    <div style={styles.waitingBadge}><Clock size={20} className="spin" /> 等待对方...</div>
+                                )}
+                                
+                                {/* 托管开关 (优化样式，带文字) */}
+                                <button 
+                                    style={{
+                                        pointerEvents: 'auto', // [修复] 关键修复：必须显式开启交互，否则被 actionBar 的 pointer-events: none 屏蔽
+                                        background: 'rgba(255,255,255,0.1)', 
+                                        border: '1px solid rgba(255,255,255,0.3)',
+                                        color: '#ecf0f1',
+                                        borderRadius: 30, // 圆角矩形
+                                        padding: '0 20px',
+                                        height: 50,
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        marginLeft: 20,
+                                        fontSize: 16,
+                                        fontWeight: 'bold',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onClick={handleToggleAutoPlay}
+                                    title="点击开启系统托管"
+                                >
+                                    <Zap size={20} style={{marginRight: 6}} />
+                                    托管
+                                </button>
+                            </>
                         )}
                     </div>
                 )}
             </div>
+            
+            <style>{`
+                .statusBadgeBot { background: #34495e; color: white; padding: 2px 6px; borderRadius: 10px; fontSize: 10px; display: flex; align-items: center; gap: 2px; border: 1px solid rgba(255,255,255,0.3); }
+                .statusBadgeAuto { background: #e67e22; color: white; padding: 2px 6px; borderRadius: 10px; fontSize: 10px; display: flex; align-items: center; gap: 2px; border: 1px solid rgba(255,255,255,0.3); animation: pulse 2s infinite; }
+                @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+            `}</style>
         </div>
     );
 };
@@ -754,10 +880,10 @@ FILE PATH: client\src\screens\LobbyScreen.jsx
 // 大厅页
 
 import React from 'react';
-import { Target, Layers, User, Play, Clock } from 'lucide-react';
+import { Target, Layers, User, Play, Clock, Bot } from 'lucide-react';
 import { styles } from '../styles';
 
-export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleStartGame }) => (
+export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleStartGame, handleAddBot }) => (
     <div style={styles.container}>
       <div style={styles.lobbyCard}>
           <div style={styles.lobbyHeader}>
@@ -771,8 +897,13 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
           <div style={styles.playerGrid}>
               {players.map((p,i)=>(
                   <div key={i} style={{...styles.lobbyPlayer, borderColor: p.id===mySocketId ? '#27ae60' : '#eee', background: p.id===mySocketId ? '#f0fbf4' : 'white'}}>
-                      <div style={styles.avatarLarge}>{p.name[0]}</div>
-                      <div style={{fontWeight: 'bold'}}>{p.name}</div>
+                      <div style={styles.avatarLarge}>
+                          {p.isBot ? <Bot size={40} /> : p.name[0]}
+                      </div>
+                      <div style={{fontWeight: 'bold', display:'flex', alignItems:'center', gap:5}}>
+                          {p.name}
+                          {p.isBot && <span style={{fontSize:10, background:'#eee', padding:'2px 5px', borderRadius:4}}>AI</span>}
+                      </div>
                       {p.isHost && <span style={styles.hostBadge}>房主</span>}
                   </div>
               ))}
@@ -785,7 +916,20 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
           </div>
           <div style={styles.lobbyFooter}>
               {players.find(p=>p.id===mySocketId)?.isHost ? (
-                  <button style={styles.primaryButton} onClick={handleStartGame} disabled={players.length < 2}><Play size={18} style={{marginRight:5}}/> 开始对战</button>
+                  <div style={{display:'flex', gap: 15}}>
+                      {/* [新增] 添加机器人按钮 */}
+                      <button 
+                          style={{...styles.primaryButton, background: '#7f8c8d', width:'auto', padding:'0 30px', fontSize: 16}} 
+                          onClick={handleAddBot}
+                          disabled={players.length >= roomConfig.maxPlayers}
+                      >
+                          <Bot size={18} style={{marginRight:5}}/> +Bot
+                      </button>
+
+                      <button style={{...styles.primaryButton, width:'auto', padding:'0 40px'}} onClick={handleStartGame} disabled={players.length < 2}>
+                          <Play size={18} style={{marginRight:5}}/> 开始对战
+                      </button>
+                  </div>
               ) : (
                   <div style={{color:'#999', fontSize: 14, display:'flex', alignItems:'center', gap:5}}><Clock size={16}/> 等待房主开始...</div>
               )}
@@ -798,12 +942,20 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
 FILE PATH: client\src\screens\LoginScreen.jsx
 ================================================================================
 // 登录页 - 重构版
-// 优化了布局，填补了空白，增加了更丰富的人数、牌数和规则配置
+// 增加了服务器连接状态显示，解决用户不知道服务器是否就绪的问题
 import React from 'react';
-import { User, Monitor, RefreshCw, Plus, LogIn, Settings, Clock, Layers, Users, Target } from 'lucide-react';
-import { styles } from '../styles';
+import { User, Monitor, RefreshCw, Plus, LogIn, Settings, Clock, Layers, Users, Target, Wifi, WifiOff, Award } from 'lucide-react';
+import { styles } from '../styles.js';
 
-export const LoginScreen = ({ username, setUsername, roomId, setRoomId, roomConfig, setRoomConfig, isCreatorMode, setIsCreatorMode, handleRoomAction, isLoading }) => {
+export const LoginScreen = ({ 
+    username, setUsername, 
+    roomId, setRoomId, 
+    roomConfig, setRoomConfig, 
+    isCreatorMode, setIsCreatorMode, 
+    handleRoomAction, 
+    isLoading,
+    isConnected 
+}) => {
     
     // 渲染配置项的辅助函数
     const renderConfigSlider = (icon, label, value, min, max, step, onChange, suffix = '') => (
@@ -844,6 +996,35 @@ export const LoginScreen = ({ username, setUsername, roomId, setRoomId, roomConf
 
                 {/* 右侧：操作区 */}
                 <div style={styles.loginRight}>
+                    {/* 顶部状态栏 */}
+                    <div style={{
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        marginBottom: 20
+                    }}>
+                        <div style={{...styles.tabs, marginBottom: 0, borderBottom: 'none'}}> 
+                           {/* 占位，保持布局平衡 */}
+                        </div>
+
+                        {/* 连接状态指示器 */}
+                        <div style={{
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 6, 
+                            fontSize: 12,
+                            padding: '6px 12px',
+                            borderRadius: 20,
+                            background: isConnected ? '#eafaf1' : '#fdedec',
+                            color: isConnected ? '#27ae60' : '#e74c3c',
+                            fontWeight: 'bold',
+                            border: `1px solid ${isConnected ? '#abebc6' : '#fadbd8'}`
+                        }}>
+                            {isConnected ? <Wifi size={14}/> : <WifiOff size={14}/>}
+                            {isConnected ? '服务器已连接' : '正在连接服务器...'}
+                        </div>
+                    </div>
+
                     {/* 顶部 Tab 切换 */}
                     <div style={styles.tabs}>
                         <button 
@@ -891,7 +1072,7 @@ export const LoginScreen = ({ username, setUsername, roomId, setRoomId, roomConf
                                     {renderConfigSlider(<Layers size={14}/>, "牌库数量", roomConfig.deckCount, 1, 8, 1, v=>setRoomConfig({...roomConfig, deckCount:v}), '副')}
                                     {renderConfigSlider(<Target size={14}/>, "获胜目标", roomConfig.targetScore, 500, 5000, 500, v=>setRoomConfig({...roomConfig, targetScore:v}), '分')}
                                     
-                                    {/* 倒计时选择 - 使用自定义 Select 样式 */}
+                                    {/* 倒计时选择 */}
                                     <div style={styles.configItem}>
                                         <div style={styles.configLabel}>
                                             <span style={{display:'flex', alignItems:'center', gap:6}}><Clock size={14}/> 出牌时限</span>
@@ -910,15 +1091,88 @@ export const LoginScreen = ({ username, setUsername, roomId, setRoomId, roomConf
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* [新增] 排名赏罚设置区域 */}
+                                <div style={{marginTop: 20, paddingTop: 20, borderTop: '1px solid #f0f0f0'}}>
+                                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 15}}>
+                                        <div style={{display:'flex', alignItems:'center', gap:8, fontWeight:'600', color:'#555', fontSize:14}}>
+                                            <Award size={16} /> 启用排名赏罚 (进贡/抓分)
+                                        </div>
+                                        <label style={{position:'relative', display:'inline-block', width:40, height:20}}>
+                                            <input 
+                                                type="checkbox" 
+                                                style={{opacity:0, width:0, height:0}}
+                                                checked={roomConfig.enableRankPenalty}
+                                                onChange={(e) => setRoomConfig({...roomConfig, enableRankPenalty: e.target.checked})}
+                                            />
+                                            <span style={{
+                                                position:'absolute', cursor:'pointer', top:0, left:0, right:0, bottom:0, 
+                                                backgroundColor: roomConfig.enableRankPenalty ? '#27ae60' : '#ccc', 
+                                                transition:'.4s', borderRadius: 20
+                                            }}>
+                                                <span style={{
+                                                    position:'absolute', content:"", height:16, width:16, left:2, bottom:2, 
+                                                    backgroundColor:'white', transition:'.4s', borderRadius:'50%',
+                                                    transform: roomConfig.enableRankPenalty ? 'translateX(20px)' : 'translateX(0)'
+                                                }}></span>
+                                            </span>
+                                        </label>
+                                    </div>
+
+                                    {/* 如果开启，显示详细分值设置 */}
+                                    {roomConfig.enableRankPenalty && (
+                                        <div style={{background:'#f9f9f9', padding: 15, borderRadius: 8, display:'flex', gap: 20, fontSize: 13}}>
+                                            <div style={{flex:1}}>
+                                                <div style={{marginBottom:5, color:'#7f8c8d'}}>头尾赏罚 (第1名 vs 倒1)</div>
+                                                <input 
+                                                    type="number" style={{...styles.input, background:'white', height: 35, padding: '0 10px'}} 
+                                                    value={roomConfig.rankPenaltyScores[0]}
+                                                    onChange={e => {
+                                                        const val = Math.max(0, parseInt(e.target.value) || 0);
+                                                        setRoomConfig({...roomConfig, rankPenaltyScores: [val, roomConfig.rankPenaltyScores[1]]});
+                                                    }}
+                                                />
+                                            </div>
+                                            <div style={{flex:1}}>
+                                                <div style={{marginBottom:5, color:'#7f8c8d'}}>次级赏罚 (第2名 vs 倒2)</div>
+                                                <input 
+                                                    type="number" style={{...styles.input, background:'white', height: 35, padding: '0 10px'}} 
+                                                    value={roomConfig.rankPenaltyScores[1]}
+                                                    onChange={e => {
+                                                        const val = Math.max(0, parseInt(e.target.value) || 0);
+                                                        setRoomConfig({...roomConfig, rankPenaltyScores: [roomConfig.rankPenaltyScores[0], val]});
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
 
-                        <div style={{flex: 1}}></div> {/* 弹簧填充，把按钮顶到底部 */}
+                        <div style={{flex: 1}}></div> {/* 弹簧填充 */}
 
-                        <button style={styles.primaryButton} onClick={handleRoomAction} disabled={isLoading}>
-                            {isLoading ? <RefreshCw className="spin" size={20}/> : (isCreatorMode ? <Plus size={20}/> : <LogIn size={20}/>)}
-                            <span style={{marginLeft:10}}>{isCreatorMode ? "立即创建房间" : "进入游戏房间"}</span>
+                        <button 
+                            style={{
+                                ...styles.primaryButton,
+                                opacity: (!isConnected || isLoading) ? 0.7 : 1,
+                                cursor: (!isConnected || isLoading) ? 'not-allowed' : 'pointer',
+                                background: (!isConnected) ? '#95a5a6' : '#2c3e50'
+                            }} 
+                            onClick={handleRoomAction} 
+                            disabled={isLoading || !isConnected}
+                        >
+                            {(isLoading || !isConnected) ? <RefreshCw className="spin" size={20}/> : (isCreatorMode ? <Plus size={20}/> : <LogIn size={20}/>)}
+                            <span style={{marginLeft:10}}>
+                                {!isConnected ? "正在连接服务器..." : (isLoading ? "处理中..." : (isCreatorMode ? "立即创建房间" : "进入游戏房间"))}
+                            </span>
                         </button>
+                        
+                        {!isConnected && (
+                            <div style={{textAlign:'center', marginTop: 15, fontSize: 13, color:'#e74c3c', background:'#fdedec', padding:'8px', borderRadius:8}}>
+                                ⚠️ 首次访问可能需要 30-50秒 唤醒服务器，请耐心等待右上角变为绿色。
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -1290,6 +1544,79 @@ export default defineConfig({
 
 
 ================================================================================
+FILE PATH: server\game\BotLogic.js
+================================================================================
+const CardRules = require('./CardRules');
+
+const BotLogic = {
+    // 简单的决策函数
+    decideMove: (hand, lastPlayedCards, deckCount) => {
+        try {
+            // 1. 如果当前没有被压牌（自己领出），出最小的一张牌
+            if (!lastPlayedCards || lastPlayedCards.length === 0) {
+                if (hand.length === 0) return null;
+                // 简单策略：总是出手中最小的一张牌
+                return [hand[0]]; 
+            }
+
+            // 2. 如果有人出牌了，尝试管上
+            const lastHandState = CardRules.analyze(lastPlayedCards, deckCount);
+            if (lastHandState.type === 'INVALID') return null; 
+
+            // 整理手牌：按点数分组
+            const grouped = {};
+            hand.forEach(c => {
+                const p = CardRules.getPoint(c);
+                if (!grouped[p]) grouped[p] = [];
+                grouped[p].push(c);
+            });
+            
+            const uniquePoints = Object.keys(grouped).map(Number).sort((a,b) => a-b);
+
+            // 策略 A：尝试用同类型的牌管（不含炸弹）
+            if (['SINGLE', 'PAIR', 'TRIPLE'].includes(lastHandState.type)) {
+                const countNeeded = lastHandState.type === 'SINGLE' ? 1 : 
+                                    lastHandState.type === 'PAIR' ? 2 : 3;
+                
+                for (let p of uniquePoints) {
+                    if (p > lastHandState.val && grouped[p].length >= countNeeded) {
+                        return grouped[p].slice(0, countNeeded);
+                    }
+                }
+            }
+            
+            // 简单的连对/飞机管牌尝试 (只管长度一致的)
+            if (lastHandState.type === 'LIANDUI' || lastHandState.type === 'AIRPLANE') {
+                 // 这是一个复杂的搜索，这里简化：Bot暂不处理复杂牌型的跟牌，直接尝试用炸弹炸
+            }
+
+            // 策略 B：尝试用炸弹炸
+            const currentLevel = lastHandState.level || 0;
+            
+            // 找普通炸弹 (4张及以上)
+            for (let p of uniquePoints) {
+                if (grouped[p].length >= 4) {
+                    const bombCards = grouped[p];
+                    const bombState = CardRules.analyze(bombCards, deckCount);
+                    
+                    // 级别高，或同级别点数大
+                    if (bombState.level > currentLevel) return bombCards;
+                    if (bombState.level === currentLevel && bombState.val > lastHandState.val) return bombCards;
+                }
+            }
+
+            // 3. 实在管不上，过
+            return null;
+        } catch (e) {
+            console.error("BotLogic error:", e);
+            return null; // 报错时默认过牌
+        }
+    }
+};
+
+module.exports = BotLogic;
+
+================================================================================
 FILE PATH: server\game\CardRules.js
 ================================================================================
 // 纯规则计算 (510K 逻辑、比大小)
@@ -1351,24 +1678,54 @@ const CardRules = {
             return { type: 'PAIR', val: points[0], level: 0 };
         }
 
-        // 三张 (不带)
+        // 三张 (不带) - 也可以看作是长度为3的飞机，但为了兼容性保留为 TRIPLE
         if (len === 3 && uniquePoints.length === 1) {
             return { type: 'TRIPLE', val: points[0], level: 0 };
         }
 
-        // 连对 (简化版，核心是偶数张且连续)
+        // 连对 (Liandui)
         if (len >= 4 && len % 2 === 0) {
-            // 简单校验：不含2和王，且点数连续
+            // 简单校验：不含2和王
             if (!points.some(p => p >= 15)) {
                 let isLiandui = true;
                 // 检查是否是连续的对子 (3344, 334455)
-                // 这里简化处理，实际项目可加更严格校验
+                // 条件1: 去重后的数量要是总张数的一半 (说明全是成对的)
                 if (uniquePoints.length === len / 2) {
-                     // 检查 uniquePoints 是否连续
+                     // 条件2: 每张牌必须出现2次 (避免 3333 这种被误判为连对，虽然3333是炸弹逻辑会优先，但以防万一)
+                     for (let p of uniquePoints) {
+                         if (counts[p] !== 2) isLiandui = false;
+                     }
+
+                     // 条件3: 检查 uniquePoints 是否连续
                      for(let i=0; i<uniquePoints.length-1; i++) {
                          if(uniquePoints[i+1] !== uniquePoints[i]+1) isLiandui = false;
                      }
+                     
                      if (isLiandui) return { type: 'LIANDUI', val: points[0], len: len, level: 0 };
+                }
+            }
+        }
+
+        // [新增] 飞机 (Airplane) - 连续的三不带
+        // 规则：至少2个连续的三张 (len >= 6)，且是3的倍数
+        if (len >= 6 && len % 3 === 0) {
+            // 简单校验：不含2和王 (通常顺子类牌型不到2)
+            if (!points.some(p => p >= 15)) {
+                let isAirplane = true;
+                
+                // 条件1: 去重后的数量应该是总张数的 1/3 (例如 333444，6张牌，去重是3,4 两个数)
+                if (uniquePoints.length === len / 3) {
+                    // 条件2: 每个点数必须出现正好3次
+                    for (let p of uniquePoints) {
+                        if (counts[p] !== 3) isAirplane = false;
+                    }
+
+                    // 条件3: 连续性检查
+                    for(let i=0; i<uniquePoints.length-1; i++) {
+                        if(uniquePoints[i+1] !== uniquePoints[i]+1) isAirplane = false;
+                    }
+
+                    if (isAirplane) return { type: 'AIRPLANE', val: points[0], len: len, level: 0 };
                 }
             }
         }
@@ -1446,9 +1803,13 @@ const CardRules = {
 
         // C. 非炸弹之间 (同牌型比较)
         if (newHand.type === lastHand.type) {
-            if (newHand.type === 'LIANDUI' && newHand.len !== lastHand.len) return false;
+            // 连对和飞机必须张数一致才能比较
+            if ((newHand.type === 'LIANDUI' || newHand.type === 'AIRPLANE') && newHand.len !== lastHand.len) return false;
+            
             // 必须张数一致
             if (newCards.length !== lastCards.length) return false;
+            
+            // 比较最小的那个点数 (val)
             return newHand.val > lastHand.val;
         }
 
@@ -1508,9 +1869,7 @@ FILE PATH: server\game\GameManager.js
 ================================================================================
 const CardRules = require('./CardRules');
 const Deck = require('./Deck');
-
-// [变更] 不再使用硬编码的常量，改用从 config 读取
-// const TURN_TIME_LIMIT = 60000; 
+const BotLogic = require('./BotLogic');
 
 class GameManager {
     constructor(roomConfig, players, io, roomId) {
@@ -1525,7 +1884,28 @@ class GameManager {
         this.gameState = null; 
         
         this.timer = null;
+        this.botTimer = null;
         this.turnStartTime = 0; 
+    }
+
+    // [新增] 切换托管状态
+    toggleAutoPlay(playerId) {
+        const player = this.players.find(p => p.id === playerId);
+        if (!player || player.isBot) return; 
+
+        player.isAutoPlay = !player.isAutoPlay;
+        
+        if (this.gameState && this.players[this.gameState.currentTurnIndex].id === playerId) {
+            if (player.isAutoPlay) {
+                this._checkAndRunBot();
+            } else {
+                if (this.botTimer) {
+                    clearTimeout(this.botTimer);
+                    this.botTimer = null;
+                }
+                this._resetTimer();
+            }
+        }
     }
 
     startRound(isNextRound = false) {
@@ -1550,7 +1930,8 @@ class GameManager {
             consecutivePasses: 0,   
             roundPoints: {},        
             pendingTablePoints: 0,  
-            roundWinnerId: null,    
+            roundWinnerId: null, 
+            finishedRank: [],    
         };
 
         this.players.forEach((p, index) => {
@@ -1559,12 +1940,101 @@ class GameManager {
         });
 
         this._resetTimer();
+        this._checkAndRunBot();
 
         return {
             startPlayerIndex: startIndex,
             startPlayerId: this.players[startIndex].id,
             hands: this.gameState.hands
         };
+    }
+
+    _checkAndRunBot() {
+        if (!this.gameState) return;
+        
+        if (this.botTimer) {
+            clearTimeout(this.botTimer);
+            this.botTimer = null;
+        }
+
+        if (this._getActivePlayerCount() <= 1 && this.gameState.lastPlayedCards.length === 0) return;
+
+        const currPlayer = this.players[this.gameState.currentTurnIndex];
+        const isAI = currPlayer.isBot || currPlayer.isAutoPlay;
+
+        if (isAI && this.gameState.hands[currPlayer.id].length > 0) {
+            const delay = 1000 + Math.random() * 1000;
+            this.botTimer = setTimeout(() => {
+                this._executeBotTurn(currPlayer);
+            }, delay);
+        }
+    }
+
+    _executeBotTurn(botPlayer) {
+        if (!this.gameState) return;
+        if (this.players[this.gameState.currentTurnIndex].id !== botPlayer.id) return;
+
+        try {
+            const hand = this.gameState.hands[botPlayer.id];
+            if (!hand || hand.length === 0) {
+                 this._advanceTurn(); 
+                 return;
+            }
+
+            const isNewRound = this.gameState.lastPlayedCards.length === 0;
+            const cardsToBeat = isNewRound ? [] : this.gameState.lastPlayedCards;
+
+            const sortedHand = [...hand].sort((a,b) => CardRules.getPoint(a) - CardRules.getPoint(b));
+            
+            const cardsToPlay = BotLogic.decideMove(sortedHand, cardsToBeat, this.config.deckCount);
+
+            if (cardsToPlay) {
+                console.log(`[Bot/Auto] ${botPlayer.name} plays ${cardsToPlay.length} cards.`);
+                const result = this.playCards(botPlayer.id, cardsToPlay);
+                
+                if (result.success) {
+                    if (result.isRoundOver) {
+                        this._handleWin(result, botPlayer.id);
+                    } else {
+                        const publicState = this.getPublicState();
+                        this.io.to(this.roomId).emit('game_state_update', publicState);
+                    }
+                } else {
+                    console.error(`[Bot Error] Play failed: ${result.error}`);
+                    if (!isNewRound) this.passTurn(botPlayer.id);
+                }
+            } else {
+                console.log(`[Bot/Auto] ${botPlayer.name} passes.`);
+                const result = this.passTurn(botPlayer.id);
+                if (result.success) {
+                    const publicState = this.getPublicState();
+                    publicState.infoText = isNewRound ? '' : 'PASS';
+                    this.io.to(this.roomId).emit('game_state_update', publicState);
+                }
+            }
+        } catch (error) {
+            console.error(`[Bot Error] Exception in _executeBotTurn:`, error);
+        }
+    }
+
+    _handleWin(result, winnerId) {
+        const rInfo = result.roundResult;
+        if (rInfo.isGrandOver) {
+            this.io.to(this.roomId).emit('grand_game_over', { 
+                grandWinner: rInfo.roundWinnerName, 
+                grandScores: rInfo.grandScores 
+            });
+            this.gameState = null; 
+            this._clearTimer(); 
+        } else {
+            this.io.to(this.roomId).emit('round_over', {
+                roundWinner: rInfo.roundWinnerName,
+                pointsEarned: rInfo.pointsEarned,
+                detail: rInfo.detail,
+                grandScores: rInfo.grandScores
+            });
+            this._clearTimer();
+        }
     }
 
     playCards(playerId, cards) {
@@ -1578,8 +2048,7 @@ class GameManager {
             return { success: false, error: '手牌不足或数据不同步' };
         }
 
-        const isNewRound = this.gameState.lastPlayedCards.length === 0 || 
-                           this.gameState.consecutivePasses >= this.players.length - 1;
+        const isNewRound = this.gameState.lastPlayedCards.length === 0;
         const cardsToBeat = isNewRound ? [] : this.gameState.lastPlayedCards;
 
         if (!CardRules.canPlay(cards, cardsToBeat, this.config.deckCount)) {
@@ -1592,22 +2061,34 @@ class GameManager {
         this.gameState.consecutivePasses = 0;
         this.gameState.roundWinnerId = playerId;
 
-        this._advanceTurn();
-
-        const isWin = this.gameState.hands[playerId].length === 0;
-        let roundResult = null;
-        
-        if (isWin) {
-            this._clearTimer(); 
-            roundResult = this._concludeRound(playerId);
-        } else {
-            this._resetTimer(); 
+        const isFinished = this.gameState.hands[playerId].length === 0;
+        if (isFinished) {
+            if (!this.gameState.finishedRank.includes(playerId)) {
+                this.gameState.finishedRank.push(playerId);
+            }
         }
+
+        const activeCount = this._getActivePlayerCount();
+        
+        if (activeCount <= 1) {
+            this._clearTimer();
+            const roundResult = this._concludeRound();
+            return { 
+                success: true, 
+                isRoundOver: true,
+                roundResult,
+                cardsPlayed: cards,
+                pendingPoints: this.gameState.pendingTablePoints
+            };
+        }
+
+        this._advanceTurn();
+        this._resetTimer();
+        this._checkAndRunBot();
 
         return { 
             success: true, 
-            isWin, 
-            roundResult, 
+            isRoundOver: false,
             cardsPlayed: cards,
             pendingPoints: this.gameState.pendingTablePoints
         };
@@ -1619,48 +2100,55 @@ class GameManager {
         const currPlayer = this.players[this.gameState.currentTurnIndex];
         if (currPlayer.id !== playerId) return { success: false, error: '还没轮到你' };
 
-        if (this.gameState.lastPlayedCards.length === 0 || 
-            this.gameState.consecutivePasses >= this.players.length - 1) {
+        if (this.gameState.lastPlayedCards.length === 0) {
             return { success: false, error: '必须出牌' };
         }
 
         this.gameState.consecutivePasses++;
-        this._advanceTurn();
+        this._advanceTurn(); 
+
+        const winnerHand = this.gameState.hands[this.gameState.roundWinnerId];
+        const winnerIsActive = winnerHand && winnerHand.length > 0;
+        const activeCount = this._getActivePlayerCount();
+        
+        const passesNeeded = winnerIsActive ? (activeCount - 1) : activeCount;
 
         let turnCleared = false;
-        if (this.gameState.consecutivePasses >= this.players.length - 1) {
+        if (this.gameState.consecutivePasses >= passesNeeded) {
             const wId = this.gameState.roundWinnerId;
             if (wId) {
                 this.gameState.roundPoints[wId] = (this.gameState.roundPoints[wId] || 0) + this.gameState.pendingTablePoints;
                 this.gameState.pendingTablePoints = 0;
-                const wIdx = this.players.findIndex(p => p.id === wId);
-                this.gameState.currentTurnIndex = wIdx;
+                
+                if (this.gameState.hands[wId].length > 0) {
+                     const wIdx = this.players.findIndex(p => p.id === wId);
+                     this.gameState.currentTurnIndex = wIdx;
+                }
             }
+            
             this.gameState.lastPlayedCards = [];
+            this.gameState.consecutivePasses = 0;
             turnCleared = true;
         }
 
         this._resetTimer(); 
+        this._checkAndRunBot();
 
         return { success: true, turnCleared };
     }
 
     _clearTimer() {
-        if (this.timer) {
-            clearTimeout(this.timer);
-            this.timer = null;
-        }
+        if (this.timer) clearTimeout(this.timer);
+        if (this.botTimer) clearTimeout(this.botTimer);
+        this.timer = null;
+        this.botTimer = null;
     }
 
     _resetTimer() {
         this._clearTimer();
-        
-        if (this.gameState) {
+        if (this.gameState && this._getActivePlayerCount() > 1) {
             this.turnStartTime = Date.now();
-            
-            // [修改] 优先读取配置的时间，如果没有则默认 60s
             const timeLimit = this.config.turnTimeout || 60000;
-
             this.timer = setTimeout(() => {
                 this._handleTimeout();
             }, timeLimit);
@@ -1669,44 +2157,75 @@ class GameManager {
 
     _handleTimeout() {
         if (!this.gameState) return;
-        
         const currIdx = this.gameState.currentTurnIndex;
         const currPlayer = this.players[currIdx];
         
         console.log(`[Timeout] Player ${currPlayer.name} (${currPlayer.id}) timed out.`);
-
-        const isNewRound = this.gameState.lastPlayedCards.length === 0 || 
-                           this.gameState.consecutivePasses >= this.players.length - 1;
+        const isNewRound = this.gameState.lastPlayedCards.length === 0;
 
         if (isNewRound) {
             const hand = this.gameState.hands[currPlayer.id];
+            if (!hand || hand.length === 0) { this._advanceTurn(); return; }
+
             const sorted = hand.map(c => ({ id: c, val: CardRules.getPoint(c) })).sort((a, b) => a.val - b.val);
             const cardToPlay = [sorted[0].id]; 
             
             const result = this.playCards(currPlayer.id, cardToPlay);
-            
             if (result.success) {
                 this.io.to(currPlayer.id).emit('hand_update', this.gameState.hands[currPlayer.id]);
                 
-                const publicState = this.getPublicState();
-                publicState.infoText = `${currPlayer.name} 超时，系统代打`;
-                this.io.to(this.roomId).emit('game_state_update', publicState);
+                if (result.isRoundOver) {
+                     this._handleWin(result, currPlayer.id);
+                } else {
+                     const publicState = this.getPublicState();
+                     publicState.infoText = `${currPlayer.name} 超时，系统代打`;
+                     this.io.to(this.roomId).emit('game_state_update', publicState);
+                }
             }
         } else {
-            this.passTurn(currPlayer.id);
-            
-            const publicState = this.getPublicState();
-            publicState.infoText = `${currPlayer.name} 超时，自动过牌`;
-            this.io.to(this.roomId).emit('game_state_update', publicState);
+            const result = this.passTurn(currPlayer.id);
+            if (result.success) {
+                const publicState = this.getPublicState();
+                publicState.infoText = `${currPlayer.name} 超时，自动过牌`;
+                this.io.to(this.roomId).emit('game_state_update', publicState);
+            }
         }
+    }
+
+    _getActivePlayerCount() {
+        if (!this.gameState) return 0;
+        let count = 0;
+        for (const p of this.players) {
+            if (this.gameState.hands[p.id] && this.gameState.hands[p.id].length > 0) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    _advanceTurn() {
+        const playerCount = this.players.length;
+        let nextIndex = this.gameState.currentTurnIndex;
+        let attempts = 0;
+        do {
+            nextIndex = (nextIndex + 1) % playerCount;
+            attempts++;
+        } while (
+            this.gameState.hands[this.players[nextIndex].id].length === 0 && 
+            attempts < playerCount 
+        );
+        this.gameState.currentTurnIndex = nextIndex;
     }
 
     getPublicState() {
         if (!this.gameState) return null;
         
         const currentScoresDisplay = {};
+        const playersInfo = {};
+        
         this.players.forEach(p => {
             currentScoresDisplay[p.id] = (this.grandScores[p.id] || 0) + (this.gameState.roundPoints[p.id] || 0);
+            playersInfo[p.id] = { isBot: p.isBot, isAutoPlay: p.isAutoPlay };
         });
 
         const winnerObj = this.players.find(p => p.id === this.gameState.roundWinnerId);
@@ -1725,7 +2244,9 @@ class GameManager {
             lastPlayed: this.gameState.lastPlayedCards,
             lastPlayerName: winnerObj ? winnerObj.name : '',
             scores: currentScoresDisplay,
-            pendingPoints: this.gameState.pendingTablePoints
+            pendingPoints: this.gameState.pendingTablePoints,
+            finishedRank: this.gameState.finishedRank,
+            playersInfo: playersInfo 
         };
     }
 
@@ -1735,6 +2256,9 @@ class GameManager {
             delete this.grandScores[oldId];
         }
         if (this.lastWinnerId === oldId) this.lastWinnerId = newId;
+
+        const player = this.players.find(p => p.id === newId);
+        if (player) player.isAutoPlay = false;
 
         if (this.gameState) {
             if (this.gameState.hands[oldId]) {
@@ -1746,12 +2270,13 @@ class GameManager {
                 delete this.gameState.roundPoints[oldId];
             }
             if (this.gameState.roundWinnerId === oldId) this.gameState.roundWinnerId = newId;
+            
+            const rankIdx = this.gameState.finishedRank.indexOf(oldId);
+            if (rankIdx !== -1) {
+                this.gameState.finishedRank[rankIdx] = newId;
+            }
         }
         return true;
-    }
-    
-    _advanceTurn() {
-        this.gameState.currentTurnIndex = (this.gameState.currentTurnIndex + 1) % this.players.length;
     }
 
     _handContainsCards(hand, cardsToPlay) {
@@ -1773,30 +2298,87 @@ class GameManager {
         this.gameState.hands[playerId] = newHand;
     }
 
-    _concludeRound(winnerId) {
-        this.lastWinnerId = winnerId;
-        let totalRoundScore = this.gameState.pendingTablePoints;
-        let penaltyLog = "";
+    // [核心修改] 结算逻辑：增加排名赏罚
+    _concludeRound() {
+        const lastPlayer = this.players.find(p => this.gameState.hands[p.id].length > 0);
+        if (lastPlayer) {
+            this.gameState.finishedRank.push(lastPlayer.id);
+        }
+        
+        // 1. 处理最后一轮的桌面分
+        const wId = this.gameState.roundWinnerId;
+        if (wId) {
+             this.gameState.roundPoints[wId] = (this.gameState.roundPoints[wId] || 0) + this.gameState.pendingTablePoints;
+             this.gameState.pendingTablePoints = 0;
+        }
 
+        // 2. 构造完整排名 (已跑完 + 剩余玩家)
+        // 实际上在 activeCount <= 1 时，剩下的那个玩家也已经被 push 到 finishedRank 里了(通过上面的 lastPlayer 逻辑)
+        // 但为了保险，我们用 Set 去重确保完整性
+        const fullRankIds = [...this.gameState.finishedRank];
         this.players.forEach(p => {
-            if (p.id !== winnerId) {
-                const handPts = CardRules.calculateTotalScore(this.gameState.hands[p.id]);
-                if (handPts > 0) {
-                    totalRoundScore += handPts;
-                    penaltyLog += `${p.name}剩${handPts}分 `;
-                }
-            }
+            if (!fullRankIds.includes(p.id)) fullRankIds.push(p.id);
         });
 
-        totalRoundScore += (this.gameState.roundPoints[winnerId] || 0);
-        this.grandScores[winnerId] += totalRoundScore;
-        const isGrandOver = this.grandScores[winnerId] >= this.config.targetScore;
-        if (isGrandOver) this.gameState = null; 
+        const firstWinnerId = fullRankIds[0];
+        this.lastWinnerId = firstWinnerId;
+
+        let logLines = [];
+
+        // 3. 规则一：剩余手牌罚分 (原有逻辑)
+        let totalCardPenalty = 0;
+        let cardPenaltyDetail = "";
+
+        this.players.forEach(p => {
+            const handPts = CardRules.calculateTotalScore(this.gameState.hands[p.id]);
+            if (handPts > 0) {
+                totalCardPenalty += handPts;
+                cardPenaltyDetail += `${p.name}-${handPts} `;
+            }
+            // 先累加桌面分
+            this.grandScores[p.id] += (this.gameState.roundPoints[p.id] || 0);
+        });
+
+        if (firstWinnerId && totalCardPenalty > 0) {
+            this.grandScores[firstWinnerId] += totalCardPenalty;
+            logLines.push(`[手牌罚分] 输家共计 ${totalCardPenalty} 分，归第一名 ${this.players.find(p=>p.id===firstWinnerId)?.name}。`);
+        }
+
+        // 4. [新增] 规则二：排名赏罚 (Rank Penalty)
+        if (this.config.enableRankPenalty && this.config.rankPenaltyScores && this.config.rankPenaltyScores.length > 0) {
+            const penaltyConfig = this.config.rankPenaltyScores;
+            const playerCount = fullRankIds.length;
+            
+            // 遍历配置：[30, 15] 对应 (第一vs倒一), (第二vs倒二)
+            penaltyConfig.forEach((score, index) => {
+                const winnerIndex = index; // 0, 1
+                const loserIndex = playerCount - 1 - index; // N-1, N-2
+
+                // 只有当赢家索引小于输家索引时才执行 (避免奇数人数中间撞车)
+                if (winnerIndex < loserIndex) {
+                    const winnerId = fullRankIds[winnerIndex];
+                    const loserId = fullRankIds[loserIndex];
+                    
+                    if (winnerId && loserId) {
+                        this.grandScores[winnerId] += score;
+                        this.grandScores[loserId] -= score;
+
+                        const wName = this.players.find(p=>p.id===winnerId)?.name;
+                        const lName = this.players.find(p=>p.id===loserId)?.name;
+                        logLines.push(`[排名赏罚] 第${winnerIndex+1}名 ${wName} 收取 倒数第${index+1}名 ${lName} ${score} 分。`);
+                    }
+                }
+            });
+        }
+
+        const firstWinnerName = this.players.find(p => p.id === firstWinnerId)?.name || '未知';
+        const isGrandOver = this.grandScores[firstWinnerId] >= this.config.targetScore;
+        const totalPointsEarned = (this.gameState.roundPoints[firstWinnerId] || 0) + totalCardPenalty;
 
         return {
-            roundWinnerName: this.players.find(p=>p.id===winnerId).name,
-            pointsEarned: totalRoundScore,
-            detail: penaltyLog ? `罚分: ${penaltyLog}` : '无罚分',
+            roundWinnerName: firstWinnerName,
+            pointsEarned: totalPointsEarned, 
+            detail: logLines.join('\n') || '完美结束，无额外罚分', // 用换行符连接
             grandScores: this.grandScores,
             isGrandOver
         };
@@ -1955,6 +2537,40 @@ io.on('connection', (socket) => {
             broadcastGameState(io, roomId, room);
         }
     });
+    
+    // 添加机器人
+    socket.on('add_bot', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+        
+        if (room.players.length >= room.config.maxPlayers) return socket.emit('error_msg', '房间已满');
+        
+        const botId = `bot_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+        const botName = `Robot ${Math.floor(Math.random()*100)}`;
+        
+        room.players.push({ 
+            id: botId, 
+            name: botName, 
+            isHost: false, 
+            online: true,
+            isBot: true 
+        });
+        
+        const currentGrandScores = room.gameManager ? room.gameManager.grandScores : {};
+        currentGrandScores[botId] = 0;
+
+        const data = { roomId, config: room.config, players: room.players, grandScores: currentGrandScores };
+        io.to(roomId).emit('room_info', data);
+    });
+
+    // [新增] 切换托管
+    socket.on('toggle_auto_play', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (!room || !room.gameManager) return;
+
+        room.gameManager.toggleAutoPlay(socket.id);
+        broadcastGameState(io, roomId, room);
+    });
 
     // --- 游戏流程 ---
     const handleGameStart = (roomId, isNextRound) => {
@@ -1962,18 +2578,19 @@ io.on('connection', (socket) => {
         if (!room) return;
 
         if (!isNextRound || !room.gameManager) {
-            // >>> 关键修改：传入 io 和 roomId，让 GameManager 能发倒计时通知 <<<
             room.gameManager = new GameManager(room.config, room.players, io, roomId);
         }
 
         const startInfo = room.gameManager.startRound(isNextRound);
 
         room.players.forEach((p) => {
-            const hand = startInfo.hands[p.id];
-            io.to(p.id).emit('game_started', { 
-                hand: hand, 
-                grandScores: room.gameManager.grandScores 
-            });
+            if (!p.isBot) { 
+                const hand = startInfo.hands[p.id];
+                io.to(p.id).emit('game_started', { 
+                    hand: hand, 
+                    grandScores: room.gameManager.grandScores 
+                });
+            }
         });
 
         const startPlayerName = room.players[startInfo.startPlayerIndex].name;
@@ -2065,14 +2682,15 @@ io.on('connection', (socket) => {
                 player.online = false;
                 console.log(`[Disconnect] Game user ${player.name} (${socket.id}) dropped.`);
 
-                const allOffline = r.players.every(p => !p.online);
-                if (allOffline) {
+                const allHumansOffline = r.players.filter(p => !p.isBot).every(p => !p.online);
+                
+                if (allHumansOffline) {
                     console.log(`[Room] Room ${rId} is empty. Scheduling destruction in 60s...`);
                     
                     if (r.destroyTimer) clearTimeout(r.destroyTimer);
                     
                     r.destroyTimer = setTimeout(() => {
-                        if (rooms[rId] && rooms[rId].players.every(p => !p.online)) {
+                        if (rooms[rId] && rooms[rId].players.filter(p => !p.isBot).every(p => !p.online)) {
                             delete rooms[rId];
                             console.log(`[Room] Room ${rId} destroyed due to inactivity (game running).`);
                         }
@@ -2082,6 +2700,7 @@ io.on('connection', (socket) => {
         });
     });
 });
+
 
 
 // 这一段的意思是：如果是在线上环境，就把 React 打包好的文件(build)发给浏览器

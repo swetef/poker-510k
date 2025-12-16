@@ -66,3 +66,47 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* --- 移动端适配 (手机屏幕 < 768px) --- */
+@media (max-width: 768px) {
+  /* 强制将登录卡片改为竖向排列，高度自动 */
+  .mobile-layout-column {
+    flex-direction: column !important;
+    height: auto !important;
+    min-height: 0 !important;
+    width: 95% !important;
+    overflow-y: auto !important; 
+    max-height: 90vh !important;
+    margin: 20px 0 !important;
+  }
+
+  /* 登录页左侧品牌区：减小高度和内边距 */
+  .mobile-login-left {
+    flex: 0 0 auto !important;
+    padding: 30px 20px !important;
+    min-height: 180px;
+  }
+
+  /* 登录页右侧表单区：调整内边距 */
+  .mobile-login-right {
+    padding: 20px 15px !important;
+    flex: 1 !important;
+  }
+  
+  /* 游戏内手牌区域：手机上需要更靠下，防止遮挡 */
+  .mobile-hand-area {
+    width: 100% !important;
+    bottom: 10px !important;
+  }
+
+  /* 调整头像大小防止太挤 */
+  .mobile-avatar-scale {
+    transform: scale(0.85);
+    margin: -5px;
+  }
+
+  /* 隐藏或缩小一些不重要的装饰元素 */
+  .hide-on-mobile {
+    display: none !important;
+  }
+}

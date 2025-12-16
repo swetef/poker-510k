@@ -1,4 +1,3 @@
-// 主入口 - 修复了服务器连接地址，支持自动切换线上/本地环境
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 
@@ -8,24 +7,15 @@ import { LoginScreen } from './screens/LoginScreen.jsx';
 import { LobbyScreen } from './screens/LobbyScreen.jsx';
 import { GameScreen } from './screens/GameScreen.jsx';
 
-// [关键修复] 智能获取 Socket 地址
 const getSocketUrl = () => {
     const { hostname, protocol } = window.location;
-    
-    // 判断是否是本地环境 (包括 localhost, 127.0.0.1, 以及 192.168.x.x 局域网IP)
     const isLocal = hostname === 'localhost' || 
                     hostname === '127.0.0.1' || 
                     hostname.startsWith('192.168.') || 
                     hostname.startsWith('10.');
-
-    // 1. 如果是本地/局域网开发：强制连接到 3001 端口 (后端端口)
-    //    这样你用手机访问电脑 IP (如 192.168.1.5:5173) 时，Socket 能正确连上 192.168.1.5:3001
     if (isLocal) {
         return `${protocol}//${hostname}:3001`;
     }
-
-    // 2. 如果是线上环境 (Render)：使用相对路径 '/'
-    //    Render 会自动处理 HTTPS 和 端口转发
     return '/';
 };
 
@@ -36,12 +26,13 @@ export default function App() {
   const [username, setUsername] = useState('');
   const [roomId, setRoomId] = useState('');
   
-  // 初始配置
   const [roomConfig, setRoomConfig] = useState({ 
       deckCount: 2,          
       maxPlayers: 4,         
       targetScore: 1000,     
-      turnTimeout: 60000     
+      turnTimeout: 60000,
+      enableRankPenalty: false,    
+      rankPenaltyScores: [30, 15]  
   });
   
   const [isCreatorMode, setIsCreatorMode] = useState(false); 
@@ -57,11 +48,14 @@ export default function App() {
   const [roundResult, setRoundResult] = useState(null); 
   const [grandResult, setGrandResult] = useState(null); 
   const [playerScores, setPlayerScores] = useState({});
+  const [playersInfo, setPlayersInfo] = useState({});
+  const [finishedRank, setFinishedRank] = useState([]); // [新增] 存储已完成玩家的 ID 列表
+  
   const [pendingPoints, setPendingPoints] = useState(0);
   const [gameLogs, setGameLogs] = useState([]);
 
   const [sortMode, setSortMode] = useState('POINT'); 
-  const [isConnected, setIsConnected] = useState(false); // [新增] 连接状态
+  const [isConnected, setIsConnected] = useState(false); 
   const [mySocketId, setMySocketId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -78,15 +72,13 @@ export default function App() {
   useEffect(() => { mySocketIdRef.current = mySocketId; }, [mySocketId]);
 
   useEffect(() => {
-    // 建立连接
     console.log(`正在连接服务器: ${SOCKET_URL}`);
     
-    // [优化] 增加连接参数，适应 Render 的冷启动
     const socket = io(SOCKET_URL, { 
-        reconnectionAttempts: 10,   // 多尝试几次，防止服务器还没醒
-        reconnectionDelay: 1000,    // 每秒重试一次
-        timeout: 20000,             // 超时时间设长一点
-        transports: ['websocket', 'polling'] // 兼容性设置
+        reconnectionAttempts: 10,   
+        reconnectionDelay: 1000,    
+        timeout: 20000,             
+        transports: ['websocket', 'polling'] 
     });
     
     socketRef.current = socket;
@@ -99,17 +91,16 @@ export default function App() {
 
     socket.on('connect', () => {
         console.log("Socket 连接成功!");
-        setIsConnected(true); // 标记为已连接
+        setIsConnected(true); 
     });
     
     socket.on('disconnect', () => {
         console.log("Socket 断开连接");
-        setIsConnected(false); // 标记为断开
+        setIsConnected(false); 
     });
     
     socket.on('connect_error', (err) => {
-        console.warn("连接错误 (可能是服务器正在唤醒):", err);
-        // 不在这里设为 false，让它自动重试
+        console.warn("连接错误:", err);
     });
 
     socket.on('your_id', (id) => {
@@ -127,15 +118,19 @@ export default function App() {
     });
 
     socket.on('game_started', (data) => {
-        setMyHand(sortHand(data.hand, sortModeRef.current));
+        if (data.hand) {
+            setMyHand(sortHand(data.hand, sortModeRef.current));
+        }
         setLastPlayed([]);
         setRoundResult(null);
         setGrandResult(null);
         setPendingPoints(0);
+        setFinishedRank([]); // [新增] 新的一局开始，清空排名
         if (data.grandScores) setPlayerScores(data.grandScores);
         setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: '🏁 新一局开始！' }]); 
         setGameState('GAME');
         setTurnRemaining(60);
+        setPlayersInfo({});
         SoundManager.play('deal');
     });
 
@@ -158,6 +153,11 @@ export default function App() {
             setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: data.infoText }]);
         }
         if (data.scores) setPlayerScores(data.scores);
+        if (data.playersInfo) setPlayersInfo(data.playersInfo);
+        
+        // [新增] 接收 finishedRank
+        if (data.finishedRank) setFinishedRank(data.finishedRank);
+
         if (data.pendingPoints !== undefined) setPendingPoints(data.pendingPoints);
 
         if (data.currentTurnId === mySocketIdRef.current) {
@@ -201,7 +201,7 @@ export default function App() {
   const toggleSort = () => setSortMode(prev => prev === 'POINT' ? 'SUIT' : 'POINT');
   
   const handleRoomAction = () => {
-      if (!isConnected) return; // 按钮已禁用，这里作为双重保险
+      if (!isConnected) return; 
       if (!username || !roomId) return alert("请输入昵称和房间号");
       setIsLoading(true);
       const event = isCreatorMode ? 'create_room' : 'join_room';
@@ -211,7 +211,10 @@ export default function App() {
   
   const handleStartGame = () => socketRef.current.emit('start_game', { roomId });
   const handleNextRound = () => socketRef.current.emit('next_round', { roomId });
+  const handleAddBot = () => socketRef.current.emit('add_bot', { roomId });
   
+  const handleToggleAutoPlay = () => socketRef.current.emit('toggle_auto_play', { roomId });
+
   const updateSelection = (cardVal, forceSelect = null) => {
     setSelectedCards(prev => {
         const isSelected = prev.includes(cardVal);
@@ -243,7 +246,6 @@ export default function App() {
     setSelectedCards([]);
   };
 
-  // 将 isConnected 传给登录页
   if (gameState === 'LOGIN') return <LoginScreen {...{
       username, setUsername, 
       roomId, setRoomId, 
@@ -251,16 +253,21 @@ export default function App() {
       isCreatorMode, setIsCreatorMode, 
       handleRoomAction, 
       isLoading,
-      isConnected // <--- 关键参数
+      isConnected 
   }} />;
   
-  if (gameState === 'LOBBY') return <LobbyScreen {...{roomId, roomConfig, players, mySocketId, handleStartGame}} />;
+  if (gameState === 'LOBBY') return <LobbyScreen {...{
+      roomId, roomConfig, players, mySocketId, 
+      handleStartGame, 
+      handleAddBot 
+  }} />;
   
   return <GameScreen {...{
       roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
-      infoMessage, winner: null, playerScores, pendingPoints, gameLogs, sortMode, 
+      infoMessage, winner: null, playerScores, playersInfo, pendingPoints, gameLogs, sortMode, 
       mySocketId, roundResult, grandResult, roomConfig,
-      turnRemaining, 
-      toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame
+      turnRemaining, finishedRank, // [新增] 传递 finishedRank
+      toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
+      handleToggleAutoPlay 
   }} />;
 }
