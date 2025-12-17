@@ -123,7 +123,7 @@ export const MiniCard = ({ cardVal, index }) => {
     );
 };
 
-// [修改] 支持 team 属性显示队伍颜色
+// [修改] 支持 team 属性显示队伍颜色，调整角标布局
 export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, remainingSeconds, rank, timerPosition, hideTimer, cardCount, showCardCountMode, team }) => {
     const progress = Math.min((score / targetScore) * 100, 100);
     const containerOpacity = rank ? 0.75 : 1; 
@@ -161,16 +161,19 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
             position: 'relative',
             opacity: containerOpacity
         }}>
+            {/* 左上角：剩余牌数 (Card Count) - 样式在 styles.js 中定义为 top: -8, left: -8 */}
             {showBadge && (
                 <div style={styles.cardCountBadge}>
                     {cardCount}
                 </div>
             )}
 
-            {/* 组队角标 */}
+            {/* 右上角：组队标识 (Team Badge) - [修改] 移到右上角 */}
             {isTeamMode && (
                 <div style={{
-                    position: 'absolute', top: -10, left: -5,
+                    position: 'absolute', 
+                    top: -10, 
+                    right: -8, // [修改] 改为 right: -8，与左边的牌数徽章对称
                     background: teamColor, color: 'white',
                     fontSize: 9, padding: '1px 4px', borderRadius: 4,
                     display: 'flex', alignItems: 'center', gap: 2,
@@ -181,10 +184,11 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
                 </div>
             )}
 
+            {/* 正上方：排名奖杯 (Rank Badge) */}
             {rank && (
                 <div style={{
                     position: 'absolute',
-                    top: -12,
+                    top: -16, // [微调] 稍微向上提一点，避免这三个徽章在视觉上太拥挤
                     left: '50%',
                     transform: 'translateX(-50%)',
                     background: rank === 1 ? '#f1c40f' : (rank === 2 ? '#bdc3c7' : '#e67e22'), 
@@ -194,7 +198,7 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
                     fontSize: 11,
                     fontWeight: 'bold',
                     boxShadow: '0 2px 5px rgba(0,0,0,0.4)',
-                    zIndex: 20,
+                    zIndex: 30, // 确保层级最高
                     display: 'flex',
                     alignItems: 'center',
                     gap: 3,

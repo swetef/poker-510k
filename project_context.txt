@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/17 16:16:50
+Project Context Generated at 2025/12/17 16:37:44
 
 
 ================================================================================
@@ -594,7 +594,7 @@ export const MiniCard = ({ cardVal, index }) => {
     );
 };
 
-// [修改] 支持 team 属性显示队伍颜色
+// [修改] 支持 team 属性显示队伍颜色，调整角标布局
 export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, remainingSeconds, rank, timerPosition, hideTimer, cardCount, showCardCountMode, team }) => {
     const progress = Math.min((score / targetScore) * 100, 100);
     const containerOpacity = rank ? 0.75 : 1; 
@@ -632,16 +632,19 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
             position: 'relative',
             opacity: containerOpacity
         }}>
+            {/* 左上角：剩余牌数 (Card Count) - 样式在 styles.js 中定义为 top: -8, left: -8 */}
             {showBadge && (
                 <div style={styles.cardCountBadge}>
                     {cardCount}
                 </div>
             )}
 
-            {/* 组队角标 */}
+            {/* 右上角：组队标识 (Team Badge) - [修改] 移到右上角 */}
             {isTeamMode && (
                 <div style={{
-                    position: 'absolute', top: -10, left: -5,
+                    position: 'absolute', 
+                    top: -10, 
+                    right: -8, // [修改] 改为 right: -8，与左边的牌数徽章对称
                     background: teamColor, color: 'white',
                     fontSize: 9, padding: '1px 4px', borderRadius: 4,
                     display: 'flex', alignItems: 'center', gap: 2,
@@ -652,10 +655,11 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
                 </div>
             )}
 
+            {/* 正上方：排名奖杯 (Rank Badge) */}
             {rank && (
                 <div style={{
                     position: 'absolute',
-                    top: -12,
+                    top: -16, // [微调] 稍微向上提一点，避免这三个徽章在视觉上太拥挤
                     left: '50%',
                     transform: 'translateX(-50%)',
                     background: rank === 1 ? '#f1c40f' : (rank === 2 ? '#bdc3c7' : '#e67e22'), 
@@ -665,7 +669,7 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
                     fontSize: 11,
                     fontWeight: 'bold',
                     boxShadow: '0 2px 5px rgba(0,0,0,0.4)',
-                    zIndex: 20,
+                    zIndex: 30, // 确保层级最高
                     display: 'flex',
                     alignItems: 'center',
                     gap: 3,
@@ -701,7 +705,6 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
         </div>
     );
 };
-
 
 ================================================================================
 FILE PATH: client\src\components\CountDownTimer.jsx
@@ -1291,34 +1294,67 @@ export const GameScreen = ({
     const handContainerRef = useRef(null);
     const lastTouchedIndex = useRef(null);
     const isDragging = useRef(false);
-    const dragStartMode = useRef(true); 
+const dragStartMode = useRef(true); // true = select, false = deselect
 
     const handleTouchStart = (e) => {
+        // [关键修改] 阻止默认事件，防止后续触发 click/mousedown 导致双重操作
         if (e.cancelable) e.preventDefault();
         
-        isDragging.current = true;
         const touch = e.touches[0];
         const container = handContainerRef.current;
         if (!container) return;
 
         const rect = container.getBoundingClientRect();
+        
+        // 1. 先算出横坐标对应的牌是哪一张 (为了做精确的高度检测，必须先知道点的是谁)
         const index = getCardIndexFromTouch(touch.clientX, rect.left, cardSpacing, myHand.length);
         const cardVal = myHand[index];
 
-        if (cardVal !== undefined) {
-            dragStartMode.current = !selectedCards.includes(cardVal);
-            lastTouchedIndex.current = index;
-            
-            const isSelected = selectedCards.includes(cardVal);
-            if (isSelected !== dragStartMode.current) {
-                 handleMouseDown(cardVal); 
-                 if (navigator.vibrate) navigator.vibrate(5);
-            }
+        if (cardVal === undefined) return;
+
+        // 2. [核心优化] 动态高度检测
+        // 解决问题：防止点击“坐着”的牌上方的空气时触发选中
+        const isSelected = selectedCards.includes(cardVal);
+        const CARD_HEIGHT = 70;    // 牌的基础高度 (styles.card.height)
+        const POP_HEIGHT = 35;     // 站起来的上浮高度 (transform translateY)
+        const TOLERANCE = 10;      // 容错空间 (手指可能比牌大一点)
+
+        // 如果牌已经站起来了，有效高度 = 基础 + 上浮 + 容错
+        // 如果牌是坐着的，有效高度 = 基础 + 容错
+        const validVisualHeight = isSelected 
+            ? CARD_HEIGHT + POP_HEIGHT + TOLERANCE 
+            : CARD_HEIGHT + TOLERANCE;
+
+        // 计算触摸点距离容器底部的距离
+        const distanceFromBottom = rect.bottom - touch.clientY;
+
+        // 判定：如果点击位置比“该牌当前的视觉高度”还要高，说明点在空气上了
+        if (distanceFromBottom > validVisualHeight) {
+            isDragging.current = false;
+            return;
+        }
+        
+        // 判定：如果点到容器外面太下面去了也不行
+        if (distanceFromBottom < -10) {
+            isDragging.current = false;
+            return;
+        }
+
+        isDragging.current = true;
+        
+        // 决定起始模式
+        dragStartMode.current = !selectedCards.includes(cardVal);
+        lastTouchedIndex.current = index;
+        
+        // 执行选中/取消
+        if (isSelected !== dragStartMode.current) {
+                handleMouseDown(cardVal); // 触发 toggle
+                if (navigator.vibrate) navigator.vibrate(5);
         }
     };
 
     const handleTouchMove = (e) => {
-        if (e.cancelable) e.preventDefault(); 
+        if (e.cancelable) e.preventDefault(); // 防止滚动
         if (!isDragging.current) return;
 
         const touch = e.touches[0];
@@ -1326,7 +1362,9 @@ export const GameScreen = ({
         if (!container) return;
 
         const rect = container.getBoundingClientRect();
-        if (touch.clientY < rect.top - 100 || touch.clientY > rect.bottom + 50) return;
+        // 增加一点 Y 轴容错，防止手指稍微滑出就断触
+        // [调整] 这里的范围可以稍微宽一点，允许滑动时手指稍微跑偏
+        if (touch.clientY < rect.top - 50 || touch.clientY > rect.bottom + 50) return;
 
         const index = getCardIndexFromTouch(touch.clientX, rect.left, cardSpacing, myHand.length);
         

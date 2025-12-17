@@ -81,32 +81,51 @@ const dragStartMode = useRef(true); // true = select, false = deselect
         if (!container) return;
 
         const rect = container.getBoundingClientRect();
+        
+        // 1. 先算出横坐标对应的牌是哪一张 (为了做精确的高度检测，必须先知道点的是谁)
+        const index = getCardIndexFromTouch(touch.clientX, rect.left, cardSpacing, myHand.length);
+        const cardVal = myHand[index];
 
-        // [新增] Y轴 触摸区域限制
-        // 手牌区高度是 160，但牌只有 70 (选中时视觉上更高)。
-        // 限制点击有效区域为底部往上 120px 范围内 (包含选中时的上浮和手指粗细容错)。
-        // 这样点击牌上方过高的空白区域将不会触发选中。
-        const TOUCH_VALID_HEIGHT = 120; 
-        if (touch.clientY < rect.bottom - TOUCH_VALID_HEIGHT) {
-            // 点在太上面了（空气），忽略，不开启拖拽
+        if (cardVal === undefined) return;
+
+        // 2. [核心优化] 动态高度检测
+        // 解决问题：防止点击“坐着”的牌上方的空气时触发选中
+        const isSelected = selectedCards.includes(cardVal);
+        const CARD_HEIGHT = 70;    // 牌的基础高度 (styles.card.height)
+        const POP_HEIGHT = 35;     // 站起来的上浮高度 (transform translateY)
+        const TOLERANCE = 10;      // 容错空间 (手指可能比牌大一点)
+
+        // 如果牌已经站起来了，有效高度 = 基础 + 上浮 + 容错
+        // 如果牌是坐着的，有效高度 = 基础 + 容错
+        const validVisualHeight = isSelected 
+            ? CARD_HEIGHT + POP_HEIGHT + TOLERANCE 
+            : CARD_HEIGHT + TOLERANCE;
+
+        // 计算触摸点距离容器底部的距离
+        const distanceFromBottom = rect.bottom - touch.clientY;
+
+        // 判定：如果点击位置比“该牌当前的视觉高度”还要高，说明点在空气上了
+        if (distanceFromBottom > validVisualHeight) {
+            isDragging.current = false;
+            return;
+        }
+        
+        // 判定：如果点到容器外面太下面去了也不行
+        if (distanceFromBottom < -10) {
             isDragging.current = false;
             return;
         }
 
         isDragging.current = true;
-        const index = getCardIndexFromTouch(touch.clientX, rect.left, cardSpacing, myHand.length);
-        const cardVal = myHand[index];
-
-        if (cardVal !== undefined) {
-            // 决定起始模式
-            dragStartMode.current = !selectedCards.includes(cardVal);
-            lastTouchedIndex.current = index;
-            
-            const isSelected = selectedCards.includes(cardVal);
-            if (isSelected !== dragStartMode.current) {
-                 handleMouseDown(cardVal); // 触发 toggle
-                 if (navigator.vibrate) navigator.vibrate(5);
-            }
+        
+        // 决定起始模式
+        dragStartMode.current = !selectedCards.includes(cardVal);
+        lastTouchedIndex.current = index;
+        
+        // 执行选中/取消
+        if (isSelected !== dragStartMode.current) {
+                handleMouseDown(cardVal); // 触发 toggle
+                if (navigator.vibrate) navigator.vibrate(5);
         }
     };
 
