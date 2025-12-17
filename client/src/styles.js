@@ -1,5 +1,5 @@
 // 统一样式文件 - 移动端适配版
-// 基于原版布局，仅增加滑动选牌支持
+// [完整版] 包含所有原有布局、拇指热区、以及新增的滑动选牌支持和剩余牌数徽章
 
 export const styles = {
   // 全局容器
@@ -15,7 +15,7 @@ export const styles = {
       overflow: 'hidden' 
   },
   
-  // --- Login Card ---
+  // --- 登录页卡片 ---
   loginCard: { 
       background: 'white', 
       borderRadius: 24, 
@@ -108,7 +108,7 @@ export const styles = {
       boxShadow: '0 10px 25px rgba(44, 62, 80, 0.25)' 
   },
 
-  // --- Game Screen Styles ---
+  // --- 游戏界面样式 ---
 
   gameTable: { 
       height: '100dvh', // 使用 100dvh
@@ -121,8 +121,7 @@ export const styles = {
       flexDirection: 'column', 
       userSelect: 'none',
       
-      // [关键修复2] 必须加上 border-box，否则 100vw + padding 会导致宽度溢出屏幕，
-      // 从而让右侧绝对定位的玩家（right: 10）被挤出屏幕外
+      // [关键] 必须加上 border-box，防止宽度溢出
       boxSizing: 'border-box',
 
       paddingTop: 'env(safe-area-inset-top)',
@@ -131,6 +130,22 @@ export const styles = {
       paddingBottom: 'env(safe-area-inset-bottom)'
   },
   
+  // 安全区域包装层
+  gameSafeArea: {
+      position: 'absolute',
+      top: 0, left: 0, right: 0, bottom: 0,
+      width: '100%',
+      height: '100%',
+      boxSizing: 'border-box',
+      paddingTop: 'env(safe-area-inset-top)',
+      paddingLeft: 'max(15px, env(safe-area-inset-left))',
+      paddingRight: 'max(15px, env(safe-area-inset-right))',
+      paddingBottom: 'env(safe-area-inset-bottom)',
+      display: 'flex',
+      flexDirection: 'column',
+      pointerEvents: 'none' 
+  },
+
   playersArea: { 
       position: 'absolute',
       top: 0, left: 0, right: 0, bottom: 0,
@@ -150,6 +165,26 @@ export const styles = {
       position: 'relative',
       backdropFilter: 'blur(3px)',
       boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
+  },
+
+  // [新增] 剩余牌数小徽章样式
+  cardCountBadge: {
+      position: 'absolute',
+      top: -8,
+      left: -8,
+      background: '#e74c3c',
+      color: 'white',
+      borderRadius: '50%',
+      width: 20,
+      height: 20,
+      fontSize: 12,
+      fontWeight: 'bold',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      border: '2px solid #fff',
+      boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
+      zIndex: 25
   },
 
   avatar: { 
@@ -178,7 +213,7 @@ export const styles = {
   
   gameLogPanel: { 
       position: 'absolute', 
-      top: 60,  // 稍微下移一点，避免和新的左上角按钮冲突
+      top: 60,  
       left: 10, 
       width: 180, 
       height: 120, 
@@ -199,29 +234,21 @@ export const styles = {
   logTime: { display: 'none' },
   
   tableHeader: { 
-      // [关键修复1] 减小基础内边距，让内容紧贴左上角
-      padding: '4px 10px', // 原: 10px 20px -> 现: 4px 10px
-      
-      // 减小安全区叠加的距离，确保在无刘海设备上也很紧凑
+      padding: '4px 10px', 
       paddingTop: 'calc(4px + env(safe-area-inset-top))', 
-      paddingLeft: 'max(4px, env(safe-area-inset-left))', // 原: 15px -> 现: 4px
-      
+      paddingLeft: 'max(4px, env(safe-area-inset-left))', 
       display: 'flex', 
       justifyContent: 'space-between', 
       alignItems:'flex-start', 
       zIndex: 20,
-      position: 'absolute',
-      top: 0,
       width: '100%',
-      boxSizing: 'border-box', // 确保 width 100% 不会溢出
       pointerEvents: 'none' 
   },
   
-  // [修改] 左上角房间徽章容器，改为 Flex 布局以容纳托管按钮
   roomBadgeContainer: {
     display: 'flex',
     alignItems: 'center',
-    gap: 8, // 稍微缩小间距
+    gap: 8, 
     pointerEvents: 'auto'
   },
 
@@ -277,7 +304,7 @@ export const styles = {
   playerScore: { fontSize: 9, color: '#f1c40f', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, marginTop: 1 },
   turnProgress: { position: 'absolute', bottom: 0, left: 0, height: 4, background: '#f1c40f', width: '100%', animation: 'progress 15s linear forwards' },
   
-  // [唯一修改点]
+  // [关键] HandArea 增加 touchAction: none 以支持滑动选牌
   handArea: { 
       position: 'absolute', 
       bottom: 10,             
@@ -288,8 +315,7 @@ export const styles = {
       justifyContent:'flex-start', 
       alignItems: 'flex-end',
       zIndex: 20,
-      // [新增] 禁用浏览器默认触摸行为，将滑动权交给 React
-      touchAction: 'none',
+      touchAction: 'none', 
       pointerEvents: 'auto'
   },
   

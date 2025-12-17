@@ -432,9 +432,15 @@ class GameManager {
         const currentScoresDisplay = {};
         const playersInfo = {};
         
+        // [新增] 统计每个人的手牌数
+        const handCounts = {};
+
         this.players.forEach(p => {
             currentScoresDisplay[p.id] = (this.grandScores[p.id] || 0) + (this.gameState.roundPoints[p.id] || 0);
             playersInfo[p.id] = { isBot: p.isBot, isAutoPlay: p.isAutoPlay };
+            
+            // 安全地获取手牌数
+            handCounts[p.id] = this.gameState.hands[p.id] ? this.gameState.hands[p.id].length : 0;
         });
 
         const winnerObj = this.players.find(p => p.id === this.gameState.roundWinnerId);
@@ -455,7 +461,8 @@ class GameManager {
             scores: currentScoresDisplay,
             pendingPoints: this.gameState.pendingTablePoints,
             finishedRank: this.gameState.finishedRank,
-            playersInfo: playersInfo 
+            playersInfo: playersInfo,
+            handCounts: handCounts // [新增] 返回给前端
         };
     }
 
@@ -577,7 +584,7 @@ class GameManager {
         return {
             roundWinnerName: firstWinnerName,
             pointsEarned: totalPointsEarned, 
-            detail: logLines.join('\n') || '完美结束，无额外罚分', 
+            detail: logLines.join('\n') || '完美结束，未设置额外罚分', 
             grandScores: this.grandScores,
             isGrandOver
         };

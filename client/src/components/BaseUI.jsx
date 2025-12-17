@@ -1,14 +1,12 @@
-// 基础UI组件 - 修复移动端点击无效、双重触发问题
 import React, { useEffect, useRef } from 'react';
 import { Coins, History, Trophy, Flag } from 'lucide-react'; 
 import { getCardDisplay } from '../utils/cardLogic.js';
-import { styles } from '../styles';
-import CountDownTimer from './CountDownTimer'; 
+import { styles } from '../styles.js';
+import CountDownTimer from './CountDownTimer.jsx'; 
 
 export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacing }) => {
     const { suit, text, color, isScore } = getCardDisplay(cardVal);
     
-    // [关键修复] 使用 Pointer Events 代替 Touch/Mouse 事件
     const handlePointerDown = (e) => {
         if (e.button !== 0 && e.pointerType === 'mouse') return;
         e.stopPropagation();
@@ -34,23 +32,10 @@ export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacin
                 touchAction: 'none' 
             }}
         >
-            {/* [修改] 卡牌内容布局：数字更小，更靠左上角 */}
-            <div style={{
-                position: 'absolute',
-                top: 0, // 紧贴顶部
-                left: 1, // 紧贴左边
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                lineHeight: 0.9
-            }}>
-                {/* 数字 - [修改] 缩小字体 */}
+            <div style={{position: 'absolute', top: 0, left: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 0.9}}>
                 <div style={{fontSize: 16, fontWeight: '900', letterSpacing: -1}}>{text}</div>
-                {/* 花色 - [修改] 缩小字体并紧挨数字 */}
                 <div style={{fontSize: 14, marginTop: -1}}>{suit}</div>
             </div>
-
-            {/* 分数标记保持在右下角 */}
             {isScore && <div style={{position:'absolute', bottom:1, right:2, fontSize:10, color:'#f1c40f'}}>★</div>}
         </div>
     );
@@ -70,9 +55,23 @@ export const MiniCard = ({ cardVal, index }) => {
     );
 };
 
-export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, remainingSeconds, rank, timerPosition }) => {
+// [修改] 增加 cardCount 属性
+export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, remainingSeconds, rank, timerPosition, hideTimer, cardCount, showCardCountMode }) => {
     const progress = Math.min((score / targetScore) * 100, 100);
     const containerOpacity = rank ? 0.75 : 1; 
+
+    // 判断是否显示牌数
+    // 模式 0: 不显示
+    // 模式 1: <=3 张显示
+    // 模式 2: 一直显示
+    // 注意：如果是自己，通常不显示或者显示也不要紧，但需求通常是看对手
+    // 这里我们统一处理，如果是自己也显示
+    let showBadge = false;
+    if (showCardCountMode === 2) showBadge = true;
+    if (showCardCountMode === 1 && cardCount <= 3 && cardCount > 0) showBadge = true;
+    
+    // 赢了或者手牌为0时，通常不显示数字，或者显示0？这里如果排位显示了就不显示数字了
+    if (rank) showBadge = false;
 
     return (
         <div style={{
@@ -84,6 +83,13 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
             position: 'relative',
             opacity: containerOpacity
         }}>
+            {/* [新增] 剩余牌数徽章 */}
+            {showBadge && (
+                <div style={styles.cardCountBadge}>
+                    {cardCount}
+                </div>
+            )}
+
             {rank && (
                 <div style={{
                     position: 'absolute',
@@ -116,8 +122,7 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
             </div>
             <div style={styles.playerScore}><Coins size={10} color="#f1c40f"/> {score}</div>
             
-            {/* [修改] 传递 timerPosition 参数控制倒计时位置 */}
-            {isTurn && !rank && (
+            {isTurn && !rank && !hideTimer && (
                 <CountDownTimer 
                     initialSeconds={remainingSeconds} 
                     totalSeconds={60} 

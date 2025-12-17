@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
-import { Smartphone } from 'lucide-react'; // [新增] 图标
+import { Smartphone } from 'lucide-react'; 
 
 import { sortHand } from './utils/cardLogic.js';
 import SoundManager from './utils/SoundManager.js';
@@ -27,13 +27,15 @@ export default function App() {
   const [username, setUsername] = useState('');
   const [roomId, setRoomId] = useState('');
   
+  // [修改] 增加 showCardCountMode: 0=不显示, 1=少于3张显示, 2=一直显示
   const [roomConfig, setRoomConfig] = useState({ 
       deckCount: 2,          
       maxPlayers: 4,         
       targetScore: 1000,     
       turnTimeout: 60000,
       enableRankPenalty: false,    
-      rankPenaltyScores: [30, 15]  
+      rankPenaltyScores: [30, 15],
+      showCardCountMode: 1 // 默认：少于3张显示
   });
   
   const [isCreatorMode, setIsCreatorMode] = useState(false); 
@@ -61,6 +63,9 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
 
   const [turnRemaining, setTurnRemaining] = useState(60); 
+
+  // [新增] 用于存储每个玩家的剩余牌数
+  const [handCounts, setHandCounts] = useState({});
 
   const socketRef = useRef(null);
   const isDragging = useRef(false); 
@@ -132,6 +137,8 @@ export default function App() {
         setGameState('GAME');
         setTurnRemaining(60);
         setPlayersInfo({});
+        // [新增] 初始牌数
+        if (data.handCounts) setHandCounts(data.handCounts);
         SoundManager.play('deal');
     });
 
@@ -156,6 +163,9 @@ export default function App() {
         if (data.scores) setPlayerScores(data.scores);
         if (data.playersInfo) setPlayersInfo(data.playersInfo);
         
+        // [新增] 更新手牌数
+        if (data.handCounts) setHandCounts(data.handCounts);
+
         if (data.finishedRank) setFinishedRank(data.finishedRank);
 
         if (data.pendingPoints !== undefined) setPendingPoints(data.pendingPoints);
@@ -290,7 +300,7 @@ export default function App() {
           roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
           infoMessage, winner: null, playerScores, playersInfo, pendingPoints, gameLogs, sortMode, 
           mySocketId, roundResult, grandResult, roomConfig,
-          turnRemaining, finishedRank,
+          turnRemaining, finishedRank, handCounts, // [修改] 传递 handCounts
           toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
           handleToggleAutoPlay 
       }} />}

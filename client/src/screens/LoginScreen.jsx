@@ -1,6 +1,7 @@
-// 登录页 - 适配移动端，包含自动全屏逻辑 + 手动全屏按钮
-import React, { useState } from 'react'; // [修改] 引入 useState
-import { User, Monitor, RefreshCw, Plus, LogIn, Settings, Clock, Layers, Users, Target, Wifi, WifiOff, Award, Maximize, Minimize } from 'lucide-react'; // [修改] 引入 Maximize, Minimize 图标
+// 登录页 - 适配移动端，包含自动全屏逻辑 + 手动全屏按钮 + 剩余牌数配置
+// [完整无删减版] 
+import React, { useState } from 'react'; 
+import { User, Monitor, RefreshCw, Plus, LogIn, Clock, Layers, Users, Target, Wifi, WifiOff, Award, Maximize, Minimize, Eye } from 'lucide-react'; 
 import { styles } from '../styles.js';
 
 export const LoginScreen = ({ 
@@ -59,7 +60,7 @@ export const LoginScreen = ({
         handleRoomAction();   
     };
 
-    // 渲染配置项的辅助函数
+    // 渲染配置项的辅助函数 - 用于简化 JSX 嵌套，逻辑未变
     const renderConfigSlider = (icon, label, value, min, max, step, onChange, suffix = '') => (
         <div style={styles.configItem}>
             <div style={styles.configLabel}>
@@ -89,6 +90,7 @@ export const LoginScreen = ({
                     <h1 style={styles.brandTitle}>扑克对战</h1>
                     <div style={styles.brandSubtitle}>多人在线 · 自由规则 · 极速畅玩</div>
                     
+                    {/* 这个类名 hide-on-mobile 保证在手机竖屏时隐藏这些特性列表 */}
                     <div style={styles.featureList} className="hide-on-mobile">
                         <div style={styles.featureItem}>✨ 支持 2-12 人同台竞技</div>
                         <div style={styles.featureItem}>🚀 只有 1 副牌? 不，现在支持 8 副!</div>
@@ -105,7 +107,7 @@ export const LoginScreen = ({
                         alignItems: 'center',
                         marginBottom: 20
                     }}>
-                        {/* [新增] 左侧：全屏切换按钮 */}
+                        {/* 左侧：全屏切换按钮 */}
                         <button 
                             onClick={toggleFullScreen}
                             style={{
@@ -209,6 +211,33 @@ export const LoginScreen = ({
                                                 </button>
                                             ))}
                                         </div>
+                                    </div>
+                                </div>
+
+                                {/* [新增] 剩余牌数显示配置 - 插入在这里 */}
+                                <div style={{marginTop: 20, paddingTop: 15, borderTop: '1px solid #f0f0f0'}}>
+                                    <div style={{display:'flex', alignItems:'center', gap:6, color:'#7f8c8d', fontSize:14, marginBottom:10, fontWeight:600}}>
+                                        <Eye size={14}/> 剩余牌数显示规则
+                                    </div>
+                                    <div style={styles.radioGroup}>
+                                        <button 
+                                            style={roomConfig.showCardCountMode === 0 ? styles.radioBtnActive : styles.radioBtn}
+                                            onClick={() => setRoomConfig({...roomConfig, showCardCountMode: 0})}
+                                        >
+                                            不显示
+                                        </button>
+                                        <button 
+                                            style={roomConfig.showCardCountMode === 1 ? styles.radioBtnActive : styles.radioBtn}
+                                            onClick={() => setRoomConfig({...roomConfig, showCardCountMode: 1})}
+                                        >
+                                            ≤3张显示
+                                        </button>
+                                        <button 
+                                            style={roomConfig.showCardCountMode === 2 ? styles.radioBtnActive : styles.radioBtn}
+                                            onClick={() => setRoomConfig({...roomConfig, showCardCountMode: 2})}
+                                        >
+                                            一直显示
+                                        </button>
                                     </div>
                                 </div>
 
