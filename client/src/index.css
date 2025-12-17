@@ -259,38 +259,93 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
         padding-right: max(15px, env(safe-area-inset-right)) !important; 
     }
 
-    /* [关键修复] 针对 LobbyScreen (大厅) 强制保持“竖屏样式” */
+    /* --- [关键优化] 登录页 (Login) --- */
+    /* 策略：横屏高度宝贵，隐藏左侧品牌区，让右侧表单居中且更容易操作 */
+    
+    .mobile-login-left {
+        display: none !important; /* 隐藏左侧，节省空间 */
+    }
+
+    .mobile-login-right {
+        width: 100% !important;
+        flex: 1 !important;
+        border-radius: 0 !important;
+        margin-top: 0 !important;
+        /* 增加左右安全距离，防止刘海屏遮挡 */
+        padding: 20px max(40px, env(safe-area-inset-right)) 20px max(40px, env(safe-area-inset-left)) !important;
+        justify-content: center !important; 
+        /* 允许内容滚动 */
+        overflow-y: auto !important;
+    }
+
+    /* 限制一下表单内容的最大宽度，防止在长横屏上太宽 */
+    .mobile-login-right .formContent {
+        max-width: 500px;
+        margin: 0 auto;
+        width: 100%;
+    }
+
+
+    /* --- [关键优化] 大厅页 (Lobby) --- */
+    /* 策略：利用横向空间，改为宽布局 + 多列 Grid */
+
+    /* 容器变宽，利用屏幕 */
     .lobbyCard.mobile-layout-column {
-        flex-direction: column !important; /* 强制垂直排列，不要左右分栏 */
-        width: 100% !important;
-        max-width: 500px !important; /* 限制最大宽度，防止横屏太宽难看 */
-        margin: 0 auto !important;   /* 居中显示 */
-        border-radius: 12px !important; /* 保持圆角 */
-        height: 95dvh !important; /* 稍微留点边距 */
-        margin-top: 2.5dvh !important;
+        flex-direction: column !important; 
+        width: 95% !important;         
+        max-width: none !important;    /* 取消 500px 限制 */
+        margin: 10px auto !important;  
+        border-radius: 12px !important; 
+        height: 90dvh !important;      
+        padding: 0 !important;
+        background: transparent !important; /* 背景交给内部 content */
     }
-
-    /* 确保横屏下内容宽度正常 */
+    
+    /* 内容区白色背景 */
     .mobile-lobby-content {
+        background: white !important;
+        border-radius: 12px !important;
+        height: 100% !important;
         width: 100% !important;
+        border: 1px solid rgba(0,0,0,0.1);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
     }
 
-    /* [关键修复] 确保 Footer 在横屏下也乖乖呆在下面，并且可见 */
+    .lobbyHeader {
+        padding: 10px 20px !important; 
+    }
+
+    /* [关键] 玩家列表 Grid 改为 4 列，减少纵向滚动 */
+    .mobile-lobby-grid {
+        display: grid !important;
+        grid-template-columns: repeat(4, 1fr) !important; 
+        gap: 10px !important;
+        padding: 10px 20px !important;
+        align-content: start !important;
+    }
+    
+    /* 针对特别小的手机横屏，如果太窄就 3 列 */
+    @media (max-width: 600px) {
+        .mobile-lobby-grid {
+            grid-template-columns: repeat(3, 1fr) !important;
+        }
+    }
+
+    .mobile-lobby-grid > div {
+        padding: 8px !important; /* 减小每个卡片的内边距 */
+    }
+    
+    .mobile-lobby-grid .avatar-large {
+        width: 40px !important; /* 缩小头像 */
+        height: 40px !important;
+        font-size: 16px !important;
+    }
+
+    /* Footer 优化 */
     .mobile-lobby-footer {
         position: static !important;
         margin-top: auto !important;
-        padding-bottom: 5px !important;
-    }
-
-    .mobile-login-left { 
-        width: 240px !important; flex: 0 0 240px !important; 
-        height: 100% !important; border-radius: 0 !important; 
-        justify-content: center !important;
-        padding-top: 0 !important;
-    }
-    .mobile-login-right { 
-        border-radius: 0 !important; margin-top: 0 !important; 
-        justify-content: center !important; 
-        padding-bottom: 20px !important;
+        padding: 10px !important;
+        background: #f8f9fa !important;
     }
 }

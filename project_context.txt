@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/17 13:42:46
+Project Context Generated at 2025/12/17 14:19:38
 
 
 ================================================================================
@@ -461,12 +461,13 @@ export default function App() {
 ================================================================================
 FILE PATH: client\src\components\BaseUI.jsx
 ================================================================================
-import React, { useEffect, useRef } from 'react';
-import { Coins, History, Trophy, Flag } from 'lucide-react'; 
+import React, { useEffect, useRef, useState } from 'react'; // [修改] 引入 useState
+import { Coins, History, Trophy, Flag, ChevronDown, ChevronUp } from 'lucide-react'; // [修改] 引入箭头图标
 import { getCardDisplay } from '../utils/cardLogic.js';
 import { styles } from '../styles.js';
 import CountDownTimer from './CountDownTimer.jsx'; 
 
+// ... existing code (Card 组件保持不变) ...
 export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacing }) => {
     const { suit, text, color, isScore } = getCardDisplay(cardVal);
     
@@ -504,6 +505,7 @@ export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacin
     );
 };
 
+// ... existing code (MiniCard 组件保持不变) ...
 export const MiniCard = ({ cardVal, index }) => {
     const { text, suit, color, isScore } = getCardDisplay(cardVal);
     return (
@@ -518,22 +520,14 @@ export const MiniCard = ({ cardVal, index }) => {
     );
 };
 
-// [修改] 增加 cardCount 属性
+// ... existing code (PlayerAvatar 组件保持不变) ...
 export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, remainingSeconds, rank, timerPosition, hideTimer, cardCount, showCardCountMode }) => {
     const progress = Math.min((score / targetScore) * 100, 100);
     const containerOpacity = rank ? 0.75 : 1; 
 
-    // 判断是否显示牌数
-    // 模式 0: 不显示
-    // 模式 1: <=3 张显示
-    // 模式 2: 一直显示
-    // 注意：如果是自己，通常不显示或者显示也不要紧，但需求通常是看对手
-    // 这里我们统一处理，如果是自己也显示
     let showBadge = false;
     if (showCardCountMode === 2) showBadge = true;
     if (showCardCountMode === 1 && cardCount <= 3 && cardCount > 0) showBadge = true;
-    
-    // 赢了或者手牌为0时，通常不显示数字，或者显示0？这里如果排位显示了就不显示数字了
     if (rank) showBadge = false;
 
     return (
@@ -546,7 +540,6 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
             position: 'relative',
             opacity: containerOpacity
         }}>
-            {/* [新增] 剩余牌数徽章 */}
             {showBadge && (
                 <div style={styles.cardCountBadge}>
                     {cardCount}
@@ -596,16 +589,45 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
     );
 };
 
+// [关键修改] 对局记录面板：支持折叠 + 透明度优化
 export const GameLogPanel = ({ logs }) => {
+    const [isCollapsed, setIsCollapsed] = useState(false); // 默认展开
     const endRef = useRef(null);
-    useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [logs]);
+
+    // 只有在展开状态下才自动滚动到底部
+    useEffect(() => {
+        if (!isCollapsed) {
+            endRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [logs, isCollapsed]);
 
     return (
-        <div style={styles.gameLogPanel}>
+        <div 
+            style={{
+                ...styles.gameLogPanel,
+                // [动态样式] 控制高度和透明度
+                height: isCollapsed ? 36 : 140, 
+                background: isCollapsed ? 'rgba(0, 0, 0, 0.2)' : 'rgba(0, 0, 0, 0.35)', // 收起时更透明
+                cursor: 'pointer' // 鼠标手势
+            }}
+            onClick={() => setIsCollapsed(!isCollapsed)} // 点击切换状态
+        >
             <div style={styles.logHeader}>
-                <History size={16} color="#f1c40f"/> <span style={{color:'#fff', fontWeight:'bold'}}>对局记录</span>
+                <History size={14} color="#f1c40f"/> 
+                <span style={{color:'#fff', fontWeight:'bold', flex: 1}}>
+                    对局记录
+                </span>
+                {/* 右侧小箭头 */}
+                {isCollapsed ? <ChevronDown size={14} color="#ccc"/> : <ChevronUp size={14} color="#ccc"/>}
             </div>
-            <div style={styles.logList}>
+            
+            {/* 内容区域 */}
+            <div style={{
+                ...styles.logList, 
+                // [动态样式] 折叠时隐藏内容，防止重叠
+                opacity: isCollapsed ? 0 : 1,
+                pointerEvents: isCollapsed ? 'none' : 'auto'
+            }}>
                 {logs.map((log, i) => (
                     <div key={i} style={styles.logItem}>
                         <span style={styles.logTime}>[{log.time.split(' ')[0]}]</span>
@@ -1107,6 +1129,9 @@ export const GameScreen = ({
     const dragStartMode = useRef(true); // true = select, false = deselect
 
     const handleTouchStart = (e) => {
+        // [关键修改] 阻止默认事件，防止后续触发 click/mousedown 导致双重操作
+        if (e.cancelable) e.preventDefault();
+        
         isDragging.current = true;
         const touch = e.touches[0];
         const container = handContainerRef.current;
@@ -1907,7 +1932,9 @@ FILE PATH: client\src\styles.js
 // [完整版] 包含所有原有布局、拇指热区、以及新增的滑动选牌支持和剩余牌数徽章
 
 export const styles = {
+  // ============================
   // 全局容器
+  // ============================
   container: { 
       height: '100dvh', // 使用 100dvh 自动适配动态地址栏
       width: '100vw', 
@@ -1920,7 +1947,9 @@ export const styles = {
       overflow: 'hidden' 
   },
   
-  // --- 登录页卡片 ---
+  // ============================
+  // 登录页 (Login Screen)
+  // ============================
   loginCard: { 
       background: 'white', 
       borderRadius: 24, 
@@ -2013,7 +2042,9 @@ export const styles = {
       boxShadow: '0 10px 25px rgba(44, 62, 80, 0.25)' 
   },
 
-  // --- 游戏界面样式 ---
+  // ============================
+  // 游戏界面 (Game Screen)
+  // ============================
 
   gameTable: { 
       height: '100dvh', // 使用 100dvh
@@ -2116,38 +2147,77 @@ export const styles = {
       maxWidth: 50 
   },
   
+  // [修改] 左上角日志面板 (GameLogPanel) - 支持折叠动画
   gameLogPanel: { 
       position: 'absolute', 
-      top: 60,  
+      top: 50, 
       left: 10, 
-      width: 180, 
-      height: 120, 
-      background: 'transparent', 
-      borderRadius: 0, 
-      padding: 5, 
+      width: 200, 
+      // 高度在 JSX 中动态控制，这里设默认值
+      // height: 140, 
+      
+      // [关键修改] 背景默认改为更透明 (0.35)，组件内动态控制
+      background: 'rgba(0, 0, 0, 0.35)', 
+      
+      borderRadius: 10, 
+      padding: '8px 12px', 
+      border: '1px solid rgba(255,255,255,0.1)',
+      backdropFilter: 'blur(5px)',
+      
       display: 'flex', 
       flexDirection: 'column', 
       zIndex: 5, 
-      backdropFilter: 'none', 
-      border: 'none', 
-      pointerEvents: 'none',
-      textShadow: '0 1px 2px rgba(0,0,0,0.8)' 
+      pointerEvents: 'auto', 
+      boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+      
+      // [关键修改] 增加过渡动画，让折叠更丝滑
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      overflow: 'hidden' // 防止折叠时内容溢出
   },
-  logHeader: { display: 'none' }, 
-  logList: { flex: 1, overflowY: 'hidden', display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11 },
-  logItem: { lineHeight: 1.2, display: 'flex', alignItems: 'flex-start', color: 'rgba(255,255,255,0.7)' },
+  
+  logHeader: { 
+      display: 'flex', 
+      alignItems: 'center', 
+      gap: 5, 
+      fontSize: 12, 
+      borderBottom: '1px solid rgba(255,255,255,0.2)', 
+      paddingBottom: 4, 
+      marginBottom: 4 
+  }, 
+  
+  logList: { 
+      flex: 1, 
+      overflowY: 'auto', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      gap: 4, 
+      fontSize: 12,
+      // 增加透明度过渡
+      transition: 'opacity 0.2s ease-in-out',
+      maskImage: 'linear-gradient(to bottom, transparent, black 10%)',
+      WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 10%)'
+  },
+  
+  logItem: { 
+      lineHeight: 1.4, 
+      display: 'flex', 
+      alignItems: 'flex-start', 
+      color: '#ecf0f1',
+      fontSize: 12,
+      textShadow: '0 1px 1px rgba(0,0,0,0.8)'
+  },
+  
   logTime: { display: 'none' },
   
   tableHeader: { 
       padding: '4px 10px', 
-      paddingTop: 'calc(4px + env(safe-area-inset-top))', 
-      paddingLeft: 'max(4px, env(safe-area-inset-left))', 
       display: 'flex', 
       justifyContent: 'space-between', 
       alignItems:'flex-start', 
       zIndex: 20,
       width: '100%',
-      pointerEvents: 'none' 
+      pointerEvents: 'none',
+      boxSizing: 'border-box' 
   },
   
   roomBadgeContainer: {
@@ -2209,19 +2279,20 @@ export const styles = {
   playerScore: { fontSize: 9, color: '#f1c40f', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, marginTop: 1 },
   turnProgress: { position: 'absolute', bottom: 0, left: 0, height: 4, background: '#f1c40f', width: '100%', animation: 'progress 15s linear forwards' },
   
-  // [关键] HandArea 增加 touchAction: none 以支持滑动选牌
+  // HandArea
   handArea: { 
       position: 'absolute', 
-      bottom: 10,             
+      bottom: 5,              
       left: 65,
       right: 10, 
-      height: 90, 
+      height: 160,            
       display: 'flex', 
       justifyContent:'flex-start', 
-      alignItems: 'flex-end',
+      alignItems: 'flex-end', 
       zIndex: 20,
       touchAction: 'none', 
-      pointerEvents: 'auto'
+      pointerEvents: 'auto',
+      paddingBottom: 10       
   },
   
   card: { 
@@ -2245,6 +2316,7 @@ export const styles = {
   modalOverlay: { position: 'fixed', top:0, left:0, right:0, bottom:0, background: 'rgba(0,0,0,0.85)', display:'flex', justifyContent:'center', alignItems:'center', zIndex: 99, backdropFilter: 'blur(8px)' },
   modalContent: { background: 'white', padding: 60, borderRadius: 30, textAlign: 'center', boxShadow: '0 30px 80px rgba(0,0,0,0.6)', animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)' },
   
+  // 大厅页 (Lobby)
   lobbyCard: { background: 'white', padding: 40, borderRadius: 20, width: '1000px', maxWidth: '95vw', minHeight: '600px', display: 'flex', flexDirection: 'column', boxShadow: '0 30px 60px rgba(0,0,0,0.5)' },
   lobbyHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30, paddingBottom: 20, borderBottom: '1px solid #eee' },
   tag: { background: '#f0f9f4', color: '#27ae60', padding: '5px 10px', borderRadius: 20, fontSize: 14, display: 'flex', alignItems: 'center', gap: 5 },
@@ -2550,6 +2622,40 @@ const CardRules = {
         if (base === 0) return 14; // A
         if (base === 1) return 15; // 2
         return base + 1; // 3 => 3
+    },
+    
+    // [新增] 辅助：点数转显示文本
+    getPointText: (point) => {
+        if (point <= 10) return point.toString();
+        if (point === 11) return 'J';
+        if (point === 12) return 'Q';
+        if (point === 13) return 'K';
+        if (point === 14) return 'A';
+        if (point === 15) return '2';
+        if (point === 16) return '小王';
+        if (point === 17) return '大王';
+        return '?';
+    },
+    
+    // [新增] 辅助：将分析结果转为人类可读文本
+    getAnalysisText: (analysisResult) => {
+        if (!analysisResult || analysisResult.type === 'INVALID') return '未知牌型';
+        
+        const pt = CardRules.getPointText(analysisResult.val);
+        
+        switch (analysisResult.type) {
+            case 'SINGLE': return `单张 ${pt}`;
+            case 'PAIR': return `对 ${pt}`;
+            case 'TRIPLE': return `三张 ${pt}`;
+            case 'LIANDUI': return `${analysisResult.len/2}连对 (${pt}起)`;
+            case 'AIRPLANE': return `飞机 (${pt}起)`;
+            case '510K_MIXED': return '杂 510K';
+            case '510K_PURE': return '纯 510K';
+            case 'BOMB_STD': return `${analysisResult.len}炸 (${pt})`;
+            case 'BOMB_MAX': return `至尊 ${analysisResult.len}炸 (${pt})`;
+            case 'BOMB_KING': return '天王炸!';
+            default: return '未知';
+        }
     },
 
     // 获取牌的分数 (5=5, 10=10, K=10)
@@ -2932,7 +3038,26 @@ class GameManager {
                         this._handleWin(result, botPlayer.id);
                     } else {
                         // 正常出牌后广播
-                        this._broadcastUpdate();
+                        // [修改] playCards 内部已经广播了，如果是AI调用的，确保不需要重复广播
+                        // 但 playCards 内部对于非赢的情况只在 Socket 事件里广播，这里需要手动广播吗？
+                        // 不，playCards 如果是 socket 触发的，socket 会广播。
+                        // 如果是这里触发的，playCards 返回 success，我们需要广播。
+                        
+                        // 由于 playCards 本身不负责广播给房间（它只负责逻辑），
+                        // Socket 代码里调用 playCards 后会调用 broadcastGameState。
+                        // 这里我们也要模拟这个过程。
+                        
+                        // [修正] playCards 确实只返回结果。所以这里需要广播。
+                        // 为了保持一致性，我们在 playCards 内部添加了生成 Log 的逻辑，
+                        // 所以我们只需要在这里调用 _broadcastUpdate 并附带 result 中的 log 信息即可。
+                        
+                        // 等等，playCards 现在返回的是 {success, ...}
+                        // 刚才我在 playCards 里还没加 log 生成，等下在下面加。
+                        
+                        // 暂时先手动生成 log
+                        const analysis = CardRules.analyze(cardsToPlay, this.config.deckCount);
+                        const desc = CardRules.getAnalysisText(analysis);
+                        this._broadcastUpdate(`${botPlayer.name}: ${desc}`);
                     }
                 } else {
                     console.error(`[Bot Error] Play failed: ${result.error}`);
@@ -2985,10 +3110,13 @@ class GameManager {
         const result = this.playCards(botPlayer.id, minCard);
         if (result.success) {
             if (!botPlayer.isBot) this.io.to(botPlayer.id).emit('hand_update', this.gameState.hands[botPlayer.id]);
-            this._broadcastUpdate();
+            
+            const analysis = CardRules.analyze(minCard, this.config.deckCount);
+            const desc = CardRules.getAnalysisText(analysis);
+            this._broadcastUpdate(`${botPlayer.name}: ${desc} (系统)`);
         } else {
              // 连最小的牌都出不出去？（理论不应该），只能跳过了
-             this._forcePass(botPlayer); // 实际上如果是新回合不能 pass，但这属于死局保护了
+             this._forcePass(botPlayer); 
         }
     }
 
@@ -3003,7 +3131,7 @@ class GameManager {
     _forcePass(botPlayer) {
         const result = this.passTurn(botPlayer.id);
         if (result.success) {
-            this._broadcastUpdate('PASS');
+            this._broadcastUpdate(`${botPlayer.name}: 不要`);
         } else {
             console.error("[Bot Critical] Failed to pass turn:", result.error);
             // 如果连 Pass 都失败，可能游戏状态有问题，尝试强制流转
@@ -3064,6 +3192,11 @@ class GameManager {
                 this.gameState.finishedRank.push(playerId);
             }
         }
+        
+        // [新增] 即使在 Socket 层会广播，我们也在这里准备好日志信息
+        const analysis = CardRules.analyze(cards, this.config.deckCount);
+        const cardDesc = CardRules.getAnalysisText(analysis);
+        const logText = `${currPlayer.name}: ${cardDesc}`;
 
         const activeCount = this._getActivePlayerCount();
         
@@ -3075,7 +3208,8 @@ class GameManager {
                 isRoundOver: true,
                 roundResult,
                 cardsPlayed: cards,
-                pendingPoints: this.gameState.pendingTablePoints
+                pendingPoints: this.gameState.pendingTablePoints,
+                logText // 返回日志给调用者
             };
         }
 
@@ -3087,7 +3221,8 @@ class GameManager {
             success: true, 
             isRoundOver: false,
             cardsPlayed: cards,
-            pendingPoints: this.gameState.pendingTablePoints
+            pendingPoints: this.gameState.pendingTablePoints,
+            logText // 返回日志给调用者
         };
     }
 
@@ -3131,7 +3266,11 @@ class GameManager {
         this._resetTimer(); 
         this._checkAndRunBot();
 
-        return { success: true, turnCleared };
+        return { 
+            success: true, 
+            turnCleared,
+            logText: `${currPlayer.name}: 不要`
+        };
     }
 
     _clearTimer() {
@@ -3171,16 +3310,19 @@ class GameManager {
             if (result.success) {
                 this.io.to(currPlayer.id).emit('hand_update', this.gameState.hands[currPlayer.id]);
                 
+                // [新增] 使用 result 中的 logText
+                const logText = result.logText || `${currPlayer.name} 超时出牌`;
+                
                 if (result.isRoundOver) {
                      this._handleWin(result, currPlayer.id);
                 } else {
-                     this._broadcastUpdate(`${currPlayer.name} 超时，系统代打`);
+                     this._broadcastUpdate(logText);
                 }
             }
         } else {
             const result = this.passTurn(currPlayer.id);
             if (result.success) {
-                this._broadcastUpdate(`${currPlayer.name} 超时，自动过牌`);
+                this._broadcastUpdate(`${currPlayer.name}: 超时过牌`);
             }
         }
     }
@@ -3597,7 +3739,7 @@ io.on('connection', (socket) => {
     socket.on('start_game', ({ roomId }) => handleGameStart(roomId, false));
     socket.on('next_round', ({ roomId }) => handleGameStart(roomId, true));
 
-    // --- 出牌 ---
+// --- 出牌 ---
     socket.on('play_cards', ({ roomId, cards }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -3611,7 +3753,7 @@ io.on('connection', (socket) => {
         const currentHand = room.gameManager.gameState.hands[socket.id];
         io.to(socket.id).emit('hand_update', currentHand);
 
-        if (result.isWin) {
+        if (result.isRoundOver) { // 修正：从 isWin 改为 isRoundOver，保持与GameManager一致
             const rInfo = result.roundResult;
             if (rInfo.isGrandOver) {
                 io.to(roomId).emit('grand_game_over', { 
@@ -3628,7 +3770,9 @@ io.on('connection', (socket) => {
                 });
             }
         } else {
-            broadcastGameState(io, roomId, room);
+            // [新增] 广播状态时，附带出牌的日志文本
+            // result.logText 是 GameManager 新增的返回值 (例如 "张三: 三张 K")
+            broadcastGameState(io, roomId, room, result.logText);
         }
     });
 
@@ -3641,7 +3785,8 @@ io.on('connection', (socket) => {
         
         if (!result.success) return socket.emit('play_error', result.error);
 
-        broadcastGameState(io, roomId, room, "PASS");
+        // [修改] 广播状态时，附带 "xxx: 不要" 的日志
+        broadcastGameState(io, roomId, room, result.logText || "PASS");
     });
 
     // --- 断开连接 ---
