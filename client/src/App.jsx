@@ -27,7 +27,7 @@ export default function App() {
   const [username, setUsername] = useState('');
   const [roomId, setRoomId] = useState('');
   
-  // [修改] 增加 showCardCountMode: 0=不显示, 1=少于3张显示, 2=一直显示
+  // [修改] 增加 isTeamMode: false 默认值
   const [roomConfig, setRoomConfig] = useState({ 
       deckCount: 2,          
       maxPlayers: 4,         
@@ -35,7 +35,8 @@ export default function App() {
       turnTimeout: 60000,
       enableRankPenalty: false,    
       rankPenaltyScores: [30, 15],
-      showCardCountMode: 1 // 默认：少于3张显示
+      showCardCountMode: 1, // 默认：少于3张显示
+      isTeamMode: false     // [新增] 组队模式
   });
   
   const [isCreatorMode, setIsCreatorMode] = useState(false); 
@@ -64,7 +65,7 @@ export default function App() {
 
   const [turnRemaining, setTurnRemaining] = useState(60); 
 
-  // [新增] 用于存储每个玩家的剩余牌数
+  // 用于存储每个玩家的剩余牌数
   const [handCounts, setHandCounts] = useState({});
 
   const socketRef = useRef(null);
@@ -137,7 +138,7 @@ export default function App() {
         setGameState('GAME');
         setTurnRemaining(60);
         setPlayersInfo({});
-        // [新增] 初始牌数
+        // 初始牌数
         if (data.handCounts) setHandCounts(data.handCounts);
         SoundManager.play('deal');
     });
@@ -163,7 +164,7 @@ export default function App() {
         if (data.scores) setPlayerScores(data.scores);
         if (data.playersInfo) setPlayersInfo(data.playersInfo);
         
-        // [新增] 更新手牌数
+        // 更新手牌数
         if (data.handCounts) setHandCounts(data.handCounts);
 
         if (data.finishedRank) setFinishedRank(data.finishedRank);
@@ -224,6 +225,12 @@ export default function App() {
   const handleAddBot = () => socketRef.current.emit('add_bot', { roomId });
   
   const handleToggleAutoPlay = () => socketRef.current.emit('toggle_auto_play', { roomId });
+
+  // [新增] 处理换座
+  const handleSwitchSeat = (index1, index2) => {
+      if (!isCreatorMode && !players.find(p=>p.id===mySocketId)?.isHost) return;
+      socketRef.current.emit('switch_seat', { roomId, index1, index2 });
+  };
 
   const updateSelection = (cardVal, forceSelect = null) => {
     setSelectedCards(prev => {
@@ -293,14 +300,15 @@ export default function App() {
       {gameState === 'LOBBY' && <LobbyScreen {...{
           roomId, roomConfig, players, mySocketId, 
           handleStartGame, 
-          handleAddBot 
+          handleAddBot,
+          handleSwitchSeat // [新增] 传递给子组件
       }} />}
       
       {gameState === 'GAME' && <GameScreen {...{
           roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
           infoMessage, winner: null, playerScores, playersInfo, pendingPoints, gameLogs, sortMode, 
           mySocketId, roundResult, grandResult, roomConfig,
-          turnRemaining, finishedRank, handCounts, // [修改] 传递 handCounts
+          turnRemaining, finishedRank, handCounts, 
           toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
           handleToggleAutoPlay 
       }} />}

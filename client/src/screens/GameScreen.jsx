@@ -1,11 +1,11 @@
 // 游戏主界面 - 深度适配移动端布局，增加了全屏按钮
-// [完整无删减版]
+// [完整无删减版] + 组队分数结算展示
 import React, { useState, useRef, useEffect } from 'react';
-import { Coins, Layers, Crown, Clock, Bot, Zap, Maximize, Minimize } from 'lucide-react';
+import { Coins, Layers, Crown, Clock, Bot, Zap, Maximize, Minimize, Shield, Users } from 'lucide-react';
 import { styles } from '../styles.js'; 
 import { Card, MiniCard, PlayerAvatar, GameLogPanel } from '../components/BaseUI.jsx';
-import TimerComponent from '../components/CountDownTimer.jsx'; // 修正导入路径
-import { calculateCardSpacing, getCardIndexFromTouch } from '../utils/cardLogic.js'; // 引入滑动计算辅助
+import TimerComponent from '../components/CountDownTimer.jsx'; 
+import { calculateCardSpacing, getCardIndexFromTouch } from '../utils/cardLogic.js'; 
 import SoundManager from '../utils/SoundManager.js';
 
 export const GameScreen = ({ 
@@ -13,7 +13,7 @@ export const GameScreen = ({
     infoMessage: serverInfoMessage, winner, playerScores, playersInfo, pendingPoints, gameLogs, sortMode,
     mySocketId, roundResult, grandResult, roomConfig,
     turnRemaining, finishedRank = [], 
-    handCounts = {}, // [新增] 接收手牌数
+    handCounts = {}, 
     toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
     handleToggleAutoPlay 
 }) => {
@@ -29,7 +29,7 @@ export const GameScreen = ({
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    const handAreaWidth = dimensions.width; // 使用动态宽度
+    const handAreaWidth = dimensions.width; 
     const cardSpacing = calculateCardSpacing(myHand.length, handAreaWidth);
     
     const myInfo = (playersInfo && playersInfo[mySocketId]) || {};
@@ -44,18 +44,35 @@ export const GameScreen = ({
 
     const [isFullScreen, setIsFullScreen] = useState(false);
 
-    // [修改] 获取当前正在操作的玩家名字，用于显示“等待 xxx”
     const currentTurnPlayer = players.find(p => p.id === currentTurnId);
     const waitingText = currentTurnPlayer ? `等待 ${currentTurnPlayer.name}...` : '等待中...';
+
+    // --- 组队积分计算辅助函数 ---
+    const getTeamScores = () => {
+        let redScore = 0;
+        let blueScore = 0;
+        let hasTeams = false;
+
+        players.forEach(p => {
+            const pInfo = playersInfo[p.id];
+            const score = playerScores[p.id] || 0;
+            if (pInfo && pInfo.team !== undefined && pInfo.team !== null) {
+                hasTeams = true;
+                if (pInfo.team === 0) redScore += score;
+                else if (pInfo.team === 1) blueScore += score;
+            }
+        });
+
+        return { hasTeams, redScore, blueScore };
+    };
 
     // --- 滑动选牌逻辑 ---
     const handContainerRef = useRef(null);
     const lastTouchedIndex = useRef(null);
     const isDragging = useRef(false);
-    const dragStartMode = useRef(true); // true = select, false = deselect
+    const dragStartMode = useRef(true); 
 
     const handleTouchStart = (e) => {
-        // [关键修改] 阻止默认事件，防止后续触发 click/mousedown 导致双重操作
         if (e.cancelable) e.preventDefault();
         
         isDragging.current = true;
@@ -68,20 +85,19 @@ export const GameScreen = ({
         const cardVal = myHand[index];
 
         if (cardVal !== undefined) {
-            // 决定起始模式
             dragStartMode.current = !selectedCards.includes(cardVal);
             lastTouchedIndex.current = index;
             
             const isSelected = selectedCards.includes(cardVal);
             if (isSelected !== dragStartMode.current) {
-                 handleMouseDown(cardVal); // 触发 toggle
+                 handleMouseDown(cardVal); 
                  if (navigator.vibrate) navigator.vibrate(5);
             }
         }
     };
 
     const handleTouchMove = (e) => {
-        if (e.cancelable) e.preventDefault(); // 防止滚动
+        if (e.cancelable) e.preventDefault(); 
         if (!isDragging.current) return;
 
         const touch = e.touches[0];
@@ -89,7 +105,6 @@ export const GameScreen = ({
         if (!container) return;
 
         const rect = container.getBoundingClientRect();
-        // 增加一点 Y 轴容错，防止手指稍微滑出就断触
         if (touch.clientY < rect.top - 100 || touch.clientY > rect.bottom + 50) return;
 
         const index = getCardIndexFromTouch(touch.clientX, rect.left, cardSpacing, myHand.length);
@@ -99,7 +114,6 @@ export const GameScreen = ({
             const cardVal = myHand[index];
             if (cardVal !== undefined) {
                 const isSelected = selectedCards.includes(cardVal);
-                // 只有当牌的状态与我们想要的目标状态不一致时，才触发 toggle
                 if (isSelected !== dragStartMode.current) {
                     handleMouseDown(cardVal); 
                     if (navigator.vibrate) navigator.vibrate(5);
@@ -142,13 +156,10 @@ export const GameScreen = ({
     };
 
     // --- 玩家位置计算逻辑 ---
-    // 目标：自己(左下)，其他人(左 -> 上 -> 右)
-    // 约束：左右最多2个，不能重叠，剩下放上面
     const renderPlayers = () => {
         const myIndex = players.findIndex(p => p.id === mySocketId);
         const safeMyIndex = myIndex === -1 ? 0 : myIndex;
         
-        // 1. 获取除自己以外的对手列表，按顺序排列
         const otherPlayers = [];
         for (let i = 1; i < players.length; i++) {
             const idx = (safeMyIndex + i) % players.length;
@@ -158,36 +169,28 @@ export const GameScreen = ({
         const layoutConfig = [];
         const total = otherPlayers.length;
 
-        // 2. 决定各区域人数
-        // 左边 (Left), 上面 (Top), 右边 (Right)
         let countL = 0, countT = 0, countR = 0;
 
         if (total === 1) { countT = 1; }
-        else if (total === 2) { countL = 1; countR = 1; } // 铁三角布局
-        else if (total === 3) { countL = 1; countT = 1; countR = 1; } // 矩形布局
-        else if (total === 4) { countL = 1; countT = 2; countR = 1; } // 避免侧边拥挤，上方放2个
-        else if (total === 5) { countL = 2; countT = 1; countR = 2; } // 侧边开始放2个
+        else if (total === 2) { countL = 1; countR = 1; } 
+        else if (total === 3) { countL = 1; countT = 1; countR = 1; } 
+        else if (total === 4) { countL = 1; countT = 2; countR = 1; } 
+        else if (total === 5) { countL = 2; countT = 1; countR = 2; } 
         else {
-            // 人数 >= 6：侧边锁死2个，剩下的全去上面
             countL = 2;
             countR = 2;
             countT = total - 4;
         }
 
-        // 3. 切分数组
         const leftGroup = otherPlayers.slice(0, countL);
         const topGroup = otherPlayers.slice(countL, countL + countT);
         const rightGroup = otherPlayers.slice(countL + countT);
 
-        // 4. 生成坐标
-        // 左侧组：垂直分布，倒计时在右侧
         leftGroup.forEach((p, i) => {
-            // 逆时针出牌顺序下，优化视觉流转
             const topPos = countL === 1 ? '40%' : (i === 0 ? '55%' : '35%'); 
             layoutConfig.push({ p, pos: { top: topPos, left: 30, transform: 'translateY(-50%)' }, timerPos: 'right' });
         });
 
-        // 顶部组：水平分布，倒计时在下方
         topGroup.forEach((p, i) => {
             let leftPos;
             if (countT === 1) {
@@ -201,13 +204,11 @@ export const GameScreen = ({
             layoutConfig.push({ p, pos: { top: 10, left: leftPos, transform: 'translateX(-50%)' }, timerPos: 'bottom' });
         });
 
-        // 右侧组：垂直分布，倒计时在左侧
         rightGroup.forEach((p, i) => {
             const topPos = countR === 1 ? '40%' : (i === 0 ? '35%' : '55%');
             layoutConfig.push({ p, pos: { top: topPos, right: 10, transform: 'translateY(-50%)' }, timerPos: 'left' });
         });
 
-        // 添加自己 (固定在左下角)，hideTimer=true 因为要在按钮中间显示
         const me = players[safeMyIndex];
         const allItems = [
             { p: me, pos: { bottom: 25, left: 20, zIndex: 100 }, hideTimer: true }, 
@@ -220,6 +221,9 @@ export const GameScreen = ({
             const isAuto = info.isAutoPlay;
             const rankIndex = finishedRank ? finishedRank.indexOf(p.id) : -1;
             const finishedRankVal = rankIndex !== -1 ? rankIndex + 1 : null;
+            
+            // [关键] 提取 Team
+            const team = info.team;
 
             return (
                 <div key={p.id} style={{...avatarStyleOverride, position: 'absolute', ...pos}}> 
@@ -232,10 +236,10 @@ export const GameScreen = ({
                         remainingSeconds={turnRemaining}
                         rank={finishedRankVal}
                         timerPosition={timerPos}
-                        hideTimer={hideTimer} // [新增]
-                        // [新增] 传递牌数和配置
+                        hideTimer={hideTimer} 
                         cardCount={handCounts[p.id] || 0}
                         showCardCountMode={roomConfig.showCardCountMode}
+                        team={team} // [新增] 传递队伍信息
                     />
                     <div style={{position: 'absolute', top: -10, right: -10, display: 'flex', gap: 5}}>
                         {isBot && <div style={styles.statusBadgeBot}><Bot size={12}/> AI</div>}
@@ -246,8 +250,31 @@ export const GameScreen = ({
         });
     };
 
+    // [新增] 渲染结算面板的队伍分数栏
+    const renderTeamScoreBoard = () => {
+        const { hasTeams, redScore, blueScore } = getTeamScores();
+        if (!hasTeams) return null;
+
+        return (
+            <div style={{
+                display: 'flex', justifyContent: 'center', gap: 20, marginBottom: 20, 
+                padding: '10px', background: '#f0f3f5', borderRadius: 12
+            }}>
+                <div style={{display:'flex', flexDirection:'column', alignItems:'center', color:'#e74c3c'}}>
+                    <div style={{fontSize: 12, fontWeight: 'bold'}}><Shield size={12} fill="currentColor"/> 红队总分</div>
+                    <div style={{fontSize: 24, fontWeight: 'bold'}}>{redScore}</div>
+                </div>
+                <div style={{width:1, background:'#ccc'}}></div>
+                <div style={{display:'flex', flexDirection:'column', alignItems:'center', color:'#3498db'}}>
+                    <div style={{fontSize: 12, fontWeight: 'bold'}}><Shield size={12} fill="currentColor"/> 蓝队总分</div>
+                    <div style={{fontSize: 24, fontWeight: 'bold'}}>{blueScore}</div>
+                </div>
+            </div>
+        );
+    };
+
     return (
-        <div style={styles.gameTable} onMouseUp={() => { /* Global Mouse Up Handled in App */ }}>
+        <div style={styles.gameTable} onMouseUp={() => { }}>
             <div style={styles.gameSafeArea}>
                 
                 <div className="gameLogPanel">
@@ -255,7 +282,6 @@ export const GameScreen = ({
                 </div>
 
                 <div style={styles.tableHeader}>
-                    {/* [修改] 左上角区域：房间号 + 托管按钮 */}
                     <div style={styles.roomBadgeContainer}>
                         <div style={styles.roomBadge}>Room {roomId}</div>
                         
@@ -282,7 +308,6 @@ export const GameScreen = ({
                         </button>
                     </div>
 
-                    {/* 右上角按钮组 */}
                     <div style={{display:'flex', gap: 10, marginLeft: 'auto'}}>
                         <button 
                             style={{...styles.glassButton, padding: '8px 12px', pointerEvents: 'auto'}} 
@@ -298,7 +323,6 @@ export const GameScreen = ({
                     </div>
                 </div>
 
-                {/* 新的中间计分板位置 */}
                 <div style={styles.scoreBoard}>
                     <div style={{fontSize: 10, opacity: 0.8, textTransform:'uppercase'}}>POINTS</div>
                     <div style={{fontSize: 24, fontWeight: 'bold', color: '#f1c40f', display:'flex', alignItems:'center', justifyContent:'center', gap:5}}>
@@ -316,6 +340,10 @@ export const GameScreen = ({
                                 <>
                                     <Crown size={80} color="#e74c3c" style={{marginBottom: 20}} />
                                     <h2 style={{fontSize: 32, marginBottom: 10, color:'#2c3e50'}}>最终冠军: {grandResult.grandWinner}</h2>
+                                    
+                                    {/* [新增] 队伍总分展示 */}
+                                    {renderTeamScoreBoard()}
+
                                     <button style={{...styles.primaryButton, fontSize: 18}} onClick={handleStartGame}>重新开始</button>
                                 </>
                             ) : roundResult ? (
@@ -325,6 +353,9 @@ export const GameScreen = ({
                                     <div style={{fontSize: 20}}>胜者: <span style={{color:'#27ae60'}}>{roundResult.roundWinner}</span></div>
                                     <div style={{fontSize: 32, fontWeight:'bold', color:'#f1c40f', margin:'10px 0'}}>+{roundResult.pointsEarned} 分</div>
                                     
+                                    {/* [新增] 队伍总分展示 */}
+                                    {renderTeamScoreBoard()}
+
                                     <div style={{
                                         color:'#666', fontSize:14, marginBottom:30, 
                                         whiteSpace: 'pre-wrap', lineHeight: '1.6', 
@@ -341,7 +372,6 @@ export const GameScreen = ({
                     </div>
                 )}
 
-                {/* 出牌区 - 绝对居中 */}
                 <div style={styles.tableCenter}>
                     {lastPlayed.length > 0 && (
                         <div style={{animation: 'popIn 0.3s'}}>
@@ -353,7 +383,6 @@ export const GameScreen = ({
                     )}
                 </div>
 
-                {/* 玩家区域 - 绝对定位 */}
                 {renderPlayers()}
 
                 <div 
@@ -362,10 +391,8 @@ export const GameScreen = ({
                         ...styles.handArea, 
                         opacity: amIAutoPlay ? 0.6 : 1, 
                         filter: amIAutoPlay ? 'grayscale(0.6)' : 'none',
-                        // [新增] 仅 amIAutoPlay 时禁用事件
                         pointerEvents: amIAutoPlay ? 'none' : 'auto' 
                     }}
-                    // [新增] 绑定 Touch 事件
                     onTouchStart={!amIAutoPlay ? handleTouchStart : undefined}
                     onTouchMove={!amIAutoPlay ? handleTouchMove : undefined}
                     onTouchEnd={!amIAutoPlay ? handleTouchEnd : undefined}
@@ -416,13 +443,11 @@ export const GameScreen = ({
                                         <>
                                             <button style={styles.passButton} onClick={handlePass}>不要</button>
                                             
-                                            {/* [修改] 自己的倒计时放在这里 (使用 inline 模式) */}
                                             <TimerComponent initialSeconds={turnRemaining} totalSeconds={60} position="inline" />
                                             
                                             <button style={styles.playButton} onClick={handlePlayCards}>出牌</button>
                                         </>
                                     ) : (
-                                        // [修改] 显示具体的等待人名
                                         <div style={styles.waitingBadge}><Clock size={20} className="spin" /> {waitingText}</div>
                                     )}
                                 </>

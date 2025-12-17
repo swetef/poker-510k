@@ -166,13 +166,54 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('room_info', data);
     });
 
-    // [新增] 切换托管
+    // 切换托管
     socket.on('toggle_auto_play', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
 
         room.gameManager.toggleAutoPlay(socket.id);
         broadcastGameState(io, roomId, room);
+    });
+
+    // [新增] 座位调整
+    socket.on('switch_seat', ({ roomId, index1, index2 }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+
+        // 1. 权限检查：必须是房主
+        const requestPlayer = room.players.find(p => p.id === socket.id);
+        if (!requestPlayer || !requestPlayer.isHost) {
+            return socket.emit('error_msg', '只有房主可以调整座位');
+        }
+
+        // 2. 边界检查
+        if (index1 < 0 || index1 >= room.players.length || index2 < 0 || index2 >= room.players.length) {
+            return;
+        }
+
+        // 3. 游戏进行中禁止调整
+        if (room.gameManager && room.gameManager.gameState) {
+             return socket.emit('error_msg', '游戏中无法调整座位');
+        }
+
+        // 4. 交换位置
+        const temp = room.players[index1];
+        room.players[index1] = room.players[index2];
+        room.players[index2] = temp;
+
+        // 5. 广播更新
+        const currentGrandScores = room.gameManager ? room.gameManager.grandScores : {};
+        if (Object.keys(currentGrandScores).length === 0) {
+            room.players.forEach(p => currentGrandScores[p.id] = 0);
+        }
+
+        const data = { 
+            roomId, 
+            config: room.config, 
+            players: room.players, 
+            grandScores: currentGrandScores 
+        };
+        io.to(roomId).emit('room_info', data);
     });
 
     // --- 游戏流程 ---
@@ -191,7 +232,9 @@ io.on('connection', (socket) => {
                 const hand = startInfo.hands[p.id];
                 io.to(p.id).emit('game_started', { 
                     hand: hand, 
-                    grandScores: room.gameManager.grandScores 
+                    grandScores: room.gameManager.grandScores,
+                    // [注意] 这里要带上牌数
+                    handCounts: room.gameManager.getPublicState().handCounts
                 });
             }
         });
@@ -221,7 +264,7 @@ io.on('connection', (socket) => {
         const currentHand = room.gameManager.gameState.hands[socket.id];
         io.to(socket.id).emit('hand_update', currentHand);
 
-        if (result.isRoundOver) { // 修正：从 isWin 改为 isRoundOver，保持与GameManager一致
+        if (result.isRoundOver) { 
             const rInfo = result.roundResult;
             if (rInfo.isGrandOver) {
                 io.to(roomId).emit('grand_game_over', { 
@@ -238,8 +281,7 @@ io.on('connection', (socket) => {
                 });
             }
         } else {
-            // [新增] 广播状态时，附带出牌的日志文本
-            // result.logText 是 GameManager 新增的返回值 (例如 "张三: 三张 K")
+            // 广播状态时，附带出牌的日志文本
             broadcastGameState(io, roomId, room, result.logText);
         }
     });
@@ -253,7 +295,6 @@ io.on('connection', (socket) => {
         
         if (!result.success) return socket.emit('play_error', result.error);
 
-        // [修改] 广播状态时，附带 "xxx: 不要" 的日志
         broadcastGameState(io, roomId, room, result.logText || "PASS");
     });
 
@@ -325,6 +366,3 @@ const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
     console.log(`>>> Server Running on port ${PORT}`);
 });
-
-
-

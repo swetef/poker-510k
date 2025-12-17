@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/17 14:56:02
+Project Context Generated at 2025/12/17 15:35:56
 
 
 ================================================================================
@@ -177,7 +177,7 @@ export default function App() {
   const [username, setUsername] = useState('');
   const [roomId, setRoomId] = useState('');
   
-  // [修改] 增加 showCardCountMode: 0=不显示, 1=少于3张显示, 2=一直显示
+  // [修改] 增加 isTeamMode: false 默认值
   const [roomConfig, setRoomConfig] = useState({ 
       deckCount: 2,          
       maxPlayers: 4,         
@@ -185,7 +185,8 @@ export default function App() {
       turnTimeout: 60000,
       enableRankPenalty: false,    
       rankPenaltyScores: [30, 15],
-      showCardCountMode: 1 // 默认：少于3张显示
+      showCardCountMode: 1, // 默认：少于3张显示
+      isTeamMode: false     // [新增] 组队模式
   });
   
   const [isCreatorMode, setIsCreatorMode] = useState(false); 
@@ -214,7 +215,7 @@ export default function App() {
 
   const [turnRemaining, setTurnRemaining] = useState(60); 
 
-  // [新增] 用于存储每个玩家的剩余牌数
+  // 用于存储每个玩家的剩余牌数
   const [handCounts, setHandCounts] = useState({});
 
   const socketRef = useRef(null);
@@ -287,7 +288,7 @@ export default function App() {
         setGameState('GAME');
         setTurnRemaining(60);
         setPlayersInfo({});
-        // [新增] 初始牌数
+        // 初始牌数
         if (data.handCounts) setHandCounts(data.handCounts);
         SoundManager.play('deal');
     });
@@ -313,7 +314,7 @@ export default function App() {
         if (data.scores) setPlayerScores(data.scores);
         if (data.playersInfo) setPlayersInfo(data.playersInfo);
         
-        // [新增] 更新手牌数
+        // 更新手牌数
         if (data.handCounts) setHandCounts(data.handCounts);
 
         if (data.finishedRank) setFinishedRank(data.finishedRank);
@@ -374,6 +375,12 @@ export default function App() {
   const handleAddBot = () => socketRef.current.emit('add_bot', { roomId });
   
   const handleToggleAutoPlay = () => socketRef.current.emit('toggle_auto_play', { roomId });
+
+  // [新增] 处理换座
+  const handleSwitchSeat = (index1, index2) => {
+      if (!isCreatorMode && !players.find(p=>p.id===mySocketId)?.isHost) return;
+      socketRef.current.emit('switch_seat', { roomId, index1, index2 });
+  };
 
   const updateSelection = (cardVal, forceSelect = null) => {
     setSelectedCards(prev => {
@@ -443,14 +450,15 @@ export default function App() {
       {gameState === 'LOBBY' && <LobbyScreen {...{
           roomId, roomConfig, players, mySocketId, 
           handleStartGame, 
-          handleAddBot 
+          handleAddBot,
+          handleSwitchSeat // [新增] 传递给子组件
       }} />}
       
       {gameState === 'GAME' && <GameScreen {...{
           roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
           infoMessage, winner: null, playerScores, playersInfo, pendingPoints, gameLogs, sortMode, 
           mySocketId, roundResult, grandResult, roomConfig,
-          turnRemaining, finishedRank, handCounts, // [修改] 传递 handCounts
+          turnRemaining, finishedRank, handCounts, 
           toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
           handleToggleAutoPlay 
       }} />}
@@ -792,6 +800,12 @@ FILE PATH: client\src\index.css
   -webkit-tap-highlight-color: transparent; 
 }
 
+/* [关键修复 0] 全局盒模型重置 */
+/* 必须加上这个！否则 padding 会导致 100% 宽度的元素溢出屏幕，导致全屏模式下按钮消失 */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 /* 链接样式 */
 a { font-weight: 500; color: #646cff; text-decoration: inherit; }
 a:hover { color: #535bf2; }
@@ -1002,32 +1016,23 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
       font-size: 14px !important;
       margin: 0 !important;
   }
-
-
-  /* --- 2.3 游戏页 (Game Table) --- */
-  .modal-content-wrapper {
-      padding: 24px !important; 
-      width: 85% !important;    
-      max-width: 340px !important;
-      border-radius: 20px !important;
-      z-index: 1000 !important; 
-  }
-  .modal-content-wrapper h2 { font-size: 22px !important; }
-  .modal-content-wrapper div { font-size: 15px !important; line-height: 1.6 !important; }
 }
 
 
 /* --- 3. 移动端横屏适配 (Landscape Overrides) --- */
 @media (max-width: 896px) and (orientation: landscape) {
     
+    /* [终极修复 1] 强制铺满屏幕，无视任何 margin，直接覆盖 */
     .mobile-layout-column {
-        flex-direction: row !important;
-        height: 100dvh !important; 
-        max-height: none !important;
+        position: fixed !important; /* 使用 fixed 强制占满视口 */
+        top: 0 !important;
+        left: 0 !important;
         width: 100% !important;
+        height: 100% !important;
         margin: 0 !important;
-        padding-left: max(15px, env(safe-area-inset-left)) !important; 
-        padding-right: max(15px, env(safe-area-inset-right)) !important; 
+        padding: 0 !important;
+        flex-direction: row !important;
+        z-index: 10;
     }
 
     /* --- [关键优化] 登录页 (Login) --- */
@@ -1038,70 +1043,77 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
 
     .mobile-login-right {
         width: 100% !important;
+        height: 100% !important;
         flex: 1 !important;
         border-radius: 0 !important;
-        margin-top: 0 !important;
+        margin: 0 !important;
         
-        /* [关键修复 1] 解决顶部被遮挡问题 */
-        /* 取消 center，使用 flex-start 让内容从顶部开始排列 */
+        /* 顶部对齐，防止被切 */
         justify-content: flex-start !important; 
         
-        /* 增加顶部内边距，确保内容不会贴着屏幕边缘 */
+        /* 增加内边距，确保内容安全 */
         padding-top: max(20px, env(safe-area-inset-top)) !important;
-        padding-bottom: 20px !important;
+        /* [修复] 底部增加大幅度 Padding，确保最下面的按钮不被手势条遮挡 */
+        padding-bottom: max(50px, env(safe-area-inset-bottom)) !important;
         padding-left: max(40px, env(safe-area-inset-left)) !important; 
         padding-right: max(40px, env(safe-area-inset-right)) !important; 
         
         overflow-y: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
     }
-
-    /* 限制一下表单内容的最大宽度 */
+    
     .mobile-login-right .formContent {
         max-width: 500px;
         margin: 0 auto;
         width: 100%;
+        /* 确保底部按钮能完整露出 */
+        padding-bottom: 20px !important;
     }
 
 
     /* --- [关键优化] 大厅页 (Lobby) --- */
 
-    /* [关键修复 2] 解决全屏下按钮消失 */
+    /* [关键修复 2] 彻底重构 Lobby 布局 */
     .lobbyCard.mobile-layout-column {
-        flex-direction: column !important; 
-        width: 100% !important;         
-        max-width: none !important;    
-        
-        /* 去除 margin，让它在全屏时完全铺满，避免高度溢出 */
-        margin: 0 !important;  
-        height: 100% !important;      
-        max-height: 100dvh !important; 
-        
-        border-radius: 0 !important; 
-        padding: 0 !important;
         background: transparent !important; 
+        border: none !important;
     }
     
     .mobile-lobby-content {
         background: white !important;
-        border-radius: 0 !important; /* 全屏铺满不需要圆角 */
+        border-radius: 0 !important; 
         height: 100% !important;
         width: 100% !important;
         border: none !important;
         box-shadow: none !important;
+        
+        /* 使用 Flex Column 布局 */
+        display: flex !important;
+        flex-direction: column !important;
     }
 
     .lobbyHeader {
+        flex: 0 0 auto !important; /* 头部固定高度 */
         padding: 10px 20px !important; 
-        /* 适配顶部安全区（刘海） */
-        padding-top: max(10px, env(safe-area-inset-top)) !important;
+        padding-top: max(15px, env(safe-area-inset-top)) !important;
+        background: #f8f9fa;
+        z-index: 20;
     }
 
     /* 玩家列表 Grid */
     .mobile-lobby-grid {
+        /* [核心修复] 中间区域自适应，允许收缩，允许滚动 */
+        flex: 1 1 auto !important;
+        min-height: 0 !important; /* 关键！允许 Flex 子项收缩到 0 */
+        
+        overflow-y: auto !important;
         display: grid !important;
         grid-template-columns: repeat(4, 1fr) !important; 
         gap: 10px !important;
         padding: 10px 20px !important;
+        padding-left: max(30px, env(safe-area-inset-left)) !important;
+        padding-right: max(30px, env(safe-area-inset-right)) !important;
         align-content: start !important;
     }
     
@@ -1123,18 +1135,22 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
 
     /* Footer 优化 */
     .mobile-lobby-footer {
-        position: static !important;
-        margin-top: auto !important;
-        
-        /* [关键修复] 强制不许收缩，防止被 grid 挤没 */
-        flex-shrink: 0 !important; 
-        
-        padding: 10px !important;
-        /* 适配底部安全区（横条） */
-        padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+        flex: 0 0 auto !important; /* 底部固定高度，不许被挤压 */
+        position: relative !important; /* 相对定位 */
+        z-index: 100 !important; /* 提高层级 */
         
         background: #f8f9fa !important;
-        z-index: 50 !important;
+        border-top: 1px solid #ddd !important;
+        
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        
+        /* [核心修复] 给底部留出足够的安全距离，防止被手势条遮挡按不到 */
+        padding-top: 10px !important;
+        padding-bottom: max(20px, env(safe-area-inset-bottom)) !important;
+        padding-left: max(20px, env(safe-area-inset-left)) !important;
+        padding-right: max(20px, env(safe-area-inset-right)) !important;
     }
 }
 
@@ -1602,44 +1618,135 @@ export const GameScreen = ({
 ================================================================================
 FILE PATH: client\src\screens\LobbyScreen.jsx
 ================================================================================
-// 大厅页 - 修复移动端溢出问题
+// 大厅页 - 支持房主换座 + 组队模式显示 + 修复移动端溢出
 
 import React from 'react';
-import { Target, Layers, User, Play, Clock, Bot } from 'lucide-react';
-import { styles } from '../styles.js'; // [修复] 增加 .js 后缀以确保解析正确
+import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown } from 'lucide-react';
+import { styles } from '../styles.js';
 
-export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleStartGame, handleAddBot }) => (
+export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleStartGame, handleAddBot, handleSwitchSeat }) => {
+    
+    // 判断自己是不是房主
+    const amIHost = players.find(p => p.id === mySocketId)?.isHost;
+    
+    // 判断是否开启了组队模式 (开关开启 且 人数是偶数)
+    const isTeamMode = roomConfig.isTeamMode && roomConfig.maxPlayers % 2 === 0;
+
+    return (
     <div style={styles.container}>
-      {/* [修改] 增加 mobile-layout-column 类名，并重构内部结构以支持 flex 滚动 */}
       <div style={styles.lobbyCard} className="mobile-layout-column">
           
-          {/* [关键修复] 增加 width: '100%' 确保在任何 flex 布局下都能撑满宽度 */}
           <div className="mobile-lobby-content" style={{display:'flex', flexDirection:'column', height:'100%', width: '100%', overflow:'hidden', borderRadius: 20}}>
             
-            {/* 头部：保持不变，固定在顶部 */}
+            {/* 头部信息 */}
             <div style={styles.lobbyHeader}>
-                <h2 style={{margin:0, fontSize: 24}}>房间: <span style={{fontFamily:'monospace', color:'#27ae60'}}>{roomId}</span></h2>
+                <div style={{display:'flex', alignItems:'center', gap: 10}}>
+                    <h2 style={{margin:0, fontSize: 24}}>房间: <span style={{fontFamily:'monospace', color:'#27ae60'}}>{roomId}</span></h2>
+                    {/* [新增] 组队模式标签 */}
+                    {isTeamMode && (
+                        <span style={{background:'#27ae60', color:'white', fontSize:12, padding:'2px 8px', borderRadius:10, display:'flex', alignItems:'center', gap:4}}>
+                            <Shield size={12}/> 组队模式
+                        </span>
+                    )}
+                </div>
                 <div style={{display:'flex', gap:15}}>
                     <span style={styles.tag}><Target size={14}/> 目标 {roomConfig.targetScore}</span>
-                    <span style={styles.tag}><Layers size={14}/> {roomConfig.deckCount}副牌</span>
+                    <span style={styles.tag}><Layers size={14}/> {roomConfig.deckCount}副</span>
                     <span style={styles.tag}><User size={14}/> {roomConfig.maxPlayers}人</span>
                 </div>
             </div>
 
-            {/* 中间：玩家列表 - [修改] 增加 mobile-lobby-grid 类名，支持滚动 */}
+            {/* 玩家列表区域 */}
             <div style={styles.playerGrid} className="mobile-lobby-grid">
-                {players.map((p,i)=>(
-                    <div key={i} style={{...styles.lobbyPlayer, borderColor: p.id===mySocketId ? '#27ae60' : '#eee', background: p.id===mySocketId ? '#f0fbf4' : 'white'}}>
-                        <div style={styles.avatarLarge}>
-                            {p.isBot ? <Bot size={40} /> : p.name[0]}
+                {players.map((p, i) => {
+                    // --- [新增] 组队模式视觉逻辑 ---
+                    let teamColor = '#eee'; // 默认边框
+                    let teamBg = 'white';   // 默认背景
+                    let teamName = null;
+                    
+                    if (isTeamMode) {
+                        const isRedTeam = i % 2 === 0; // 0, 2, 4... 红队
+                        teamColor = isRedTeam ? '#e74c3c' : '#3498db';
+                        teamBg = isRedTeam ? '#fdedec' : '#eaf2f8';
+                        teamName = isRedTeam ? '红队' : '蓝队';
+                    }
+
+                    // 自己的高亮处理 (在组队模式下叠加，普通模式下单独显示)
+                    const isMe = p.id === mySocketId;
+                    if (isMe && !isTeamMode) {
+                        teamBg = '#f0fbf4';
+                        teamColor = '#27ae60';
+                    }
+                    const borderWidth = isMe ? 3 : 2;
+
+                    return (
+                        <div key={p.id} style={{
+                            ...styles.lobbyPlayer, 
+                            borderColor: isMe ? '#2ecc71' : teamColor, 
+                            background: teamBg,
+                            borderWidth: borderWidth,
+                            position: 'relative'
+                        }}>
+                            {/* [新增] 组队角标 */}
+                            {teamName && (
+                                <div style={{
+                                    position: 'absolute', top: 0, left: 0, 
+                                    background: teamColor, color: 'white', 
+                                    fontSize: 10, padding: '2px 8px', 
+                                    borderBottomRightRadius: 8, borderTopLeftRadius: 8
+                                }}>
+                                    {teamName}
+                                </div>
+                            )}
+
+                            {/* --- [新增] 房主调位按钮 (所有模式通用) --- */}
+                            {amIHost && players.length > 1 && (
+                                <div style={{
+                                    position: 'absolute', right: 5, top: '50%', transform: 'translateY(-50%)',
+                                    display:'flex', flexDirection:'column', gap:4
+                                }}>
+                                    {/* 上移按钮 (非第一位显示) */}
+                                    {i > 0 && (
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); handleSwitchSeat(i, i - 1); }}
+                                            style={{
+                                                padding:4, borderRadius:4, border:'1px solid #ccc', 
+                                                background:'white', cursor:'pointer', lineHeight:0
+                                            }}
+                                            title="上移"
+                                        >
+                                            <ArrowUp size={14} color="#666"/>
+                                        </button>
+                                    )}
+                                    {/* 下移按钮 (非最后一位显示) */}
+                                    {i < players.length - 1 && (
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); handleSwitchSeat(i, i + 1); }}
+                                            style={{
+                                                padding:4, borderRadius:4, border:'1px solid #ccc', 
+                                                background:'white', cursor:'pointer', lineHeight:0
+                                            }}
+                                            title="下移"
+                                        >
+                                            <ArrowDown size={14} color="#666"/>
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            <div style={styles.avatarLarge}>
+                                {p.isBot ? <Bot size={40} /> : p.name[0]}
+                            </div>
+                            <div style={{fontWeight: 'bold', display:'flex', alignItems:'center', gap:5}}>
+                                {p.name}
+                                {p.isBot && <span style={{fontSize:10, background:'#eee', padding:'2px 5px', borderRadius:4}}>AI</span>}
+                            </div>
+                            {p.isHost && <span style={styles.hostBadge}>房主</span>}
                         </div>
-                        <div style={{fontWeight: 'bold', display:'flex', alignItems:'center', gap:5}}>
-                            {p.name}
-                            {p.isBot && <span style={{fontSize:10, background:'#eee', padding:'2px 5px', borderRadius:4}}>AI</span>}
-                        </div>
-                        {p.isHost && <span style={styles.hostBadge}>房主</span>}
-                    </div>
-                ))}
+                    );
+                })}
+                
+                {/* 虚拟空位 */}
                 {Array.from({length: roomConfig.maxPlayers - players.length}).map((_, i) => (
                     <div key={`empty-${i}`} style={{...styles.lobbyPlayer, borderStyle: 'dashed', opacity: 0.5}}>
                         <div style={{...styles.avatarLarge, background:'#f0f0f0', color:'#ccc'}}>?</div>
@@ -1648,7 +1755,7 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
                 ))}
             </div>
 
-            {/* 底部：按钮区 - [修改] 增加 mobile-lobby-footer 类名，固定在底部 */}
+            {/* 底部按钮 */}
             <div style={styles.lobbyFooter} className="mobile-lobby-footer">
                 {players.find(p=>p.id===mySocketId)?.isHost ? (
                     <div style={{display:'flex', gap: 15, justifyContent: 'center'}}>
@@ -1668,19 +1775,18 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
                     <div style={{color:'#999', fontSize: 14, display:'flex', alignItems:'center', gap:5}}><Clock size={16}/> 等待房主开始...</div>
                 )}
             </div>
-          
           </div>
       </div>
     </div>
-);
+    );
+};
 
 ================================================================================
 FILE PATH: client\src\screens\LoginScreen.jsx
 ================================================================================
-// 登录页 - 适配移动端，包含自动全屏逻辑 + 手动全屏按钮 + 剩余牌数配置
-// [完整无删减版] 
+// 登录页 - 适配移动端，包含自动全屏逻辑 + 手动全屏按钮 + 剩余牌数配置 + [新增]组队开关
 import React, { useState } from 'react'; 
-import { User, Monitor, RefreshCw, Plus, LogIn, Clock, Layers, Users, Target, Wifi, WifiOff, Award, Maximize, Minimize, Eye } from 'lucide-react'; 
+import { User, Monitor, RefreshCw, Plus, LogIn, Clock, Layers, Users, Target, Wifi, WifiOff, Award, Maximize, Minimize, Eye, Shield } from 'lucide-react'; 
 import { styles } from '../styles.js';
 
 export const LoginScreen = ({ 
@@ -1693,10 +1799,10 @@ export const LoginScreen = ({
     isConnected 
 }) => {
     
-    // [新增] 全屏状态管理
+    // 全屏状态管理
     const [isFullScreen, setIsFullScreen] = useState(false);
 
-    // [新增] 手动切换全屏
+    // 手动切换全屏
     const toggleFullScreen = () => {
         if (!document.fullscreenElement) {
             const docEl = document.documentElement;
@@ -1715,7 +1821,7 @@ export const LoginScreen = ({
         }
     };
 
-    // 尝试请求全屏的辅助函数 (用于点击进入房间时自动触发)
+    // 尝试请求全屏的辅助函数
     const tryEnterFullScreen = () => {
         try {
             if (!document.fullscreenElement) {
@@ -1733,13 +1839,11 @@ export const LoginScreen = ({
         }
     };
 
-    // 包装原本的 handleRoomAction
     const onActionClick = () => {
         tryEnterFullScreen(); 
         handleRoomAction();   
     };
 
-    // 渲染配置项的辅助函数 - 用于简化 JSX 嵌套，逻辑未变
     const renderConfigSlider = (icon, label, value, min, max, step, onChange, suffix = '') => (
         <div style={styles.configItem}>
             <div style={styles.configLabel}>
@@ -1769,7 +1873,6 @@ export const LoginScreen = ({
                     <h1 style={styles.brandTitle}>扑克对战</h1>
                     <div style={styles.brandSubtitle}>多人在线 · 自由规则 · 极速畅玩</div>
                     
-                    {/* 这个类名 hide-on-mobile 保证在手机竖屏时隐藏这些特性列表 */}
                     <div style={styles.featureList} className="hide-on-mobile">
                         <div style={styles.featureItem}>✨ 支持 2-12 人同台竞技</div>
                         <div style={styles.featureItem}>🚀 只有 1 副牌? 不，现在支持 8 副!</div>
@@ -1786,40 +1889,22 @@ export const LoginScreen = ({
                         alignItems: 'center',
                         marginBottom: 20
                     }}>
-                        {/* 左侧：全屏切换按钮 */}
                         <button 
                             onClick={toggleFullScreen}
                             style={{
-                                background: '#f8f9fa', 
-                                border: '1px solid #e1e4e8', 
-                                borderRadius: 20,
-                                padding: '6px 12px',
-                                cursor: 'pointer', 
-                                color: '#7f8c8d', 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                gap: 6,
-                                fontSize: 12, 
-                                fontWeight: 'bold',
-                                transition: 'all 0.2s'
+                                background: '#f8f9fa', border: '1px solid #e1e4e8', borderRadius: 20, padding: '6px 12px',
+                                cursor: 'pointer', color: '#7f8c8d', display: 'flex', alignItems: 'center', gap: 6,
+                                fontSize: 12, fontWeight: 'bold', transition: 'all 0.2s'
                             }}
                         >
                             {isFullScreen ? <Minimize size={14}/> : <Maximize size={14}/>}
                             <span>{isFullScreen ? '退出全屏' : '全屏模式'}</span>
                         </button>
 
-                        {/* 右侧：连接状态指示器 */}
                         <div style={{
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: 6, 
-                            fontSize: 12,
-                            padding: '6px 12px',
-                            borderRadius: 20,
-                            background: isConnected ? '#eafaf1' : '#fdedec',
-                            color: isConnected ? '#27ae60' : '#e74c3c',
-                            fontWeight: 'bold',
-                            border: `1px solid ${isConnected ? '#abebc6' : '#fadbd8'}`
+                            display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 12px', borderRadius: 20,
+                            background: isConnected ? '#eafaf1' : '#fdedec', color: isConnected ? '#27ae60' : '#e74c3c',
+                            fontWeight: 'bold', border: `1px solid ${isConnected ? '#abebc6' : '#fadbd8'}`
                         }}>
                             {isConnected ? <Wifi size={14}/> : <WifiOff size={14}/>}
                             {isConnected ? '已连接' : '连接中...'}
@@ -1828,41 +1913,18 @@ export const LoginScreen = ({
 
                     {/* 顶部 Tab 切换 */}
                     <div style={styles.tabs}>
-                        <button 
-                            style={!isCreatorMode ? styles.tabBtnActive : styles.tabBtn} 
-                            onClick={()=>setIsCreatorMode(false)}
-                        >
-                            加入房间
-                        </button>
-                        <button 
-                            style={isCreatorMode ? styles.tabBtnActive : styles.tabBtn} 
-                            onClick={()=>setIsCreatorMode(true)}
-                        >
-                            创建房间
-                        </button>
+                        <button style={!isCreatorMode ? styles.tabBtnActive : styles.tabBtn} onClick={()=>setIsCreatorMode(false)}>加入房间</button>
+                        <button style={isCreatorMode ? styles.tabBtnActive : styles.tabBtn} onClick={()=>setIsCreatorMode(true)}>创建房间</button>
                     </div>
 
                     <div style={styles.formContent}>
-                        {/* 基础信息输入 (昵称/房号) */}
                         <div style={styles.inputGroup}>
                             <User size={18} color="#7f8c8d" />
-                            <input 
-                                style={styles.input} 
-                                value={username} 
-                                onChange={e=>setUsername(e.target.value)} 
-                                placeholder="请输入你的昵称" 
-                                maxLength={10}
-                            />
+                            <input style={styles.input} value={username} onChange={e=>setUsername(e.target.value)} placeholder="请输入你的昵称" maxLength={10}/>
                         </div>
                         <div style={styles.inputGroup}>
                             <Monitor size={18} color="#7f8c8d" />
-                            <input 
-                                style={styles.input} 
-                                value={roomId} 
-                                onChange={e=>setRoomId(e.target.value)} 
-                                placeholder="请输入房间号 (如: 888)" 
-                                maxLength={6}
-                            />
+                            <input style={styles.input} value={roomId} onChange={e=>setRoomId(e.target.value)} placeholder="请输入房间号 (如: 888)" maxLength={6}/>
                         </div>
 
                         {/* 创建模式下的高级配置区 */}
@@ -1873,6 +1935,38 @@ export const LoginScreen = ({
                                     {renderConfigSlider(<Layers size={14}/>, "牌库数量", roomConfig.deckCount, 1, 8, 1, v=>setRoomConfig({...roomConfig, deckCount:v}), '副')}
                                     {renderConfigSlider(<Target size={14}/>, "获胜目标", roomConfig.targetScore, 500, 5000, 500, v=>setRoomConfig({...roomConfig, targetScore:v}), '分')}
                                     
+                                    {/* [新增] 组队对抗开关 */}
+                                    <div style={{...styles.configItem, marginTop: 10, padding: '10px', background: roomConfig.maxPlayers % 2 !== 0 ? '#f0f0f0' : '#e8f8f5', borderRadius: 8, opacity: roomConfig.maxPlayers % 2 !== 0 ? 0.6 : 1, gridColumn: '1 / -1'}}>
+                                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                            <div style={{display:'flex', alignItems:'center', gap:6, fontWeight:'600', color: roomConfig.maxPlayers % 2 !== 0 ? '#999' : '#27ae60'}}>
+                                                <Shield size={16} /> 组队对抗模式 (2v2, 3v3...)
+                                            </div>
+                                            <label style={{position:'relative', display:'inline-block', width:40, height:20}}>
+                                                <input 
+                                                    type="checkbox" 
+                                                    style={{opacity:0, width:0, height:0}}
+                                                    checked={roomConfig.isTeamMode && roomConfig.maxPlayers % 2 === 0}
+                                                    disabled={roomConfig.maxPlayers % 2 !== 0}
+                                                    onChange={(e) => setRoomConfig({...roomConfig, isTeamMode: e.target.checked})}
+                                                />
+                                                <span style={{
+                                                    position:'absolute', cursor: roomConfig.maxPlayers % 2 !== 0 ? 'not-allowed' : 'pointer', top:0, left:0, right:0, bottom:0, 
+                                                    backgroundColor: (roomConfig.isTeamMode && roomConfig.maxPlayers % 2 === 0) ? '#27ae60' : '#ccc', 
+                                                    transition:'.4s', borderRadius: 20
+                                                }}>
+                                                    <span style={{
+                                                        position:'absolute', content:"", height:16, width:16, left:2, bottom:2, 
+                                                        backgroundColor:'white', transition:'.4s', borderRadius:'50%',
+                                                        transform: (roomConfig.isTeamMode && roomConfig.maxPlayers % 2 === 0) ? 'translateX(20px)' : 'translateX(0)'
+                                                    }}></span>
+                                                </span>
+                                            </label>
+                                        </div>
+                                        <div style={{fontSize: 11, color: '#7f8c8d', marginTop: 4}}>
+                                            {roomConfig.maxPlayers % 2 !== 0 ? "⚠️ 需要偶数人数 (4, 6...) 才能开启" : "开启后，间隔入座为队友 (1和3队友，2和4队友)"}
+                                        </div>
+                                    </div>
+
                                     {/* 倒计时选择 */}
                                     <div style={styles.configItem}>
                                         <div style={styles.configLabel}>
@@ -1893,7 +1987,7 @@ export const LoginScreen = ({
                                     </div>
                                 </div>
 
-                                {/* [新增] 剩余牌数显示配置 - 插入在这里 */}
+                                {/* 剩余牌数显示配置 */}
                                 <div style={{marginTop: 20, paddingTop: 15, borderTop: '1px solid #f0f0f0'}}>
                                     <div style={{display:'flex', alignItems:'center', gap:6, color:'#7f8c8d', fontSize:14, marginBottom:10, fontWeight:600}}>
                                         <Eye size={14}/> 剩余牌数显示规则
@@ -1978,7 +2072,7 @@ export const LoginScreen = ({
                             </div>
                         )}
 
-                        <div style={{flex: 1}}></div> {/* 弹簧填充 */}
+                        <div style={{flex: 1}}></div>
 
                         <button 
                             style={{
@@ -3018,7 +3112,7 @@ class GameManager {
         this.turnStartTime = 0; 
     }
 
-    // [新增] 切换托管状态
+    // 切换托管状态
     toggleAutoPlay(playerId) {
         const player = this.players.find(p => p.id === playerId);
         if (!player || player.isBot) return; 
@@ -3055,6 +3149,16 @@ class GameManager {
             const winnerIdx = this.players.findIndex(p => p.id === this.lastWinnerId);
             if (winnerIdx !== -1) startIndex = winnerIdx;
         }
+
+        // [新增] 组队分配逻辑：间隔入座 (0,2为一队; 1,3为一队)
+        const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
+        this.players.forEach((p, index) => {
+            if (isTeamMode) {
+                p.team = index % 2; // 0 或 1
+            } else {
+                p.team = null; // 个人战
+            }
+        });
 
         this.gameState = {
             hands: {},
@@ -3128,7 +3232,6 @@ class GameManager {
                 cardsToPlay = BotLogic.decideMove(sortedHand, cardsToBeat, this.config.deckCount);
             } catch (err) {
                 console.error("[Bot Error] Logic crashed:", err);
-                // 逻辑崩溃时，默认为 null (过牌/出最小)
             }
 
             if (cardsToPlay) {
@@ -3143,46 +3246,23 @@ class GameManager {
                     if (result.isRoundOver) {
                         this._handleWin(result, botPlayer.id);
                     } else {
-                        // 正常出牌后广播
-                        // [修改] playCards 内部已经广播了，如果是AI调用的，确保不需要重复广播
-                        // 但 playCards 内部对于非赢的情况只在 Socket 事件里广播，这里需要手动广播吗？
-                        // 不，playCards 如果是 socket 触发的，socket 会广播。
-                        // 如果是这里触发的，playCards 返回 success，我们需要广播。
-                        
-                        // 由于 playCards 本身不负责广播给房间（它只负责逻辑），
-                        // Socket 代码里调用 playCards 后会调用 broadcastGameState。
-                        // 这里我们也要模拟这个过程。
-                        
-                        // [修正] playCards 确实只返回结果。所以这里需要广播。
-                        // 为了保持一致性，我们在 playCards 内部添加了生成 Log 的逻辑，
-                        // 所以我们只需要在这里调用 _broadcastUpdate 并附带 result 中的 log 信息即可。
-                        
-                        // 等等，playCards 现在返回的是 {success, ...}
-                        // 刚才我在 playCards 里还没加 log 生成，等下在下面加。
-                        
-                        // 暂时先手动生成 log
                         const analysis = CardRules.analyze(cardsToPlay, this.config.deckCount);
                         const desc = CardRules.getAnalysisText(analysis);
                         this._broadcastUpdate(`${botPlayer.name}: ${desc}`);
                     }
                 } else {
                     console.error(`[Bot Error] Play failed: ${result.error}`);
-                    // [修复] 如果出牌失败（可能是逻辑判断错误），且不是新回合，强制过牌
                     if (!isNewRound) {
                         this._forcePass(botPlayer);
                     } else {
-                        // 新回合必须出牌但失败了，尝试出最小的一张兜底
                         this._playMinCard(botPlayer, sortedHand);
                     }
                 }
             } else {
-                // AI 决定过牌 (或者逻辑返回 null)
                 if (isNewRound) {
-                    // [修复] 如果是新回合（必须出牌），但 AI 返回 null（异常），强制出一张最小的牌
                     console.warn(`[Bot Fix] AI tried to pass on new round. Forcing min card.`);
                     this._playMinCard(botPlayer, sortedHand);
                 } else {
-                    // 正常过牌
                     console.log(`[Bot/Auto] ${botPlayer.name} passes.`);
                     this._forcePass(botPlayer);
                 }
@@ -3190,27 +3270,18 @@ class GameManager {
         } catch (error) {
             console.error(`[Bot Error] Critical Exception in _executeBotTurn:`, error);
             
-            // [关键 Bug 修复]
-            // 如果发生严重错误，我们必须确保游戏继续流转，并且通知前端！
-            // 之前的代码在这里调用了 _advanceTurn 但没有 broadcast，导致前端卡死在 AI 回合，服务器却跑到了用户回合。
-            
-            // 1. 强制跳过当前玩家
             this._advanceTurn();
-            
-            // 2. 重置计时器给下一个人
             this._resetTimer();
             
-            // 3. 广播状态更新！告诉前端换人了！
             const publicState = this.getPublicState();
             publicState.infoText = `${botPlayer.name} 发生错误，跳过`;
             this.io.to(this.roomId).emit('game_state_update', publicState);
 
-            // 4. 继续驱动 AI (如果是连续 AI)
             this._checkAndRunBot();
         }
     }
     
-    // [新增] 辅助：出最小的一张牌 (用于兜底)
+    // 辅助：出最小的一张牌 (用于兜底)
     _playMinCard(botPlayer, sortedHand) {
         const minCard = [sortedHand[0]];
         const result = this.playCards(botPlayer.id, minCard);
@@ -3221,12 +3292,11 @@ class GameManager {
             const desc = CardRules.getAnalysisText(analysis);
             this._broadcastUpdate(`${botPlayer.name}: ${desc} (系统)`);
         } else {
-             // 连最小的牌都出不出去？（理论不应该），只能跳过了
              this._forcePass(botPlayer); 
         }
     }
 
-    // [新增] 统一广播函数
+    // 统一广播函数
     _broadcastUpdate(infoText = null) {
         const publicState = this.getPublicState();
         if (infoText) publicState.infoText = infoText;
@@ -3240,7 +3310,6 @@ class GameManager {
             this._broadcastUpdate(`${botPlayer.name}: 不要`);
         } else {
             console.error("[Bot Critical] Failed to pass turn:", result.error);
-            // 如果连 Pass 都失败，可能游戏状态有问题，尝试强制流转
             this._advanceTurn();
             this._broadcastUpdate();
             this._resetTimer();
@@ -3299,7 +3368,6 @@ class GameManager {
             }
         }
         
-        // [新增] 即使在 Socket 层会广播，我们也在这里准备好日志信息
         const analysis = CardRules.analyze(cards, this.config.deckCount);
         const cardDesc = CardRules.getAnalysisText(analysis);
         const logText = `${currPlayer.name}: ${cardDesc}`;
@@ -3416,7 +3484,6 @@ class GameManager {
             if (result.success) {
                 this.io.to(currPlayer.id).emit('hand_update', this.gameState.hands[currPlayer.id]);
                 
-                // [新增] 使用 result 中的 logText
                 const logText = result.logText || `${currPlayer.name} 超时出牌`;
                 
                 if (result.isRoundOver) {
@@ -3449,7 +3516,6 @@ class GameManager {
         let nextIndex = this.gameState.currentTurnIndex;
         let attempts = 0;
         
-        // 逆时针出牌逻辑 (Counter-Clockwise)
         do {
             nextIndex = (nextIndex - 1 + playerCount) % playerCount;
             attempts++;
@@ -3467,14 +3533,11 @@ class GameManager {
         const currentScoresDisplay = {};
         const playersInfo = {};
         
-        // [新增] 统计每个人的手牌数
         const handCounts = {};
 
         this.players.forEach(p => {
             currentScoresDisplay[p.id] = (this.grandScores[p.id] || 0) + (this.gameState.roundPoints[p.id] || 0);
             playersInfo[p.id] = { isBot: p.isBot, isAutoPlay: p.isAutoPlay };
-            
-            // 安全地获取手牌数
             handCounts[p.id] = this.gameState.hands[p.id] ? this.gameState.hands[p.id].length : 0;
         });
 
@@ -3497,7 +3560,7 @@ class GameManager {
             pendingPoints: this.gameState.pendingTablePoints,
             finishedRank: this.gameState.finishedRank,
             playersInfo: playersInfo,
-            handCounts: handCounts // [新增] 返回给前端
+            handCounts: handCounts 
         };
     }
 
@@ -3583,11 +3646,13 @@ class GameManager {
             this.grandScores[p.id] += (this.gameState.roundPoints[p.id] || 0);
         });
 
+        // 头游收分逻辑
         if (firstWinnerId && totalCardPenalty > 0) {
             this.grandScores[firstWinnerId] += totalCardPenalty;
             logLines.push(`[手牌罚分] 输家共计 ${totalCardPenalty} 分，归第一名 ${this.players.find(p=>p.id===firstWinnerId)?.name}。`);
         }
 
+        // 排名赏罚 + [新增] 队友保护逻辑
         if (this.config.enableRankPenalty && this.config.rankPenaltyScores && this.config.rankPenaltyScores.length > 0) {
             const penaltyConfig = this.config.rankPenaltyScores;
             const playerCount = fullRankIds.length;
@@ -3601,12 +3666,19 @@ class GameManager {
                     const loserId = fullRankIds[loserIndex];
                     
                     if (winnerId && loserId) {
-                        this.grandScores[winnerId] += score;
-                        this.grandScores[loserId] -= score;
-
-                        const wName = this.players.find(p=>p.id===winnerId)?.name;
-                        const lName = this.players.find(p=>p.id===loserId)?.name;
-                        logLines.push(`[排名赏罚] 第${winnerIndex+1}名 ${wName} 收取 倒数第${index+1}名 ${lName} ${score} 分。`);
+                        const winner = this.players.find(p=>p.id===winnerId);
+                        const loser = this.players.find(p=>p.id===loserId);
+                        
+                        // [新增] 队友保护判断
+                        // 逻辑：如果两人都有 team 属性，且 team 相等，则免罚
+                        if (winner.team !== null && winner.team !== undefined && winner.team === loser.team) {
+                             logLines.push(`[🛡️队友保护] 第${winnerIndex+1}名(${winner.name}) 与 倒数第${index+1}名(${loser.name}) 是队友，${score}分 免罚！`);
+                        } else {
+                            // 正常罚分
+                            this.grandScores[winnerId] += score;
+                            this.grandScores[loserId] -= score;
+                            logLines.push(`[排名赏罚] 第${winnerIndex+1}名 ${winner.name} 收取 倒数第${index+1}名 ${loser.name} ${score} 分。`);
+                        }
                     }
                 }
             });
@@ -3804,13 +3876,54 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('room_info', data);
     });
 
-    // [新增] 切换托管
+    // 切换托管
     socket.on('toggle_auto_play', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
 
         room.gameManager.toggleAutoPlay(socket.id);
         broadcastGameState(io, roomId, room);
+    });
+
+    // [新增] 座位调整
+    socket.on('switch_seat', ({ roomId, index1, index2 }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+
+        // 1. 权限检查：必须是房主
+        const requestPlayer = room.players.find(p => p.id === socket.id);
+        if (!requestPlayer || !requestPlayer.isHost) {
+            return socket.emit('error_msg', '只有房主可以调整座位');
+        }
+
+        // 2. 边界检查
+        if (index1 < 0 || index1 >= room.players.length || index2 < 0 || index2 >= room.players.length) {
+            return;
+        }
+
+        // 3. 游戏进行中禁止调整
+        if (room.gameManager && room.gameManager.gameState) {
+             return socket.emit('error_msg', '游戏中无法调整座位');
+        }
+
+        // 4. 交换位置
+        const temp = room.players[index1];
+        room.players[index1] = room.players[index2];
+        room.players[index2] = temp;
+
+        // 5. 广播更新
+        const currentGrandScores = room.gameManager ? room.gameManager.grandScores : {};
+        if (Object.keys(currentGrandScores).length === 0) {
+            room.players.forEach(p => currentGrandScores[p.id] = 0);
+        }
+
+        const data = { 
+            roomId, 
+            config: room.config, 
+            players: room.players, 
+            grandScores: currentGrandScores 
+        };
+        io.to(roomId).emit('room_info', data);
     });
 
     // --- 游戏流程 ---
@@ -3829,7 +3942,9 @@ io.on('connection', (socket) => {
                 const hand = startInfo.hands[p.id];
                 io.to(p.id).emit('game_started', { 
                     hand: hand, 
-                    grandScores: room.gameManager.grandScores 
+                    grandScores: room.gameManager.grandScores,
+                    // [注意] 这里要带上牌数
+                    handCounts: room.gameManager.getPublicState().handCounts
                 });
             }
         });
@@ -3859,7 +3974,7 @@ io.on('connection', (socket) => {
         const currentHand = room.gameManager.gameState.hands[socket.id];
         io.to(socket.id).emit('hand_update', currentHand);
 
-        if (result.isRoundOver) { // 修正：从 isWin 改为 isRoundOver，保持与GameManager一致
+        if (result.isRoundOver) { 
             const rInfo = result.roundResult;
             if (rInfo.isGrandOver) {
                 io.to(roomId).emit('grand_game_over', { 
@@ -3876,8 +3991,7 @@ io.on('connection', (socket) => {
                 });
             }
         } else {
-            // [新增] 广播状态时，附带出牌的日志文本
-            // result.logText 是 GameManager 新增的返回值 (例如 "张三: 三张 K")
+            // 广播状态时，附带出牌的日志文本
             broadcastGameState(io, roomId, room, result.logText);
         }
     });
@@ -3891,7 +4005,6 @@ io.on('connection', (socket) => {
         
         if (!result.success) return socket.emit('play_error', result.error);
 
-        // [修改] 广播状态时，附带 "xxx: 不要" 的日志
         broadcastGameState(io, roomId, room, result.logText || "PASS");
     });
 
@@ -3963,10 +4076,6 @@ const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
     console.log(`>>> Server Running on port ${PORT}`);
 });
-
-
-
-
 
 ================================================================================
 FILE PATH: server\package.json

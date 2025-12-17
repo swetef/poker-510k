@@ -18,11 +18,10 @@
   -moz-osx-font-smoothing: grayscale;
   
   /* [优化] 禁止移动端点击高亮 */
-  -webkit-tap-highlight-color: transparent; 
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* [关键修复 0] 全局盒模型重置 */
-/* 必须加上这个！否则 padding 会导致 100% 宽度的元素溢出屏幕，导致全屏模式下按钮消失 */
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -40,7 +39,7 @@ html, body {
   /* [关键修复] 彻底禁止浏览器的下拉刷新和回弹效果 */
   overscroll-behavior: none;
   overflow: hidden; /* 锁死 Body 滚动，只允许内部元素滚动 */
-  position: fixed;  /* 强制固定，防止 iOS Safari 地址栏因为页面滚动而忽隐忽现 */
+  position: fixed; /* 强制固定，防止 iOS Safari 地址栏因为页面滚动而忽隐忽现 */
 }
 
 body {
@@ -87,7 +86,7 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
 
 /* --- 1. 横屏引导遮罩 --- */
 .landscape-hint {
-    display: none; 
+    display: none;
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(30, 39, 46, 0.95);
@@ -102,7 +101,8 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
 }
 
 .phone-rotate-icon {
-    width: 60px; height: 100px; 
+    width: 60px;
+    height: 100px; 
     border: 3px solid white; border-radius: 10px; margin-bottom: 20px;
     animation: rotate-phone 2s infinite ease-in-out;
 }
@@ -128,18 +128,18 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
     height: auto !important;
     
     /* 使用 dvh 适配动态地址栏 */
-    min-height: 85vh !important; 
+    min-height: 85vh !important;
     min-height: 85dvh !important; 
     
     max-height: 95dvh !important; 
     margin: 10px auto !important; 
     overflow: hidden !important; 
-    padding: 0 !important;      
+    padding: 0 !important;
   }
 
   /* --- 2.1 登录页 (Login) --- */
   .mobile-login-left {
-    flex: 0 0 auto !important; 
+    flex: 0 0 auto !important;
     width: 100% !important;
     padding: 30px 20px !important; 
     border-radius: 0 0 24px 24px !important; 
@@ -155,7 +155,7 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
   .mobile-login-left .logoText { font-size: 22px !important; }
 
   .mobile-login-right {
-    flex: 1 !important; 
+    flex: 1 !important;
     width: 100% !important;
     padding: 30px 20px !important;
     background: white;
@@ -174,7 +174,7 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
 
   /* --- 2.2 大厅页 (Lobby) --- */
   .lobbyCard.mobile-layout-column {
-      height: 92dvh !important; 
+      height: 92dvh !important;
       position: relative;
       background: white !important;
   }
@@ -197,16 +197,14 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
 
   .mobile-lobby-grid {
       flex: 1 !important; 
-      overflow-y: auto !important; 
+      overflow-y: auto !important;
       padding: 10px !important;
       display: grid !important;
       grid-template-columns: repeat(2, 1fr) !important; 
       align-content: start !important;
       gap: 10px !important;
-      -webkit-overflow-scrolling: touch; 
-      
-      /* [关键修改] 移除下边距占位，因为 Footer 不再是绝对定位 */
-      padding-bottom: 10px !important; 
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 10px !important;
   }
   
   .mobile-lobby-grid > div { padding: 15px !important; gap: 10px !important; }
@@ -218,13 +216,9 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
       background: white;
       border-top: 1px solid #eee;
       z-index: 10;
-      padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important; 
-      
-      /* [关键修复] 取消绝对定位，改用 flex 布局的自然底部对齐 */
-      /* 之前是 position: absolute; bottom: 0; */
+      padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important;
       position: static !important; 
-      margin-top: auto !important; /* 这会让它自动顶到最下面，但不会飞出容器 */
-      
+      margin-top: auto !important;
       display: flex !important;
       justify-content: space-around !important;
       box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
@@ -244,12 +238,15 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
 @media (max-width: 896px) and (orientation: landscape) {
     
     /* [终极修复 1] 强制铺满屏幕，无视任何 margin，直接覆盖 */
+    /* [关键 Fix] 必须强制重置 min-height 为 0，否则 JS 里的 600px 会撑破屏幕 */
     .mobile-layout-column {
-        position: fixed !important; /* 使用 fixed 强制占满视口 */
+        position: fixed !important;
         top: 0 !important;
         left: 0 !important;
         width: 100% !important;
         height: 100% !important;
+        min-height: 0 !important; /* 核心修复：解决底部看不见的问题 */
+        max-height: none !important;
         margin: 0 !important;
         padding: 0 !important;
         flex-direction: row !important;
@@ -259,7 +256,7 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
     /* --- [关键优化] 登录页 (Login) --- */
     
     .mobile-login-left {
-        display: none !important; 
+        display: none !important;
     }
 
     .mobile-login-right {
@@ -270,13 +267,12 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
         margin: 0 !important;
         
         /* 顶部对齐，防止被切 */
-        justify-content: flex-start !important; 
+        justify-content: flex-start !important;
+        padding-top: max(10px, env(safe-area-inset-top)) !important;
         
-        /* 增加内边距，确保内容安全 */
-        padding-top: max(20px, env(safe-area-inset-top)) !important;
-        /* [修复] 底部增加大幅度 Padding，确保最下面的按钮不被手势条遮挡 */
-        padding-bottom: max(50px, env(safe-area-inset-bottom)) !important;
-        padding-left: max(40px, env(safe-area-inset-left)) !important; 
+        /* [修复] 底部增加大幅度 Padding，确保滚动到底部时，最下面的按钮能完整露出 */
+        padding-bottom: max(40px, env(safe-area-inset-bottom)) !important;
+        padding-left: max(40px, env(safe-area-inset-left)) !important;
         padding-right: max(40px, env(safe-area-inset-right)) !important; 
         
         overflow-y: auto !important;
@@ -285,7 +281,7 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
     }
     
     .mobile-login-right .formContent {
-        max-width: 500px;
+        max-width: 600px;
         margin: 0 auto;
         width: 100%;
         /* 确保底部按钮能完整露出 */
@@ -297,7 +293,7 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
 
     /* [关键修复 2] 彻底重构 Lobby 布局 */
     .lobbyCard.mobile-layout-column {
-        background: transparent !important; 
+        background: transparent !important;
         border: none !important;
     }
     
@@ -308,25 +304,27 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
         width: 100% !important;
         border: none !important;
         box-shadow: none !important;
-        
         /* 使用 Flex Column 布局 */
         display: flex !important;
         flex-direction: column !important;
     }
 
     .lobbyHeader {
-        flex: 0 0 auto !important; /* 头部固定高度 */
-        padding: 10px 20px !important; 
-        padding-top: max(15px, env(safe-area-inset-top)) !important;
+        flex: 0 0 auto !important; /* 头部固定高度，不许伸缩 */
+        padding: 8px 20px !important; 
+        padding-top: max(10px, env(safe-area-inset-top)) !important;
         background: #f8f9fa;
         z-index: 20;
+        border-bottom: 1px solid #eee;
     }
+    /* 缩小横屏下的标题字号 */
+    .lobbyHeader h2 { font-size: 18px !important; }
 
     /* 玩家列表 Grid */
     .mobile-lobby-grid {
         /* [核心修复] 中间区域自适应，允许收缩，允许滚动 */
-        flex: 1 1 auto !important;
-        min-height: 0 !important; /* 关键！允许 Flex 子项收缩到 0 */
+        flex: 1 1 0% !important; /* 关键！设为 0% 强制让它去适应剩余空间，而不是被内容撑大 */
+        min-height: 0 !important; 
         
         overflow-y: auto !important;
         display: grid !important;
@@ -345,20 +343,21 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
     }
 
     .mobile-lobby-grid > div {
-        padding: 8px !important;
+        padding: 6px !important;
+        gap: 5px !important;
     }
     
     .mobile-lobby-grid .avatar-large {
-        width: 40px !important;
-        height: 40px !important;
-        font-size: 16px !important;
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 14px !important;
     }
 
     /* Footer 优化 */
     .mobile-lobby-footer {
         flex: 0 0 auto !important; /* 底部固定高度，不许被挤压 */
-        position: relative !important; /* 相对定位 */
-        z-index: 100 !important; /* 提高层级 */
+        position: relative !important;
+        z-index: 100 !important;
         
         background: #f8f9fa !important;
         border-top: 1px solid #ddd !important;
@@ -366,11 +365,16 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
         display: flex !important;
         justify-content: center !important;
         align-items: center !important;
-        
         /* [核心修复] 给底部留出足够的安全距离，防止被手势条遮挡按不到 */
-        padding-top: 10px !important;
-        padding-bottom: max(20px, env(safe-area-inset-bottom)) !important;
+        padding-top: 8px !important;
+        padding-bottom: max(15px, env(safe-area-inset-bottom)) !important;
         padding-left: max(20px, env(safe-area-inset-left)) !important;
         padding-right: max(20px, env(safe-area-inset-right)) !important;
+        margin-top: 0 !important; /* 清除 marginTop auto */
+    }
+    
+    .mobile-lobby-footer button {
+        height: 40px !important; /* 稍微调矮按钮 */
+        font-size: 14px !important;
     }
 }

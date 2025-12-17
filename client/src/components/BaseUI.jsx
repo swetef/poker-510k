@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'; 
-import { Coins, History, Trophy, Flag, ChevronDown, ChevronUp } from 'lucide-react'; 
+import { Coins, History, Trophy, Flag, ChevronDown, ChevronUp, Shield } from 'lucide-react'; 
 import { getCardDisplay } from '../utils/cardLogic.js';
 import { styles } from '../styles.js';
 import CountDownTimer from './CountDownTimer.jsx'; 
@@ -121,7 +121,8 @@ export const MiniCard = ({ cardVal, index }) => {
     );
 };
 
-export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, remainingSeconds, rank, timerPosition, hideTimer, cardCount, showCardCountMode }) => {
+// [修改] 支持 team 属性显示队伍颜色
+export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, remainingSeconds, rank, timerPosition, hideTimer, cardCount, showCardCountMode, team }) => {
     const progress = Math.min((score / targetScore) * 100, 100);
     const containerOpacity = rank ? 0.75 : 1; 
 
@@ -130,19 +131,51 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
     if (showCardCountMode === 1 && cardCount <= 3 && cardCount > 0) showBadge = true;
     if (rank) showBadge = false;
 
+    // --- 队伍颜色逻辑 ---
+    // 0:红队, 1:蓝队
+    const isTeamMode = team !== undefined && team !== null;
+    const teamColor = team === 0 ? '#e74c3c' : '#3498db'; 
+    const teamName = team === 0 ? '红' : '蓝';
+    
+    // 边框逻辑：如果是轮到他，显示金色高亮；否则如果处于组队模式，显示队伍色；否则默认透明
+    let borderColor = 'rgba(255,255,255,0.1)';
+    if (isTeamMode) borderColor = teamColor;
+    if (isTurn) borderColor = '#f1c40f'; // 轮到谁，金色优先
+
+    // 背景逻辑：轮到谁深色强调，否则组队模式下带点队伍色
+    let bgColor = isTurn ? 'rgba(44, 62, 80, 0.9)' : 'rgba(44, 62, 80, 0.6)';
+    if (isTeamMode && !isTurn) {
+        bgColor = team === 0 ? 'rgba(231, 76, 60, 0.2)' : 'rgba(52, 152, 219, 0.2)';
+    }
+
     return (
         <div style={{
             ...styles.playerBox,
-            borderColor: isTurn ? '#f1c40f' : 'rgba(255,255,255,0.1)',
+            borderColor: borderColor,
+            borderWidth: isTeamMode ? 2 : 1, // 组队模式边框加粗
             transform: isTurn ? 'scale(1.1)' : 'scale(1)',
             boxShadow: isTurn ? '0 0 25px rgba(241, 196, 15, 0.5)' : 'none',
-            background: isTurn ? 'rgba(44, 62, 80, 0.9)' : 'rgba(44, 62, 80, 0.6)',
+            background: bgColor,
             position: 'relative',
             opacity: containerOpacity
         }}>
             {showBadge && (
                 <div style={styles.cardCountBadge}>
                     {cardCount}
+                </div>
+            )}
+
+            {/* 组队角标 */}
+            {isTeamMode && (
+                <div style={{
+                    position: 'absolute', top: -10, left: -5,
+                    background: teamColor, color: 'white',
+                    fontSize: 9, padding: '1px 4px', borderRadius: 4,
+                    display: 'flex', alignItems: 'center', gap: 2,
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                    zIndex: 25
+                }}>
+                    <Shield size={8} fill="currentColor"/> {teamName}队
                 </div>
             )}
 
@@ -171,8 +204,15 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
                 </div>
             )}
 
-            <div style={styles.avatar}>{player.name[0]}</div>
-            <div style={styles.playerName}>{player.name} {isMySocket && '(我)'}</div>
+            <div style={{...styles.avatar, borderColor: isTeamMode ? teamColor : 'rgba(255,255,255,0.3)'}}>
+                {player.name[0]}
+            </div>
+            
+            {/* 名字显示优化：加队伍前缀颜色 */}
+            <div style={styles.playerName}>
+                {player.name} {isMySocket && '(我)'}
+            </div>
+            
             <div style={styles.scoreBarBg}>
                 <div style={{...styles.scoreBarFill, width:`${progress}%`, background: progress>=100?'#e74c3c':'#2ecc71'}}></div>
             </div>

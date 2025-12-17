@@ -19,7 +19,7 @@ class GameManager {
         this.turnStartTime = 0; 
     }
 
-    // [新增] 切换托管状态
+    // 切换托管状态
     toggleAutoPlay(playerId) {
         const player = this.players.find(p => p.id === playerId);
         if (!player || player.isBot) return; 
@@ -56,6 +56,16 @@ class GameManager {
             const winnerIdx = this.players.findIndex(p => p.id === this.lastWinnerId);
             if (winnerIdx !== -1) startIndex = winnerIdx;
         }
+
+        // [新增] 组队分配逻辑：间隔入座 (0,2为一队; 1,3为一队)
+        const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
+        this.players.forEach((p, index) => {
+            if (isTeamMode) {
+                p.team = index % 2; // 0 或 1
+            } else {
+                p.team = null; // 个人战
+            }
+        });
 
         this.gameState = {
             hands: {},
@@ -129,7 +139,6 @@ class GameManager {
                 cardsToPlay = BotLogic.decideMove(sortedHand, cardsToBeat, this.config.deckCount);
             } catch (err) {
                 console.error("[Bot Error] Logic crashed:", err);
-                // 逻辑崩溃时，默认为 null (过牌/出最小)
             }
 
             if (cardsToPlay) {
@@ -144,46 +153,23 @@ class GameManager {
                     if (result.isRoundOver) {
                         this._handleWin(result, botPlayer.id);
                     } else {
-                        // 正常出牌后广播
-                        // [修改] playCards 内部已经广播了，如果是AI调用的，确保不需要重复广播
-                        // 但 playCards 内部对于非赢的情况只在 Socket 事件里广播，这里需要手动广播吗？
-                        // 不，playCards 如果是 socket 触发的，socket 会广播。
-                        // 如果是这里触发的，playCards 返回 success，我们需要广播。
-                        
-                        // 由于 playCards 本身不负责广播给房间（它只负责逻辑），
-                        // Socket 代码里调用 playCards 后会调用 broadcastGameState。
-                        // 这里我们也要模拟这个过程。
-                        
-                        // [修正] playCards 确实只返回结果。所以这里需要广播。
-                        // 为了保持一致性，我们在 playCards 内部添加了生成 Log 的逻辑，
-                        // 所以我们只需要在这里调用 _broadcastUpdate 并附带 result 中的 log 信息即可。
-                        
-                        // 等等，playCards 现在返回的是 {success, ...}
-                        // 刚才我在 playCards 里还没加 log 生成，等下在下面加。
-                        
-                        // 暂时先手动生成 log
                         const analysis = CardRules.analyze(cardsToPlay, this.config.deckCount);
                         const desc = CardRules.getAnalysisText(analysis);
                         this._broadcastUpdate(`${botPlayer.name}: ${desc}`);
                     }
                 } else {
                     console.error(`[Bot Error] Play failed: ${result.error}`);
-                    // [修复] 如果出牌失败（可能是逻辑判断错误），且不是新回合，强制过牌
                     if (!isNewRound) {
                         this._forcePass(botPlayer);
                     } else {
-                        // 新回合必须出牌但失败了，尝试出最小的一张兜底
                         this._playMinCard(botPlayer, sortedHand);
                     }
                 }
             } else {
-                // AI 决定过牌 (或者逻辑返回 null)
                 if (isNewRound) {
-                    // [修复] 如果是新回合（必须出牌），但 AI 返回 null（异常），强制出一张最小的牌
                     console.warn(`[Bot Fix] AI tried to pass on new round. Forcing min card.`);
                     this._playMinCard(botPlayer, sortedHand);
                 } else {
-                    // 正常过牌
                     console.log(`[Bot/Auto] ${botPlayer.name} passes.`);
                     this._forcePass(botPlayer);
                 }
@@ -191,27 +177,18 @@ class GameManager {
         } catch (error) {
             console.error(`[Bot Error] Critical Exception in _executeBotTurn:`, error);
             
-            // [关键 Bug 修复]
-            // 如果发生严重错误，我们必须确保游戏继续流转，并且通知前端！
-            // 之前的代码在这里调用了 _advanceTurn 但没有 broadcast，导致前端卡死在 AI 回合，服务器却跑到了用户回合。
-            
-            // 1. 强制跳过当前玩家
             this._advanceTurn();
-            
-            // 2. 重置计时器给下一个人
             this._resetTimer();
             
-            // 3. 广播状态更新！告诉前端换人了！
             const publicState = this.getPublicState();
             publicState.infoText = `${botPlayer.name} 发生错误，跳过`;
             this.io.to(this.roomId).emit('game_state_update', publicState);
 
-            // 4. 继续驱动 AI (如果是连续 AI)
             this._checkAndRunBot();
         }
     }
     
-    // [新增] 辅助：出最小的一张牌 (用于兜底)
+    // 辅助：出最小的一张牌 (用于兜底)
     _playMinCard(botPlayer, sortedHand) {
         const minCard = [sortedHand[0]];
         const result = this.playCards(botPlayer.id, minCard);
@@ -222,12 +199,11 @@ class GameManager {
             const desc = CardRules.getAnalysisText(analysis);
             this._broadcastUpdate(`${botPlayer.name}: ${desc} (系统)`);
         } else {
-             // 连最小的牌都出不出去？（理论不应该），只能跳过了
              this._forcePass(botPlayer); 
         }
     }
 
-    // [新增] 统一广播函数
+    // 统一广播函数
     _broadcastUpdate(infoText = null) {
         const publicState = this.getPublicState();
         if (infoText) publicState.infoText = infoText;
@@ -241,7 +217,6 @@ class GameManager {
             this._broadcastUpdate(`${botPlayer.name}: 不要`);
         } else {
             console.error("[Bot Critical] Failed to pass turn:", result.error);
-            // 如果连 Pass 都失败，可能游戏状态有问题，尝试强制流转
             this._advanceTurn();
             this._broadcastUpdate();
             this._resetTimer();
@@ -300,7 +275,6 @@ class GameManager {
             }
         }
         
-        // [新增] 即使在 Socket 层会广播，我们也在这里准备好日志信息
         const analysis = CardRules.analyze(cards, this.config.deckCount);
         const cardDesc = CardRules.getAnalysisText(analysis);
         const logText = `${currPlayer.name}: ${cardDesc}`;
@@ -417,7 +391,6 @@ class GameManager {
             if (result.success) {
                 this.io.to(currPlayer.id).emit('hand_update', this.gameState.hands[currPlayer.id]);
                 
-                // [新增] 使用 result 中的 logText
                 const logText = result.logText || `${currPlayer.name} 超时出牌`;
                 
                 if (result.isRoundOver) {
@@ -450,7 +423,6 @@ class GameManager {
         let nextIndex = this.gameState.currentTurnIndex;
         let attempts = 0;
         
-        // 逆时针出牌逻辑 (Counter-Clockwise)
         do {
             nextIndex = (nextIndex - 1 + playerCount) % playerCount;
             attempts++;
@@ -468,14 +440,16 @@ class GameManager {
         const currentScoresDisplay = {};
         const playersInfo = {};
         
-        // [新增] 统计每个人的手牌数
         const handCounts = {};
 
         this.players.forEach(p => {
             currentScoresDisplay[p.id] = (this.grandScores[p.id] || 0) + (this.gameState.roundPoints[p.id] || 0);
-            playersInfo[p.id] = { isBot: p.isBot, isAutoPlay: p.isAutoPlay };
-            
-            // 安全地获取手牌数
+            // [关键修改] 将 team 信息暴露给前端
+            playersInfo[p.id] = { 
+                isBot: p.isBot, 
+                isAutoPlay: p.isAutoPlay,
+                team: p.team 
+            };
             handCounts[p.id] = this.gameState.hands[p.id] ? this.gameState.hands[p.id].length : 0;
         });
 
@@ -498,7 +472,7 @@ class GameManager {
             pendingPoints: this.gameState.pendingTablePoints,
             finishedRank: this.gameState.finishedRank,
             playersInfo: playersInfo,
-            handCounts: handCounts // [新增] 返回给前端
+            handCounts: handCounts 
         };
     }
 
@@ -584,11 +558,13 @@ class GameManager {
             this.grandScores[p.id] += (this.gameState.roundPoints[p.id] || 0);
         });
 
+        // 头游收分逻辑
         if (firstWinnerId && totalCardPenalty > 0) {
             this.grandScores[firstWinnerId] += totalCardPenalty;
             logLines.push(`[手牌罚分] 输家共计 ${totalCardPenalty} 分，归第一名 ${this.players.find(p=>p.id===firstWinnerId)?.name}。`);
         }
 
+        // 排名赏罚 + [新增] 队友保护逻辑
         if (this.config.enableRankPenalty && this.config.rankPenaltyScores && this.config.rankPenaltyScores.length > 0) {
             const penaltyConfig = this.config.rankPenaltyScores;
             const playerCount = fullRankIds.length;
@@ -602,12 +578,19 @@ class GameManager {
                     const loserId = fullRankIds[loserIndex];
                     
                     if (winnerId && loserId) {
-                        this.grandScores[winnerId] += score;
-                        this.grandScores[loserId] -= score;
-
-                        const wName = this.players.find(p=>p.id===winnerId)?.name;
-                        const lName = this.players.find(p=>p.id===loserId)?.name;
-                        logLines.push(`[排名赏罚] 第${winnerIndex+1}名 ${wName} 收取 倒数第${index+1}名 ${lName} ${score} 分。`);
+                        const winner = this.players.find(p=>p.id===winnerId);
+                        const loser = this.players.find(p=>p.id===loserId);
+                        
+                        // [新增] 队友保护判断
+                        // 逻辑：如果两人都有 team 属性，且 team 相等，则免罚
+                        if (winner.team !== null && winner.team !== undefined && winner.team === loser.team) {
+                             logLines.push(`[🛡️队友保护] 第${winnerIndex+1}名(${winner.name}) 与 倒数第${index+1}名(${loser.name}) 是队友，${score}分 免罚！`);
+                        } else {
+                            // 正常罚分
+                            this.grandScores[winnerId] += score;
+                            this.grandScores[loserId] -= score;
+                            logLines.push(`[排名赏罚] 第${winnerIndex+1}名 ${winner.name} 收取 倒数第${index+1}名 ${loser.name} ${score} 分。`);
+                        }
                     }
                 }
             });
