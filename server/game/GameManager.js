@@ -145,7 +145,26 @@ class GameManager {
                         this._handleWin(result, botPlayer.id);
                     } else {
                         // 正常出牌后广播
-                        this._broadcastUpdate();
+                        // [修改] playCards 内部已经广播了，如果是AI调用的，确保不需要重复广播
+                        // 但 playCards 内部对于非赢的情况只在 Socket 事件里广播，这里需要手动广播吗？
+                        // 不，playCards 如果是 socket 触发的，socket 会广播。
+                        // 如果是这里触发的，playCards 返回 success，我们需要广播。
+                        
+                        // 由于 playCards 本身不负责广播给房间（它只负责逻辑），
+                        // Socket 代码里调用 playCards 后会调用 broadcastGameState。
+                        // 这里我们也要模拟这个过程。
+                        
+                        // [修正] playCards 确实只返回结果。所以这里需要广播。
+                        // 为了保持一致性，我们在 playCards 内部添加了生成 Log 的逻辑，
+                        // 所以我们只需要在这里调用 _broadcastUpdate 并附带 result 中的 log 信息即可。
+                        
+                        // 等等，playCards 现在返回的是 {success, ...}
+                        // 刚才我在 playCards 里还没加 log 生成，等下在下面加。
+                        
+                        // 暂时先手动生成 log
+                        const analysis = CardRules.analyze(cardsToPlay, this.config.deckCount);
+                        const desc = CardRules.getAnalysisText(analysis);
+                        this._broadcastUpdate(`${botPlayer.name}: ${desc}`);
                     }
                 } else {
                     console.error(`[Bot Error] Play failed: ${result.error}`);
@@ -198,10 +217,13 @@ class GameManager {
         const result = this.playCards(botPlayer.id, minCard);
         if (result.success) {
             if (!botPlayer.isBot) this.io.to(botPlayer.id).emit('hand_update', this.gameState.hands[botPlayer.id]);
-            this._broadcastUpdate();
+            
+            const analysis = CardRules.analyze(minCard, this.config.deckCount);
+            const desc = CardRules.getAnalysisText(analysis);
+            this._broadcastUpdate(`${botPlayer.name}: ${desc} (系统)`);
         } else {
              // 连最小的牌都出不出去？（理论不应该），只能跳过了
-             this._forcePass(botPlayer); // 实际上如果是新回合不能 pass，但这属于死局保护了
+             this._forcePass(botPlayer); 
         }
     }
 
@@ -216,7 +238,7 @@ class GameManager {
     _forcePass(botPlayer) {
         const result = this.passTurn(botPlayer.id);
         if (result.success) {
-            this._broadcastUpdate('PASS');
+            this._broadcastUpdate(`${botPlayer.name}: 不要`);
         } else {
             console.error("[Bot Critical] Failed to pass turn:", result.error);
             // 如果连 Pass 都失败，可能游戏状态有问题，尝试强制流转
@@ -277,6 +299,11 @@ class GameManager {
                 this.gameState.finishedRank.push(playerId);
             }
         }
+        
+        // [新增] 即使在 Socket 层会广播，我们也在这里准备好日志信息
+        const analysis = CardRules.analyze(cards, this.config.deckCount);
+        const cardDesc = CardRules.getAnalysisText(analysis);
+        const logText = `${currPlayer.name}: ${cardDesc}`;
 
         const activeCount = this._getActivePlayerCount();
         
@@ -288,7 +315,8 @@ class GameManager {
                 isRoundOver: true,
                 roundResult,
                 cardsPlayed: cards,
-                pendingPoints: this.gameState.pendingTablePoints
+                pendingPoints: this.gameState.pendingTablePoints,
+                logText // 返回日志给调用者
             };
         }
 
@@ -300,7 +328,8 @@ class GameManager {
             success: true, 
             isRoundOver: false,
             cardsPlayed: cards,
-            pendingPoints: this.gameState.pendingTablePoints
+            pendingPoints: this.gameState.pendingTablePoints,
+            logText // 返回日志给调用者
         };
     }
 
@@ -344,7 +373,11 @@ class GameManager {
         this._resetTimer(); 
         this._checkAndRunBot();
 
-        return { success: true, turnCleared };
+        return { 
+            success: true, 
+            turnCleared,
+            logText: `${currPlayer.name}: 不要`
+        };
     }
 
     _clearTimer() {
@@ -384,16 +417,19 @@ class GameManager {
             if (result.success) {
                 this.io.to(currPlayer.id).emit('hand_update', this.gameState.hands[currPlayer.id]);
                 
+                // [新增] 使用 result 中的 logText
+                const logText = result.logText || `${currPlayer.name} 超时出牌`;
+                
                 if (result.isRoundOver) {
                      this._handleWin(result, currPlayer.id);
                 } else {
-                     this._broadcastUpdate(`${currPlayer.name} 超时，系统代打`);
+                     this._broadcastUpdate(logText);
                 }
             }
         } else {
             const result = this.passTurn(currPlayer.id);
             if (result.success) {
-                this._broadcastUpdate(`${currPlayer.name} 超时，自动过牌`);
+                this._broadcastUpdate(`${currPlayer.name}: 超时过牌`);
             }
         }
     }

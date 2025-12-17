@@ -2,7 +2,9 @@
 // [完整版] 包含所有原有布局、拇指热区、以及新增的滑动选牌支持和剩余牌数徽章
 
 export const styles = {
+  // ============================
   // 全局容器
+  // ============================
   container: { 
       height: '100dvh', // 使用 100dvh 自动适配动态地址栏
       width: '100vw', 
@@ -15,7 +17,9 @@ export const styles = {
       overflow: 'hidden' 
   },
   
-  // --- 登录页卡片 ---
+  // ============================
+  // 登录页 (Login Screen)
+  // ============================
   loginCard: { 
       background: 'white', 
       borderRadius: 24, 
@@ -108,7 +112,9 @@ export const styles = {
       boxShadow: '0 10px 25px rgba(44, 62, 80, 0.25)' 
   },
 
-  // --- 游戏界面样式 ---
+  // ============================
+  // 游戏界面 (Game Screen)
+  // ============================
 
   gameTable: { 
       height: '100dvh', // 使用 100dvh
@@ -211,38 +217,77 @@ export const styles = {
       maxWidth: 50 
   },
   
+  // [修改] 左上角日志面板 (GameLogPanel) - 半透明黑底，文字清晰
   gameLogPanel: { 
       position: 'absolute', 
-      top: 60,  
+      top: 50,  // 原位置是 60，稍微上移一点
       left: 10, 
-      width: 180, 
-      height: 120, 
-      background: 'transparent', 
-      borderRadius: 0, 
-      padding: 5, 
+      width: 200, // 加宽一点，方便显示长文字
+      height: 140, 
+      
+      // 新样式
+      background: 'rgba(0, 0, 0, 0.5)', 
+      borderRadius: 10, 
+      padding: '8px 12px', 
+      border: '1px solid rgba(255,255,255,0.1)',
+      backdropFilter: 'blur(5px)',
+      
       display: 'flex', 
       flexDirection: 'column', 
       zIndex: 5, 
-      backdropFilter: 'none', 
-      border: 'none', 
-      pointerEvents: 'none',
-      textShadow: '0 1px 2px rgba(0,0,0,0.8)' 
+      pointerEvents: 'auto', // 允许滑动
+      boxShadow: '0 4px 10px rgba(0,0,0,0.3)'
   },
-  logHeader: { display: 'none' }, 
-  logList: { flex: 1, overflowY: 'hidden', display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11 },
-  logItem: { lineHeight: 1.2, display: 'flex', alignItems: 'flex-start', color: 'rgba(255,255,255,0.7)' },
+  
+  // [新增] 日志标题栏
+  logHeader: { 
+      display: 'flex', 
+      alignItems: 'center', 
+      gap: 5, 
+      fontSize: 12, 
+      borderBottom: '1px solid rgba(255,255,255,0.2)', 
+      paddingBottom: 4, 
+      marginBottom: 4 
+  }, 
+  
+  // [修改] 日志列表
+  logList: { 
+      flex: 1, 
+      overflowY: 'auto', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      gap: 4, 
+      fontSize: 12,
+      // 顶部渐隐遮罩
+      maskImage: 'linear-gradient(to bottom, transparent, black 10%)',
+      WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 10%)'
+  },
+  
+  // [修改] 单条日志项
+  logItem: { 
+      lineHeight: 1.4, 
+      display: 'flex', 
+      alignItems: 'flex-start', 
+      color: '#ecf0f1',
+      fontSize: 12,
+      textShadow: '0 1px 1px rgba(0,0,0,0.8)'
+  },
+  
   logTime: { display: 'none' },
   
+  // [修改] 顶部栏 (TableHeader) - 修复偏右问题
   tableHeader: { 
       padding: '4px 10px', 
-      paddingTop: 'calc(4px + env(safe-area-inset-top))', 
-      paddingLeft: 'max(4px, env(safe-area-inset-left))', 
+      // 移除原有的 env padding，因为外层 container 已经加过了
+      // paddingTop: 'calc(4px + env(safe-area-inset-top))', 
+      // paddingLeft: 'max(4px, env(safe-area-inset-left))', 
       display: 'flex', 
       justifyContent: 'space-between', 
       alignItems:'flex-start', 
       zIndex: 20,
       width: '100%',
-      pointerEvents: 'none' 
+      pointerEvents: 'none',
+      boxSizing: 'border-box' // 防止 padding 撑大宽度
   },
   
   roomBadgeContainer: {
@@ -304,7 +349,7 @@ export const styles = {
   playerScore: { fontSize: 9, color: '#f1c40f', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, marginTop: 1 },
   turnProgress: { position: 'absolute', bottom: 0, left: 0, height: 4, background: '#f1c40f', width: '100%', animation: 'progress 15s linear forwards' },
   
-  // [关键] HandArea 增加 touchAction: none 以支持滑动选牌
+  // HandArea
   handArea: { 
       position: 'absolute', 
       bottom: 10,             
@@ -340,6 +385,7 @@ export const styles = {
   modalOverlay: { position: 'fixed', top:0, left:0, right:0, bottom:0, background: 'rgba(0,0,0,0.85)', display:'flex', justifyContent:'center', alignItems:'center', zIndex: 99, backdropFilter: 'blur(8px)' },
   modalContent: { background: 'white', padding: 60, borderRadius: 30, textAlign: 'center', boxShadow: '0 30px 80px rgba(0,0,0,0.6)', animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)' },
   
+  // 大厅页 (Lobby)
   lobbyCard: { background: 'white', padding: 40, borderRadius: 20, width: '1000px', maxWidth: '95vw', minHeight: '600px', display: 'flex', flexDirection: 'column', boxShadow: '0 30px 60px rgba(0,0,0,0.5)' },
   lobbyHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30, paddingBottom: 20, borderBottom: '1px solid #eee' },
   tag: { background: '#f0f9f4', color: '#27ae60', padding: '5px 10px', borderRadius: 20, fontSize: 14, display: 'flex', alignItems: 'center', gap: 5 },

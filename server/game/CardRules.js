@@ -12,6 +12,40 @@ const CardRules = {
         if (base === 1) return 15; // 2
         return base + 1; // 3 => 3
     },
+    
+    // [新增] 辅助：点数转显示文本
+    getPointText: (point) => {
+        if (point <= 10) return point.toString();
+        if (point === 11) return 'J';
+        if (point === 12) return 'Q';
+        if (point === 13) return 'K';
+        if (point === 14) return 'A';
+        if (point === 15) return '2';
+        if (point === 16) return '小王';
+        if (point === 17) return '大王';
+        return '?';
+    },
+    
+    // [新增] 辅助：将分析结果转为人类可读文本
+    getAnalysisText: (analysisResult) => {
+        if (!analysisResult || analysisResult.type === 'INVALID') return '未知牌型';
+        
+        const pt = CardRules.getPointText(analysisResult.val);
+        
+        switch (analysisResult.type) {
+            case 'SINGLE': return `单张 ${pt}`;
+            case 'PAIR': return `对 ${pt}`;
+            case 'TRIPLE': return `三张 ${pt}`;
+            case 'LIANDUI': return `${analysisResult.len/2}连对 (${pt}起)`;
+            case 'AIRPLANE': return `飞机 (${pt}起)`;
+            case '510K_MIXED': return '杂 510K';
+            case '510K_PURE': return '纯 510K';
+            case 'BOMB_STD': return `${analysisResult.len}炸 (${pt})`;
+            case 'BOMB_MAX': return `至尊 ${analysisResult.len}炸 (${pt})`;
+            case 'BOMB_KING': return '天王炸!';
+            default: return '未知';
+        }
+    },
 
     // 获取牌的分数 (5=5, 10=10, K=10)
     getCardScore: (cardVal) => {

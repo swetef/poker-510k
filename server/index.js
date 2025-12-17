@@ -207,7 +207,7 @@ io.on('connection', (socket) => {
     socket.on('start_game', ({ roomId }) => handleGameStart(roomId, false));
     socket.on('next_round', ({ roomId }) => handleGameStart(roomId, true));
 
-    // --- 出牌 ---
+// --- 出牌 ---
     socket.on('play_cards', ({ roomId, cards }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -221,7 +221,7 @@ io.on('connection', (socket) => {
         const currentHand = room.gameManager.gameState.hands[socket.id];
         io.to(socket.id).emit('hand_update', currentHand);
 
-        if (result.isWin) {
+        if (result.isRoundOver) { // 修正：从 isWin 改为 isRoundOver，保持与GameManager一致
             const rInfo = result.roundResult;
             if (rInfo.isGrandOver) {
                 io.to(roomId).emit('grand_game_over', { 
@@ -238,7 +238,9 @@ io.on('connection', (socket) => {
                 });
             }
         } else {
-            broadcastGameState(io, roomId, room);
+            // [新增] 广播状态时，附带出牌的日志文本
+            // result.logText 是 GameManager 新增的返回值 (例如 "张三: 三张 K")
+            broadcastGameState(io, roomId, room, result.logText);
         }
     });
 
@@ -251,7 +253,8 @@ io.on('connection', (socket) => {
         
         if (!result.success) return socket.emit('play_error', result.error);
 
-        broadcastGameState(io, roomId, room, "PASS");
+        // [修改] 广播状态时，附带 "xxx: 不要" 的日志
+        broadcastGameState(io, roomId, room, result.logText || "PASS");
     });
 
     // --- 断开连接 ---
