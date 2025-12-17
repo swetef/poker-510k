@@ -243,14 +243,17 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
 /* --- 3. 移动端横屏适配 (Landscape Overrides) --- */
 @media (max-width: 896px) and (orientation: landscape) {
     
+    /* [终极修复 1] 强制铺满屏幕，无视任何 margin，直接覆盖 */
     .mobile-layout-column {
-        flex-direction: row !important;
-        height: 100dvh !important; 
-        max-height: none !important;
+        position: fixed !important; /* 使用 fixed 强制占满视口 */
+        top: 0 !important;
+        left: 0 !important;
         width: 100% !important;
+        height: 100% !important;
         margin: 0 !important;
-        padding-left: max(15px, env(safe-area-inset-left)) !important; 
-        padding-right: max(15px, env(safe-area-inset-right)) !important; 
+        padding: 0 !important;
+        flex-direction: row !important;
+        z-index: 10;
     }
 
     /* --- [关键优化] 登录页 (Login) --- */
@@ -261,79 +264,78 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
 
     .mobile-login-right {
         width: 100% !important;
+        height: 100% !important;
         flex: 1 !important;
         border-radius: 0 !important;
-        margin-top: 0 !important;
+        margin: 0 !important;
         
-        /* [关键修复 1] 解决顶部被遮挡问题 */
-        /* 取消 center，使用 flex-start 让内容从顶部开始排列 */
+        /* 顶部对齐，防止被切 */
         justify-content: flex-start !important; 
         
-        /* 增加顶部内边距，确保内容不会贴着屏幕边缘 */
+        /* 增加内边距，确保内容安全 */
         padding-top: max(20px, env(safe-area-inset-top)) !important;
-        /* [修复] 增加底部内边距，确保最下面的按钮能滚动出来，不被手势条遮挡 */
-        padding-bottom: max(60px, env(safe-area-inset-bottom)) !important;
-        
+        /* [修复] 底部增加大幅度 Padding，确保最下面的按钮不被手势条遮挡 */
+        padding-bottom: max(50px, env(safe-area-inset-bottom)) !important;
         padding-left: max(40px, env(safe-area-inset-left)) !important; 
         padding-right: max(40px, env(safe-area-inset-right)) !important; 
         
         overflow-y: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
     }
-
-    /* 限制一下表单内容的最大宽度 */
+    
     .mobile-login-right .formContent {
         max-width: 500px;
         margin: 0 auto;
         width: 100%;
+        /* 确保底部按钮能完整露出 */
+        padding-bottom: 20px !important;
     }
 
 
     /* --- [关键优化] 大厅页 (Lobby) --- */
 
-    /* [关键修复 2] 解决全屏下按钮消失 */
+    /* [关键修复 2] 彻底重构 Lobby 布局 */
     .lobbyCard.mobile-layout-column {
-        flex-direction: column !important; 
-        width: 100% !important;         
-        max-width: none !important;    
-        
-        /* 去除 margin，让它在全屏时完全铺满，避免高度溢出 */
-        margin: 0 !important;  
-        height: 100% !important;      
-        max-height: 100dvh !important; 
-        
-        border-radius: 0 !important; 
-        padding: 0 !important;
         background: transparent !important; 
+        border: none !important;
     }
     
     .mobile-lobby-content {
         background: white !important;
-        border-radius: 0 !important; /* 全屏铺满不需要圆角 */
+        border-radius: 0 !important; 
         height: 100% !important;
         width: 100% !important;
         border: none !important;
         box-shadow: none !important;
+        
+        /* 使用 Flex Column 布局 */
+        display: flex !important;
+        flex-direction: column !important;
     }
 
     .lobbyHeader {
+        flex: 0 0 auto !important; /* 头部固定高度 */
         padding: 10px 20px !important; 
-        /* 适配顶部安全区（刘海） */
-        padding-top: max(10px, env(safe-area-inset-top)) !important;
+        padding-top: max(15px, env(safe-area-inset-top)) !important;
+        background: #f8f9fa;
+        z-index: 20;
     }
 
     /* 玩家列表 Grid */
     .mobile-lobby-grid {
+        /* [核心修复] 中间区域自适应，允许收缩，允许滚动 */
+        flex: 1 1 auto !important;
+        min-height: 0 !important; /* 关键！允许 Flex 子项收缩到 0 */
+        
+        overflow-y: auto !important;
         display: grid !important;
         grid-template-columns: repeat(4, 1fr) !important; 
         gap: 10px !important;
         padding: 10px 20px !important;
+        padding-left: max(30px, env(safe-area-inset-left)) !important;
+        padding-right: max(30px, env(safe-area-inset-right)) !important;
         align-content: start !important;
-        
-        /* [关键修复] 添加 min-height: 0，这在 Flex 子元素中非常重要 */
-        /* 它允许该区域在空间不足时自动收缩，而不是强行撑大父容器把 Footer 挤出去 */
-        min-height: 0 !important;
-        
-        overflow-y: auto !important;
     }
     
     @media (max-width: 600px) {
@@ -354,17 +356,21 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
 
     /* Footer 优化 */
     .mobile-lobby-footer {
-        position: static !important;
-        margin-top: auto !important;
-        
-        /* [关键修复] 强制不许收缩，防止被 grid 挤没 */
-        flex-shrink: 0 !important; 
-        
-        padding: 10px !important;
-        /* 适配底部安全区（横条） */
-        padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+        flex: 0 0 auto !important; /* 底部固定高度，不许被挤压 */
+        position: relative !important; /* 相对定位 */
+        z-index: 100 !important; /* 提高层级 */
         
         background: #f8f9fa !important;
-        z-index: 50 !important;
+        border-top: 1px solid #ddd !important;
+        
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        
+        /* [核心修复] 给底部留出足够的安全距离，防止被手势条遮挡按不到 */
+        padding-top: 10px !important;
+        padding-bottom: max(20px, env(safe-area-inset-bottom)) !important;
+        padding-left: max(20px, env(safe-area-inset-left)) !important;
+        padding-right: max(20px, env(safe-area-inset-right)) !important;
     }
 }
