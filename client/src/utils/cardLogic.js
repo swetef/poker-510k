@@ -44,22 +44,21 @@ export const sortHand = (cards, mode = 'POINT') => {
     return [...cards].sort((a, b) => getSortValue(b) - getSortValue(a));
 };
 
-// 计算手牌间距 - [修改] 适配移动端
+// 计算手牌间距
 export const calculateCardSpacing = (count, screenWidth) => {
     if (count <= 1) return 0;
     
-    // [修改] 适配手机：如果屏幕很窄，增加可用宽度的比例
+    // 适配手机逻辑：留出左右安全距离
     const isMobile = screenWidth < 768;
-    const padding = isMobile ? 10 : 80; // 进一步减少留白
+    const padding = isMobile ? 20 : 100; // 减少两侧留白
     
-    const w = Math.min(screenWidth - padding, 1400); 
+    const w = Math.min(screenWidth - padding, 1200); 
     
-    // [修改] 卡牌实际渲染宽度 (对应 styles.js 里的 card.width)
-    // 从 80 调整为 68 以匹配新样式
-    const cardWidth = 68; 
+    // 卡牌实际宽度
+    const cardWidth = 55; // 与 styles.js 中的 card width 一致
     
     // 最大间距：牌少的时候不要分太开
-    const maxGap = isMobile ? 40 : 50; 
+    const maxGap = isMobile ? 35 : 45; 
     
     const neededWidth = (count - 1) * maxGap + cardWidth;
     
@@ -68,4 +67,19 @@ export const calculateCardSpacing = (count, screenWidth) => {
     
     // 否则，挤压牌的间距
     return (w - cardWidth) / (count - 1);
+};
+
+// [新增] 辅助函数：根据触摸X坐标计算是第几张牌
+export const getCardIndexFromTouch = (touchX, containerLeft, spacing, count) => {
+    // 相对容器左侧的距离
+    const relativeX = touchX - containerLeft;
+    
+    // 估算索引
+    let index = Math.floor(relativeX / spacing);
+    
+    // 边界检查
+    if (index < 0) index = 0;
+    if (index >= count) index = count - 1; // 触摸在最后一张牌之后，也算最后一张
+    
+    return index;
 };

@@ -1,5 +1,6 @@
 // 统一样式文件 - 移动端适配版
-// 增加了 viewport 安全区支持，防止刘海遮挡
+// 基于原版布局，仅增加滑动选牌支持
+
 export const styles = {
   // 全局容器
   container: { 
@@ -276,6 +277,7 @@ export const styles = {
   playerScore: { fontSize: 9, color: '#f1c40f', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, marginTop: 1 },
   turnProgress: { position: 'absolute', bottom: 0, left: 0, height: 4, background: '#f1c40f', width: '100%', animation: 'progress 15s linear forwards' },
   
+  // [唯一修改点]
   handArea: { 
       position: 'absolute', 
       bottom: 10,             
@@ -285,7 +287,10 @@ export const styles = {
       display: 'flex', 
       justifyContent:'flex-start', 
       alignItems: 'flex-end',
-      zIndex: 20 
+      zIndex: 20,
+      // [新增] 禁用浏览器默认触摸行为，将滑动权交给 React
+      touchAction: 'none',
+      pointerEvents: 'auto'
   },
   
   card: { 
