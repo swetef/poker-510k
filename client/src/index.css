@@ -260,10 +260,9 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
     }
 
     /* --- [关键优化] 登录页 (Login) --- */
-    /* 策略：横屏高度宝贵，隐藏左侧品牌区，让右侧表单居中且更容易操作 */
     
     .mobile-login-left {
-        display: none !important; /* 隐藏左侧，节省空间 */
+        display: none !important; 
     }
 
     .mobile-login-right {
@@ -271,14 +270,21 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
         flex: 1 !important;
         border-radius: 0 !important;
         margin-top: 0 !important;
-        /* 增加左右安全距离，防止刘海屏遮挡 */
-        padding: 20px max(40px, env(safe-area-inset-right)) 20px max(40px, env(safe-area-inset-left)) !important;
-        justify-content: center !important; 
-        /* 允许内容滚动 */
+        
+        /* [关键修复 1] 解决顶部被遮挡问题 */
+        /* 取消 center，使用 flex-start 让内容从顶部开始排列 */
+        justify-content: flex-start !important; 
+        
+        /* 增加顶部内边距，确保内容不会贴着屏幕边缘 */
+        padding-top: max(20px, env(safe-area-inset-top)) !important;
+        padding-bottom: 20px !important;
+        padding-left: max(40px, env(safe-area-inset-left)) !important; 
+        padding-right: max(40px, env(safe-area-inset-right)) !important; 
+        
         overflow-y: auto !important;
     }
 
-    /* 限制一下表单内容的最大宽度，防止在长横屏上太宽 */
+    /* 限制一下表单内容的最大宽度 */
     .mobile-login-right .formContent {
         max-width: 500px;
         margin: 0 auto;
@@ -287,35 +293,39 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
 
 
     /* --- [关键优化] 大厅页 (Lobby) --- */
-    /* 策略：利用横向空间，改为宽布局 + 多列 Grid */
 
-    /* 容器变宽，利用屏幕 */
+    /* [关键修复 2] 解决全屏下按钮消失 */
     .lobbyCard.mobile-layout-column {
         flex-direction: column !important; 
-        width: 95% !important;         
-        max-width: none !important;    /* 取消 500px 限制 */
-        margin: 10px auto !important;  
-        border-radius: 12px !important; 
-        height: 90dvh !important;      
+        width: 100% !important;         
+        max-width: none !important;    
+        
+        /* 去除 margin，让它在全屏时完全铺满，避免高度溢出 */
+        margin: 0 !important;  
+        height: 100% !important;      
+        max-height: 100dvh !important; 
+        
+        border-radius: 0 !important; 
         padding: 0 !important;
-        background: transparent !important; /* 背景交给内部 content */
+        background: transparent !important; 
     }
     
-    /* 内容区白色背景 */
     .mobile-lobby-content {
         background: white !important;
-        border-radius: 12px !important;
+        border-radius: 0 !important; /* 全屏铺满不需要圆角 */
         height: 100% !important;
         width: 100% !important;
-        border: 1px solid rgba(0,0,0,0.1);
-        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        border: none !important;
+        box-shadow: none !important;
     }
 
     .lobbyHeader {
         padding: 10px 20px !important; 
+        /* 适配顶部安全区（刘海） */
+        padding-top: max(10px, env(safe-area-inset-top)) !important;
     }
 
-    /* [关键] 玩家列表 Grid 改为 4 列，减少纵向滚动 */
+    /* 玩家列表 Grid */
     .mobile-lobby-grid {
         display: grid !important;
         grid-template-columns: repeat(4, 1fr) !important; 
@@ -324,7 +334,6 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
         align-content: start !important;
     }
     
-    /* 针对特别小的手机横屏，如果太窄就 3 列 */
     @media (max-width: 600px) {
         .mobile-lobby-grid {
             grid-template-columns: repeat(3, 1fr) !important;
@@ -332,11 +341,11 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
     }
 
     .mobile-lobby-grid > div {
-        padding: 8px !important; /* 减小每个卡片的内边距 */
+        padding: 8px !important;
     }
     
     .mobile-lobby-grid .avatar-large {
-        width: 40px !important; /* 缩小头像 */
+        width: 40px !important;
         height: 40px !important;
         font-size: 16px !important;
     }
@@ -345,7 +354,15 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
     .mobile-lobby-footer {
         position: static !important;
         margin-top: auto !important;
+        
+        /* [关键修复] 强制不许收缩，防止被 grid 挤没 */
+        flex-shrink: 0 !important; 
+        
         padding: 10px !important;
+        /* 适配底部安全区（横条） */
+        padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+        
         background: #f8f9fa !important;
+        z-index: 50 !important;
     }
 }

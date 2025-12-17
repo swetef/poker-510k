@@ -1,10 +1,75 @@
-import React, { useEffect, useRef, useState } from 'react'; // [修改] 引入 useState
-import { Coins, History, Trophy, Flag, ChevronDown, ChevronUp } from 'lucide-react'; // [修改] 引入箭头图标
+import React, { useEffect, useRef, useState } from 'react'; 
+import { Coins, History, Trophy, Flag, ChevronDown, ChevronUp } from 'lucide-react'; 
 import { getCardDisplay } from '../utils/cardLogic.js';
 import { styles } from '../styles.js';
 import CountDownTimer from './CountDownTimer.jsx'; 
 
-// ... existing code (Card 组件保持不变) ...
+// [关键修改] 对局记录面板：支持折叠 + 透明度优化 + 文字描边
+export const GameLogPanel = ({ logs }) => {
+    const [isCollapsed, setIsCollapsed] = useState(false); // 默认展开
+    const endRef = useRef(null);
+
+    // 只有在展开状态下才自动滚动到底部
+    useEffect(() => {
+        if (!isCollapsed) {
+            endRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [logs, isCollapsed]);
+
+    return (
+        <div 
+            style={{
+                ...styles.gameLogPanel,
+                // [关键修改] 强制提高层级至最高，防止被玩家头像或动画遮挡
+                zIndex: 1000,
+                // [动态样式] 控制高度
+                height: isCollapsed ? 36 : 140, 
+                
+                // [关键修改] 背景设置：
+                // 1. background: 'transparent' 让背景完全透明
+                // 2. backdropFilter: 'none' 去除毛玻璃模糊效果
+                // 3. border: 收起时去除边框，彻底消除框框感
+                background: 'transparent', 
+                backdropFilter: 'none',
+                border: isCollapsed ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
+                boxShadow: 'none', // 去除阴影
+                
+                cursor: 'pointer',
+                
+                // [关键修改] 强力文字描边：让白字在任何背景上都清晰可见
+                // 模拟 text-stroke 效果，确保字是浮在画面上的
+                textShadow: '1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 2px 4px rgba(0,0,0,0.8)'
+            }}
+            onClick={() => setIsCollapsed(!isCollapsed)} // 点击切换状态
+        >
+            <div style={styles.logHeader}>
+                <History size={14} color="#f1c40f" style={{filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))'}}/> 
+                <span style={{color:'#fff', fontWeight:'bold', flex: 1}}>
+                    对局记录
+                </span>
+                {/* 右侧小箭头 */}
+                {isCollapsed ? <ChevronDown size={14} color="#ccc" style={{filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))'}}/> : <ChevronUp size={14} color="#ccc" style={{filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))'}}/>}
+            </div>
+            
+            {/* 内容区域 */}
+            <div style={{
+                ...styles.logList, 
+                // [动态样式] 折叠时隐藏内容，防止重叠
+                opacity: isCollapsed ? 0 : 1,
+                pointerEvents: isCollapsed ? 'none' : 'auto'
+            }}>
+                {logs.map((log, i) => (
+                    <div key={i} style={styles.logItem}>
+                        <span style={styles.logTime}>[{log.time.split(' ')[0]}]</span>
+                        <span style={{color: '#eee'}}>{log.text}</span>
+                    </div>
+                ))}
+                <div ref={endRef} />
+            </div>
+        </div>
+    );
+};
+
 export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacing }) => {
     const { suit, text, color, isScore } = getCardDisplay(cardVal);
     
@@ -42,7 +107,6 @@ export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacin
     );
 };
 
-// ... existing code (MiniCard 组件保持不变) ...
 export const MiniCard = ({ cardVal, index }) => {
     const { text, suit, color, isScore } = getCardDisplay(cardVal);
     return (
@@ -57,7 +121,6 @@ export const MiniCard = ({ cardVal, index }) => {
     );
 };
 
-// ... existing code (PlayerAvatar 组件保持不变) ...
 export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, remainingSeconds, rank, timerPosition, hideTimer, cardCount, showCardCountMode }) => {
     const progress = Math.min((score / targetScore) * 100, 100);
     const containerOpacity = rank ? 0.75 : 1; 
@@ -122,57 +185,6 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
                     position={timerPosition}
                 />
             )}
-        </div>
-    );
-};
-
-// [关键修改] 对局记录面板：支持折叠 + 透明度优化
-export const GameLogPanel = ({ logs }) => {
-    const [isCollapsed, setIsCollapsed] = useState(false); // 默认展开
-    const endRef = useRef(null);
-
-    // 只有在展开状态下才自动滚动到底部
-    useEffect(() => {
-        if (!isCollapsed) {
-            endRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }
-    }, [logs, isCollapsed]);
-
-    return (
-        <div 
-            style={{
-                ...styles.gameLogPanel,
-                // [动态样式] 控制高度和透明度
-                height: isCollapsed ? 36 : 140, 
-                background: isCollapsed ? 'rgba(0, 0, 0, 0.2)' : 'rgba(0, 0, 0, 0.35)', // 收起时更透明
-                cursor: 'pointer' // 鼠标手势
-            }}
-            onClick={() => setIsCollapsed(!isCollapsed)} // 点击切换状态
-        >
-            <div style={styles.logHeader}>
-                <History size={14} color="#f1c40f"/> 
-                <span style={{color:'#fff', fontWeight:'bold', flex: 1}}>
-                    对局记录
-                </span>
-                {/* 右侧小箭头 */}
-                {isCollapsed ? <ChevronDown size={14} color="#ccc"/> : <ChevronUp size={14} color="#ccc"/>}
-            </div>
-            
-            {/* 内容区域 */}
-            <div style={{
-                ...styles.logList, 
-                // [动态样式] 折叠时隐藏内容，防止重叠
-                opacity: isCollapsed ? 0 : 1,
-                pointerEvents: isCollapsed ? 'none' : 'auto'
-            }}>
-                {logs.map((log, i) => (
-                    <div key={i} style={styles.logItem}>
-                        <span style={styles.logTime}>[{log.time.split(' ')[0]}]</span>
-                        <span style={{color: '#eee'}}>{log.text}</span>
-                    </div>
-                ))}
-                <div ref={endRef} />
-            </div>
         </div>
     );
 };
