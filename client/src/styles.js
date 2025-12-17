@@ -217,16 +217,18 @@ export const styles = {
       maxWidth: 50 
   },
   
-  // [修改] 左上角日志面板 (GameLogPanel) - 半透明黑底，文字清晰
+  // [修改] 左上角日志面板 (GameLogPanel) - 支持折叠动画
   gameLogPanel: { 
       position: 'absolute', 
-      top: 50,  // 原位置是 60，稍微上移一点
+      top: 50, 
       left: 10, 
-      width: 200, // 加宽一点，方便显示长文字
-      height: 140, 
+      width: 200, 
+      // 高度在 JSX 中动态控制，这里设默认值
+      // height: 140, 
       
-      // 新样式
-      background: 'rgba(0, 0, 0, 0.5)', 
+      // [关键修改] 背景默认改为更透明 (0.35)，组件内动态控制
+      background: 'rgba(0, 0, 0, 0.35)', 
+      
       borderRadius: 10, 
       padding: '8px 12px', 
       border: '1px solid rgba(255,255,255,0.1)',
@@ -235,11 +237,14 @@ export const styles = {
       display: 'flex', 
       flexDirection: 'column', 
       zIndex: 5, 
-      pointerEvents: 'auto', // 允许滑动
-      boxShadow: '0 4px 10px rgba(0,0,0,0.3)'
+      pointerEvents: 'auto', 
+      boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+      
+      // [关键修改] 增加过渡动画，让折叠更丝滑
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      overflow: 'hidden' // 防止折叠时内容溢出
   },
   
-  // [新增] 日志标题栏
   logHeader: { 
       display: 'flex', 
       alignItems: 'center', 
@@ -250,7 +255,6 @@ export const styles = {
       marginBottom: 4 
   }, 
   
-  // [修改] 日志列表
   logList: { 
       flex: 1, 
       overflowY: 'auto', 
@@ -258,12 +262,12 @@ export const styles = {
       flexDirection: 'column', 
       gap: 4, 
       fontSize: 12,
-      // 顶部渐隐遮罩
+      // 增加透明度过渡
+      transition: 'opacity 0.2s ease-in-out',
       maskImage: 'linear-gradient(to bottom, transparent, black 10%)',
       WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 10%)'
   },
   
-  // [修改] 单条日志项
   logItem: { 
       lineHeight: 1.4, 
       display: 'flex', 
@@ -275,19 +279,15 @@ export const styles = {
   
   logTime: { display: 'none' },
   
-  // [修改] 顶部栏 (TableHeader) - 修复偏右问题
   tableHeader: { 
       padding: '4px 10px', 
-      // 移除原有的 env padding，因为外层 container 已经加过了
-      // paddingTop: 'calc(4px + env(safe-area-inset-top))', 
-      // paddingLeft: 'max(4px, env(safe-area-inset-left))', 
       display: 'flex', 
       justifyContent: 'space-between', 
       alignItems:'flex-start', 
       zIndex: 20,
       width: '100%',
       pointerEvents: 'none',
-      boxSizing: 'border-box' // 防止 padding 撑大宽度
+      boxSizing: 'border-box' 
   },
   
   roomBadgeContainer: {
@@ -352,17 +352,17 @@ export const styles = {
   // HandArea
   handArea: { 
       position: 'absolute', 
-      bottom: 5,              // [修改] 稍微往下放一点，贴底
+      bottom: 5,              
       left: 65,
       right: 10, 
-      height: 160,            // [关键修改] 高度从 90 改为 160，足以容纳弹起的牌(70+35=105)
+      height: 160,            
       display: 'flex', 
       justifyContent:'flex-start', 
-      alignItems: 'flex-end', // 保持底对齐，这样高度增加只会向上延伸
+      alignItems: 'flex-end', 
       zIndex: 20,
       touchAction: 'none', 
       pointerEvents: 'auto',
-      paddingBottom: 10       // 底部留一点空隙
+      paddingBottom: 10       
   },
   
   card: { 

@@ -1,9 +1,10 @@
-import React, { useEffect, useRef } from 'react';
-import { Coins, History, Trophy, Flag } from 'lucide-react'; 
+import React, { useEffect, useRef, useState } from 'react'; // [修改] 引入 useState
+import { Coins, History, Trophy, Flag, ChevronDown, ChevronUp } from 'lucide-react'; // [修改] 引入箭头图标
 import { getCardDisplay } from '../utils/cardLogic.js';
 import { styles } from '../styles.js';
 import CountDownTimer from './CountDownTimer.jsx'; 
 
+// ... existing code (Card 组件保持不变) ...
 export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacing }) => {
     const { suit, text, color, isScore } = getCardDisplay(cardVal);
     
@@ -41,6 +42,7 @@ export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacin
     );
 };
 
+// ... existing code (MiniCard 组件保持不变) ...
 export const MiniCard = ({ cardVal, index }) => {
     const { text, suit, color, isScore } = getCardDisplay(cardVal);
     return (
@@ -55,22 +57,14 @@ export const MiniCard = ({ cardVal, index }) => {
     );
 };
 
-// [修改] 增加 cardCount 属性
+// ... existing code (PlayerAvatar 组件保持不变) ...
 export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, remainingSeconds, rank, timerPosition, hideTimer, cardCount, showCardCountMode }) => {
     const progress = Math.min((score / targetScore) * 100, 100);
     const containerOpacity = rank ? 0.75 : 1; 
 
-    // 判断是否显示牌数
-    // 模式 0: 不显示
-    // 模式 1: <=3 张显示
-    // 模式 2: 一直显示
-    // 注意：如果是自己，通常不显示或者显示也不要紧，但需求通常是看对手
-    // 这里我们统一处理，如果是自己也显示
     let showBadge = false;
     if (showCardCountMode === 2) showBadge = true;
     if (showCardCountMode === 1 && cardCount <= 3 && cardCount > 0) showBadge = true;
-    
-    // 赢了或者手牌为0时，通常不显示数字，或者显示0？这里如果排位显示了就不显示数字了
     if (rank) showBadge = false;
 
     return (
@@ -83,7 +77,6 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
             position: 'relative',
             opacity: containerOpacity
         }}>
-            {/* [新增] 剩余牌数徽章 */}
             {showBadge && (
                 <div style={styles.cardCountBadge}>
                     {cardCount}
@@ -133,16 +126,45 @@ export const PlayerAvatar = ({ player, isTurn, score, targetScore, isMySocket, r
     );
 };
 
+// [关键修改] 对局记录面板：支持折叠 + 透明度优化
 export const GameLogPanel = ({ logs }) => {
+    const [isCollapsed, setIsCollapsed] = useState(false); // 默认展开
     const endRef = useRef(null);
-    useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [logs]);
+
+    // 只有在展开状态下才自动滚动到底部
+    useEffect(() => {
+        if (!isCollapsed) {
+            endRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [logs, isCollapsed]);
 
     return (
-        <div style={styles.gameLogPanel}>
+        <div 
+            style={{
+                ...styles.gameLogPanel,
+                // [动态样式] 控制高度和透明度
+                height: isCollapsed ? 36 : 140, 
+                background: isCollapsed ? 'rgba(0, 0, 0, 0.2)' : 'rgba(0, 0, 0, 0.35)', // 收起时更透明
+                cursor: 'pointer' // 鼠标手势
+            }}
+            onClick={() => setIsCollapsed(!isCollapsed)} // 点击切换状态
+        >
             <div style={styles.logHeader}>
-                <History size={16} color="#f1c40f"/> <span style={{color:'#fff', fontWeight:'bold'}}>对局记录</span>
+                <History size={14} color="#f1c40f"/> 
+                <span style={{color:'#fff', fontWeight:'bold', flex: 1}}>
+                    对局记录
+                </span>
+                {/* 右侧小箭头 */}
+                {isCollapsed ? <ChevronDown size={14} color="#ccc"/> : <ChevronUp size={14} color="#ccc"/>}
             </div>
-            <div style={styles.logList}>
+            
+            {/* 内容区域 */}
+            <div style={{
+                ...styles.logList, 
+                // [动态样式] 折叠时隐藏内容，防止重叠
+                opacity: isCollapsed ? 0 : 1,
+                pointerEvents: isCollapsed ? 'none' : 'auto'
+            }}>
                 {logs.map((log, i) => (
                     <div key={i} style={styles.logItem}>
                         <span style={styles.logTime}>[{log.time.split(' ')[0]}]</span>
