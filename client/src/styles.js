@@ -352,16 +352,17 @@ export const styles = {
   // HandArea
   handArea: { 
       position: 'absolute', 
-      bottom: 10,             
+      bottom: 5,              // [修改] 稍微往下放一点，贴底
       left: 65,
       right: 10, 
-      height: 90, 
+      height: 160,            // [关键修改] 高度从 90 改为 160，足以容纳弹起的牌(70+35=105)
       display: 'flex', 
       justifyContent:'flex-start', 
-      alignItems: 'flex-end',
+      alignItems: 'flex-end', // 保持底对齐，这样高度增加只会向上延伸
       zIndex: 20,
       touchAction: 'none', 
-      pointerEvents: 'auto'
+      pointerEvents: 'auto',
+      paddingBottom: 10       // 底部留一点空隙
   },
   
   card: { 

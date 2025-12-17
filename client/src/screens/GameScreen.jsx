@@ -55,6 +55,9 @@ export const GameScreen = ({
     const dragStartMode = useRef(true); // true = select, false = deselect
 
     const handleTouchStart = (e) => {
+        // [关键修改] 阻止默认事件，防止后续触发 click/mousedown 导致双重操作
+        if (e.cancelable) e.preventDefault();
+        
         isDragging.current = true;
         const touch = e.touches[0];
         const container = handContainerRef.current;
