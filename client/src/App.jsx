@@ -27,7 +27,6 @@ export default function App() {
   const [username, setUsername] = useState('');
   const [roomId, setRoomId] = useState('');
   
-  // [修改] 增加 isTeamMode: false 默认值
   const [roomConfig, setRoomConfig] = useState({ 
       deckCount: 2,          
       maxPlayers: 4,         
@@ -36,7 +35,7 @@ export default function App() {
       enableRankPenalty: false,    
       rankPenaltyScores: [30, 15],
       showCardCountMode: 1, // 默认：少于3张显示
-      isTeamMode: false     // [新增] 组队模式
+      isTeamMode: false     // 组队模式
   });
   
   const [isCreatorMode, setIsCreatorMode] = useState(false); 
@@ -74,6 +73,9 @@ export default function App() {
   const sortModeRef = useRef('POINT');
   const usernameRef = useRef(username); 
   const mySocketIdRef = useRef(null);   
+  
+  // [新增] 用于乐观更新失败时的回滚备份
+  const backupHandRef = useRef([]);
 
   useEffect(() => { usernameRef.current = username; }, [username]);
   useEffect(() => { mySocketIdRef.current = mySocketId; }, [mySocketId]);
@@ -141,6 +143,7 @@ export default function App() {
         // 初始牌数
         if (data.handCounts) setHandCounts(data.handCounts);
         SoundManager.play('deal');
+        backupHandRef.current = []; // 新局开始清空备份
     });
 
     socket.on('game_state_update', (data) => {
@@ -150,8 +153,12 @@ export default function App() {
              setTurnRemaining(data.turnRemaining);
         }
 
+        // [修改] 只有当出牌人不是自己时，才播放出牌音效
+        // 因为如果是自己，点击按钮的瞬间已经在本地播放过了 (防止重音和延迟)
         if (data.lastPlayed && data.lastPlayed.length > 0) {
-             SoundManager.play('play'); 
+             if (data.lastPlayerName !== usernameRef.current) {
+                SoundManager.play('play'); 
+             }
         }
 
         if (data.lastPlayed) setLastPlayed(sortHand(data.lastPlayed, sortModeRef.current));
@@ -179,12 +186,21 @@ export default function App() {
     socket.on('hand_update', (newHand) => {
         setMyHand(sortHand(newHand, sortModeRef.current)); 
         setSelectedCards([]);
+        // 服务器确认手牌更新了，说明操作成功，清空备份
+        backupHandRef.current = [];
     });
 
     socket.on('play_error', (msg) => { 
         setInfoMessage(msg); 
         setTimeout(()=>setInfoMessage(''), 2000); 
         SoundManager.play('lose'); 
+        
+        // [新增] 发生错误（如牌型不对/网络错误），回滚本地手牌
+        if (backupHandRef.current.length > 0) {
+            setMyHand(backupHandRef.current);
+            backupHandRef.current = [];
+            setInfoMessage("出牌无效，手牌已回滚");
+        }
     }); 
     
     socket.on('round_over', (data) => {
@@ -226,7 +242,6 @@ export default function App() {
   
   const handleToggleAutoPlay = () => socketRef.current.emit('toggle_auto_play', { roomId });
 
-  // [新增] 处理换座
   const handleSwitchSeat = (index1, index2) => {
       if (!isCreatorMode && !players.find(p=>p.id===mySocketId)?.isHost) return;
       socketRef.current.emit('switch_seat', { roomId, index1, index2 });
@@ -253,12 +268,34 @@ export default function App() {
     }
   };
 
+  // [修改] 乐观更新版出牌函数
   const handlePlayCards = () => {
     if (selectedCards.length === 0) return alert("请先选牌");
-    socketRef.current.emit('play_cards', { roomId, cards: selectedCards });
+    
+    // 1. 复制要出的牌
+    const cardsToPlay = [...selectedCards];
+
+    // 2. 备份当前手牌，万一服务器报错，用于回滚
+    backupHandRef.current = [...myHand];
+
+    // 3. 【乐观更新】立即从 UI 上移除手牌
+    const nextHand = myHand.filter(c => !cardsToPlay.includes(c));
+    setMyHand(nextHand);
+
+    // 4. 【乐观更新】立即在桌面上显示刚出的牌 (为了好看，本地也排个序)
+    setLastPlayed(sortHand(cardsToPlay, sortModeRef.current));
+    setLastPlayerName(username); // 临时显示自己的名字
+    setSelectedCards([]); // 清空选中状态
+
+    // 5. 【无延迟】立即播放音效
+    SoundManager.play('play');
+
+    // 6. 最后再发送给服务器
+    socketRef.current.emit('play_cards', { roomId, cards: cardsToPlay });
   };
   
   const handlePass = () => {
+    // 不要（Pass）通常不需要乐观更新，因为没有复杂的视觉变化
     socketRef.current.emit('pass_turn', { roomId });
     setSelectedCards([]);
   };
@@ -301,7 +338,7 @@ export default function App() {
           roomId, roomConfig, players, mySocketId, 
           handleStartGame, 
           handleAddBot,
-          handleSwitchSeat // [新增] 传递给子组件
+          handleSwitchSeat 
       }} />}
       
       {gameState === 'GAME' && <GameScreen {...{
