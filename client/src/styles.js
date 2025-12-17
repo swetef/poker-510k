@@ -352,7 +352,9 @@ export const styles = {
   // HandArea
   handArea: { 
       position: 'absolute', 
-      bottom: 5,              
+      // [关键修改] 抬高底部距离，从 5px 改为 max(25px, env...) 
+      // 避免 iOS 底部小黑条遮挡，解决“点击底部无反应”的问题
+      bottom: 'max(25px, env(safe-area-inset-bottom))',              
       left: 65,
       right: 10, 
       height: 160,            

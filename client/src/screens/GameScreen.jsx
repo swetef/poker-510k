@@ -70,34 +70,48 @@ export const GameScreen = ({
     const handContainerRef = useRef(null);
     const lastTouchedIndex = useRef(null);
     const isDragging = useRef(false);
-    const dragStartMode = useRef(true); 
+const dragStartMode = useRef(true); // true = select, false = deselect
 
     const handleTouchStart = (e) => {
+        // [关键修改] 阻止默认事件，防止后续触发 click/mousedown 导致双重操作
         if (e.cancelable) e.preventDefault();
         
-        isDragging.current = true;
         const touch = e.touches[0];
         const container = handContainerRef.current;
         if (!container) return;
 
         const rect = container.getBoundingClientRect();
+
+        // [新增] Y轴 触摸区域限制
+        // 手牌区高度是 160，但牌只有 70 (选中时视觉上更高)。
+        // 限制点击有效区域为底部往上 120px 范围内 (包含选中时的上浮和手指粗细容错)。
+        // 这样点击牌上方过高的空白区域将不会触发选中。
+        const TOUCH_VALID_HEIGHT = 120; 
+        if (touch.clientY < rect.bottom - TOUCH_VALID_HEIGHT) {
+            // 点在太上面了（空气），忽略，不开启拖拽
+            isDragging.current = false;
+            return;
+        }
+
+        isDragging.current = true;
         const index = getCardIndexFromTouch(touch.clientX, rect.left, cardSpacing, myHand.length);
         const cardVal = myHand[index];
 
         if (cardVal !== undefined) {
+            // 决定起始模式
             dragStartMode.current = !selectedCards.includes(cardVal);
             lastTouchedIndex.current = index;
             
             const isSelected = selectedCards.includes(cardVal);
             if (isSelected !== dragStartMode.current) {
-                 handleMouseDown(cardVal); 
+                 handleMouseDown(cardVal); // 触发 toggle
                  if (navigator.vibrate) navigator.vibrate(5);
             }
         }
     };
 
     const handleTouchMove = (e) => {
-        if (e.cancelable) e.preventDefault(); 
+        if (e.cancelable) e.preventDefault(); // 防止滚动
         if (!isDragging.current) return;
 
         const touch = e.touches[0];
@@ -105,7 +119,9 @@ export const GameScreen = ({
         if (!container) return;
 
         const rect = container.getBoundingClientRect();
-        if (touch.clientY < rect.top - 100 || touch.clientY > rect.bottom + 50) return;
+        // 增加一点 Y 轴容错，防止手指稍微滑出就断触
+        // [调整] 这里的范围可以稍微宽一点，允许滑动时手指稍微跑偏
+        if (touch.clientY < rect.top - 50 || touch.clientY > rect.bottom + 50) return;
 
         const index = getCardIndexFromTouch(touch.clientX, rect.left, cardSpacing, myHand.length);
         

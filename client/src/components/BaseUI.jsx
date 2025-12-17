@@ -74,6 +74,9 @@ export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacin
     const { suit, text, color, isScore } = getCardDisplay(cardVal);
     
     const handlePointerDown = (e) => {
+        // [核心修复] 保留 Code 2 的修复：如果是触摸事件，不处理，交给父容器
+        if (e.pointerType === 'touch') return;
+
         if (e.button !== 0 && e.pointerType === 'mouse') return;
         e.stopPropagation();
         onClick(cardVal);
@@ -106,7 +109,6 @@ export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacin
         </div>
     );
 };
-
 export const MiniCard = ({ cardVal, index }) => {
     const { text, suit, color, isScore } = getCardDisplay(cardVal);
     return (
