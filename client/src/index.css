@@ -21,6 +21,12 @@
   -webkit-tap-highlight-color: transparent; 
 }
 
+/* [关键修复 0] 全局盒模型重置 */
+/* 必须加上这个！否则 padding 会导致 100% 宽度的元素溢出屏幕，导致全屏模式下按钮消失 */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 /* 链接样式 */
 a { font-weight: 500; color: #646cff; text-decoration: inherit; }
 a:hover { color: #535bf2; }
@@ -231,18 +237,6 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
       font-size: 14px !important;
       margin: 0 !important;
   }
-
-
-  /* --- 2.3 游戏页 (Game Table) --- */
-  .modal-content-wrapper {
-      padding: 24px !important; 
-      width: 85% !important;    
-      max-width: 340px !important;
-      border-radius: 20px !important;
-      z-index: 1000 !important; 
-  }
-  .modal-content-wrapper h2 { font-size: 22px !important; }
-  .modal-content-wrapper div { font-size: 15px !important; line-height: 1.6 !important; }
 }
 
 
@@ -277,7 +271,9 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
         
         /* 增加顶部内边距，确保内容不会贴着屏幕边缘 */
         padding-top: max(20px, env(safe-area-inset-top)) !important;
-        padding-bottom: 20px !important;
+        /* [修复] 增加底部内边距，确保最下面的按钮能滚动出来，不被手势条遮挡 */
+        padding-bottom: max(60px, env(safe-area-inset-bottom)) !important;
+        
         padding-left: max(40px, env(safe-area-inset-left)) !important; 
         padding-right: max(40px, env(safe-area-inset-right)) !important; 
         
@@ -332,6 +328,12 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
         gap: 10px !important;
         padding: 10px 20px !important;
         align-content: start !important;
+        
+        /* [关键修复] 添加 min-height: 0，这在 Flex 子元素中非常重要 */
+        /* 它允许该区域在空间不足时自动收缩，而不是强行撑大父容器把 Footer 挤出去 */
+        min-height: 0 !important;
+        
+        overflow-y: auto !important;
     }
     
     @media (max-width: 600px) {
