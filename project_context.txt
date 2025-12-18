@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/18 13:04:58
+Project Context Generated at 2025/12/18 15:03:30
 
 
 ================================================================================
@@ -436,8 +436,11 @@ export default function App() {
       if (myHand.length > 0) setMyHand(prev => sortHand(prev, sortMode));
   }, [sortMode]);
 
-  const toggleSort = () => setSortMode(prev => prev === 'POINT' ? 'SUIT' : 'POINT');
-  
+
+  const toggleSort = () => setSortMode(prev => prev === 'POINT' ? 'ARRANGE' : 'POINT');
+
+
+
   const handleRoomAction = () => {
       if (!isConnected) return; 
       if (!username || !roomId) return alert("请输入昵称和房间号");
@@ -461,12 +464,23 @@ export default function App() {
       socketRef.current.emit('draw_seat_card', { roomId, cardIndex: index });
   };
 
+  // [新增] 更新房间配置的处理函数
+  const handleUpdateConfig = (newConfig) => {
+      socketRef.current.emit('update_room_config', { roomId, config: newConfig });
+      // 注意：本地 config 会通过 socket.on('room_info') 自动更新，所以这里不需要手动 setRoomConfig
+  };
+
   const updateSelection = (cardVal, forceSelect = null) => {
     setSelectedCards(prev => {
         const isSelected = prev.includes(cardVal);
         if (forceSelect !== null) return forceSelect && !isSelected ? [...prev, cardVal] : (!forceSelect && isSelected ? prev.filter(c => c !== cardVal) : prev);
         return isSelected ? prev.filter(c => c !== cardVal) : [...prev, cardVal];
     });
+  };
+
+  // [新增] 一键清空选中手牌
+  const handleClearSelection = () => {
+      setSelectedCards([]);
   };
 
   const handleMouseDown = (cardVal) => {
@@ -500,6 +514,7 @@ export default function App() {
     setSelectedCards([]);
   };
 
+  // [恢复] 横屏提示组件 (之前版本遗漏)
   const renderLandscapeHint = () => (
       <div className="landscape-hint">
           <div className="phone-rotate-icon"></div>
@@ -544,6 +559,7 @@ export default function App() {
   return (
     <>
       {renderDisconnectAlert()}
+      {/* [恢复] 渲染横屏提示 */}
       {renderLandscapeHint()}
       
       {gameState === 'LOGIN' && <LoginScreen {...{
@@ -560,7 +576,8 @@ export default function App() {
           roomId, roomConfig, players, mySocketId, 
           handleStartGame, 
           handleAddBot,
-          handleSwitchSeat 
+          handleSwitchSeat,
+          handleUpdateConfig // [新增] 传入配置更新函数
       }} />}
       
       {gameState === 'DRAW_SEATS' && <DrawSeatScreen {...{
@@ -575,7 +592,7 @@ export default function App() {
           mySocketId, roundResult, grandResult, roomConfig,
           turnRemaining, finishedRank, handCounts, 
           toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
-          handleToggleAutoPlay 
+          handleToggleAutoPlay, handleClearSelection // [新增] 传入清理函数
       }} />}
     </>
   );
@@ -1428,12 +1445,13 @@ export const DrawSeatScreen = ({
 
                         return (
                             <div key={index} style={{position: 'relative', width: 80, height: 110, display:'flex', flexDirection:'column', alignItems:'center'}}>
-                                {/* 玩家名字标签 */}
+                                {/* 玩家名字标签 - [修改] 稍微调高 top 避免视觉拥挤 */}
                                 {isFlipped && (
                                     <div style={{
-                                        position: 'absolute', top: -25, width: 120, textAlign: 'center',
+                                        position: 'absolute', top: -28, width: 120, textAlign: 'center',
                                         fontSize: 12, color: isMine ? '#f1c40f' : 'white', fontWeight: 'bold',
-                                        textShadow: '0 1px 2px black', whiteSpace:'nowrap'
+                                        textShadow: '0 1px 2px black', whiteSpace:'nowrap',
+                                        zIndex: 10 // 确保名字在最上层
                                     }}>
                                         {flipData.playerName}
                                     </div>
@@ -1444,12 +1462,16 @@ export const DrawSeatScreen = ({
                                     <div style={{
                                         transform: isMine ? 'scale(1.1)' : 'scale(1)', 
                                         transition: 'all 0.3s',
-                                        pointerEvents: 'auto' 
+                                        pointerEvents: 'auto',
+                                        // [修改] 如果是我的牌，在外层加光晕，而不是让 Card 组件自己弹起
+                                        boxShadow: isMine ? '0 0 20px rgba(241, 196, 15, 0.6)' : 'none',
+                                        borderRadius: 6
                                     }}>
                                         <Card 
                                             cardVal={flipData.val} 
                                             index={0} 
-                                            isSelected={isMine} 
+                                            // [修改] 强制设为 false，防止 Card 组件内部执行 translateY(-35px) 导致遮挡名字
+                                            isSelected={false} 
                                             onClick={()=>{}} 
                                             onMouseEnter={()=>{}} 
                                             spacing={0}
@@ -1500,13 +1522,13 @@ FILE PATH: client\src\screens\GameScreen.jsx
 ================================================================================
 // 游戏主界面 - 深度适配移动端布局，增加了全屏按钮
 // [完整修复版] 修复移动端 Touch 事件 passive 报错，解决操作卡死/失效问题
+// [本次修改] 1. 增加身份同步检查，防止掉线重连后视角变成房主 2. 保持原有逆时针布局和功能
 import React, { useState, useRef, useEffect } from 'react';
-import { Coins, Layers, Crown, Clock, Bot, Zap, Maximize, Minimize, Shield, Users } from 'lucide-react';
+import { Coins, Layers, Crown, Clock, Bot, Zap, Maximize, Minimize, Shield, RotateCcw } from 'lucide-react';
 import { styles } from '../styles.js'; 
 import { Card, MiniCard, PlayerAvatar, GameLogPanel } from '../components/BaseUI.jsx';
 import TimerComponent from '../components/CountDownTimer.jsx'; 
 import { calculateCardSpacing, getCardIndexFromTouch } from '../utils/cardLogic.js'; 
-import SoundManager from '../utils/SoundManager.js';
 
 export const GameScreen = ({ 
     roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
@@ -1515,8 +1537,31 @@ export const GameScreen = ({
     turnRemaining, finishedRank = [], 
     handCounts = {}, 
     toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
-    handleToggleAutoPlay 
+    handleToggleAutoPlay, handleClearSelection // [新增] 接收清理函数
 }) => {
+    // [关键修复] 身份同步保护
+    // 掉线重连时，SocketID 会变。如果新 ID 还没同步到 players 列表，myIndex 会找不到(-1)
+    // 导致下方 safeMyIndex 默认为 0，从而错误渲染成房主视角。
+    // 这里我们强制检查：只有当我在玩家列表中时，才渲染游戏界面。
+    const myPlayerExists = players.some(p => p.id === mySocketId);
+
+    if (!myPlayerExists && players.length > 0) {
+        return (
+            <div style={{...styles.gameTable, display:'flex', alignItems:'center', justifyContent:'center'}}>
+                <div style={{
+                    color:'white', fontSize: 16, fontWeight: 'bold',
+                    background: 'rgba(0,0,0,0.6)', padding: '15px 30px', borderRadius: 20,
+                    backdropFilter: 'blur(5px)', border: '1px solid rgba(255,255,255,0.2)',
+                    display: 'flex', alignItems: 'center', gap: 10
+                }}>
+                   <div className="spin" style={{width: 20, height: 20, border: '3px solid rgba(255,255,255,0.3)', borderTop: '3px solid white', borderRadius: '50%'}}></div>
+                   正在同步数据...
+                </div>
+                <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+            </div>
+        );
+    }
+
     const isMyTurn = currentTurnId === mySocketId;
     const amIHost = players.find(p => p.id === mySocketId)?.isHost;
     
@@ -1574,7 +1619,6 @@ export const GameScreen = ({
     const dragStartMode = useRef(true); // true = select, false = deselect
 
     // [核心修复] 使用 Ref 保存最新的状态和回调，防止 useEffect 闭包陷阱
-    // 这样我们在事件监听器里永远能拿到最新的 myHand 和 selectedCards
     const stateRef = useRef({ myHand, selectedCards, cardSpacing, handleMouseDown });
     useEffect(() => {
         stateRef.current = { myHand, selectedCards, cardSpacing, handleMouseDown };
@@ -1713,10 +1757,12 @@ export const GameScreen = ({
         }
     };
 
-    // --- 玩家位置计算逻辑 ---
+    // --- 玩家位置计算逻辑 (保持逆时针布局) ---
+    // 顺序: Me -> Right -> Top -> Left
     const renderPlayers = () => {
         const myIndex = players.findIndex(p => p.id === mySocketId);
-        const safeMyIndex = myIndex === -1 ? 0 : myIndex;
+        // [修改] 此时 myIndex 一定存在（已被上方 Loading 拦截），所以直接使用
+        const safeMyIndex = myIndex;
         
         const otherPlayers = [];
         for (let i = 1; i < players.length; i++) {
@@ -1729,26 +1775,30 @@ export const GameScreen = ({
 
         let countL = 0, countT = 0, countR = 0;
 
+        // 计算各方位人数
         if (total === 1) { countT = 1; }
-        else if (total === 2) { countL = 1; countR = 1; } 
-        else if (total === 3) { countL = 1; countT = 1; countR = 1; } 
-        else if (total === 4) { countL = 1; countT = 2; countR = 1; } 
-        else if (total === 5) { countL = 2; countT = 1; countR = 2; } 
+        else if (total === 2) { countR = 1; countL = 1; } 
+        else if (total === 3) { countR = 1; countT = 1; countL = 1; } 
+        else if (total === 4) { countR = 1; countT = 2; countL = 1; } 
+        else if (total === 5) { countR = 2; countT = 1; countL = 2; } 
         else {
-            countL = 2;
             countR = 2;
+            countL = 2;
             countT = total - 4;
         }
 
-        const leftGroup = otherPlayers.slice(0, countL);
-        const topGroup = otherPlayers.slice(countL, countL + countT);
-        const rightGroup = otherPlayers.slice(countL + countT);
+        // [核心修改] 分配逻辑调整：优先填右侧 (Right)，然后上方 (Top)，最后左侧 (Left)
+        const rightGroup = otherPlayers.slice(0, countR);
+        const topGroup = otherPlayers.slice(countR, countR + countT);
+        const leftGroup = otherPlayers.slice(countR + countT);
 
-        leftGroup.forEach((p, i) => {
-            const topPos = countL === 1 ? '40%' : (i === 0 ? '55%' : '35%'); 
-            layoutConfig.push({ p, pos: { top: topPos, left: 30, transform: 'translateY(-50%)' }, timerPos: 'right' });
+        // 1. 右侧 (Right) - 逆时针顺序：Me -> Right(下) -> Right(上)
+        rightGroup.forEach((p, i) => {
+            const topPos = countR === 1 ? '40%' : (i === 0 ? '55%' : '35%');
+            layoutConfig.push({ p, pos: { top: topPos, right: 10, transform: 'translateY(-50%)' }, timerPos: 'left' });
         });
 
+        // 2. 上方 (Top) - 逆时针顺序：Right(上) -> Top(右) -> Top(左) -> Left(上)
         topGroup.forEach((p, i) => {
             let leftPos;
             if (countT === 1) {
@@ -1757,14 +1807,15 @@ export const GameScreen = ({
                 const start = 20; 
                 const end = 80;
                 const step = (end - start) / (countT - 1);
-                leftPos = `${start + i * step}%`;
+                leftPos = `${end - i * step}%`; 
             }
             layoutConfig.push({ p, pos: { top: 10, left: leftPos, transform: 'translateX(-50%)' }, timerPos: 'bottom' });
         });
 
-        rightGroup.forEach((p, i) => {
-            const topPos = countR === 1 ? '40%' : (i === 0 ? '35%' : '55%');
-            layoutConfig.push({ p, pos: { top: topPos, right: 10, transform: 'translateY(-50%)' }, timerPos: 'left' });
+        // 3. 左侧 (Left) - 逆时针顺序：Top(左) -> Left(上) -> Left(下) -> Me
+        leftGroup.forEach((p, i) => {
+            const topPos = countL === 1 ? '40%' : (i === 0 ? '35%' : '55%'); 
+            layoutConfig.push({ p, pos: { top: topPos, left: 30, transform: 'translateY(-50%)' }, timerPos: 'right' });
         });
 
         const me = players[safeMyIndex];
@@ -1874,7 +1925,8 @@ export const GameScreen = ({
                         </button>
 
                         <button style={styles.sortButton} onClick={toggleSort}>
-                            <Layers size={16} style={{marginRight:5}}/> {sortMode === 'POINT' ? '点数' : '花色'}
+                            <Layers size={16} style={{marginRight:5}}/> 
+                            {sortMode === 'POINT' ? '点数' : (sortMode === 'SUIT' ? '花色' : '理牌')}
                         </button>
                     </div>
                 </div>
@@ -1947,7 +1999,6 @@ export const GameScreen = ({
                         filter: amIAutoPlay ? 'grayscale(0.6)' : 'none',
                         pointerEvents: amIAutoPlay ? 'none' : 'auto' 
                     }}
-                    // [修改] 移除了 onTouchXxx 属性绑定，改用 useEffect 绑定
                 >
                     {amIAutoPlay && (
                         <div style={{
@@ -1976,6 +2027,22 @@ export const GameScreen = ({
                 <div style={styles.actionBar}>
                     {!winner && !roundResult && !grandResult && (
                         <div style={{display:'flex', alignItems: 'center', gap: 20}}>
+                            
+                            {/* [新增] 重选按钮：只要有选中牌就显示，方便任何时候重置 */}
+                            {selectedCards.length > 0 && (
+                                <button 
+                                    style={{
+                                        ...styles.passButton, 
+                                        background: '#95a5a6', 
+                                        padding: '8px 15px',
+                                        display: 'flex', alignItems: 'center', gap: 5
+                                    }} 
+                                    onClick={handleClearSelection}
+                                >
+                                    <RotateCcw size={16} /> 重选
+                                </button>
+                            )}
+
                             {amIAutoPlay ? (
                                 <button 
                                     style={{
@@ -2021,13 +2088,18 @@ export const GameScreen = ({
 ================================================================================
 FILE PATH: client\src\screens\LobbyScreen.jsx
 ================================================================================
-// 大厅页 - 支持房主换座 + 组队模式显示 + 修复移动端溢出
-
-import React from 'react';
-import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown } from 'lucide-react';
+// 大厅页 - 支持房主换座 + 组队模式 + 房主修改规则
+import React, { useState } from 'react';
+import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Eye, Award, Check } from 'lucide-react';
 import { styles } from '../styles.js';
 
-export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleStartGame, handleAddBot, handleSwitchSeat }) => {
+export const LobbyScreen = ({ 
+    roomId, roomConfig, players, mySocketId, 
+    handleStartGame, 
+    handleAddBot,
+    handleSwitchSeat,
+    handleUpdateConfig // [新增] 接收 App.jsx 传来的更新函数
+}) => {
     
     // 判断自己是不是房主
     const amIHost = players.find(p => p.id === mySocketId)?.isHost;
@@ -2035,8 +2107,205 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
     // 判断是否开启了组队模式 (开关开启 且 人数是偶数)
     const isTeamMode = roomConfig.isTeamMode && roomConfig.maxPlayers % 2 === 0;
 
+    // --- 配置弹窗状态 ---
+    const [showSettings, setShowSettings] = useState(false);
+    
+    // 渲染配置滑块的辅助函数 (复用自 LoginScreen 风格)
+    const renderConfigSlider = (icon, label, value, min, max, step, onChange, suffix = '') => (
+        <div style={styles.configItem}>
+            <div style={styles.configLabel}>
+                <span style={{display:'flex', alignItems:'center', gap:6}}>{icon} {label}</span>
+                <span style={styles.configValue}>{value}{suffix}</span>
+            </div>
+            <input 
+                type="range" 
+                style={styles.rangeInput}
+                min={min} 
+                max={max} 
+                step={step || 1}
+                value={value} 
+                onChange={(e) => onChange(parseInt(e.target.value))}
+            />
+        </div>
+    );
+
+    // 统一更新函数
+    const updateConfig = (key, value) => {
+        const newConfig = { ...roomConfig, [key]: value };
+        // 立即发送 socket 请求
+        handleUpdateConfig(newConfig);
+    };
+
+    // 渲染设置弹窗内容
+    const renderSettingsModal = () => (
+        <div style={styles.modalOverlay}>
+            <div style={{...styles.modalContent, width: '90%', maxWidth: 500, padding: 25, textAlign:'left'}}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 20, borderBottom:'1px solid #eee', paddingBottom:10}}>
+                    <div style={{display:'flex', alignItems:'center', gap:8, fontSize:18, fontWeight:'bold', color:'#2c3e50'}}>
+                        <Settings size={20}/> 房间规则设置
+                    </div>
+                    <button onClick={()=>setShowSettings(false)} style={{background:'none', border:'none', cursor:'pointer', padding:5}}>
+                        <X size={20} color="#999"/>
+                    </button>
+                </div>
+
+                <div style={{maxHeight: '60vh', overflowY:'auto', paddingRight: 5}}>
+                    <div style={styles.configGrid}>
+                        {renderConfigSlider(<UsersIcon/>, "玩家人数", roomConfig.maxPlayers, 2, 12, 1, v=>updateConfig('maxPlayers', v), '人')}
+                        {renderConfigSlider(<Layers size={14}/>, "牌库数量", roomConfig.deckCount, 1, 8, 1, v=>updateConfig('deckCount', v), '副')}
+                        {renderConfigSlider(<Target size={14}/>, "获胜目标", roomConfig.targetScore, 500, 5000, 500, v=>updateConfig('targetScore', v), '分')}
+                        
+                        {/* 组队对抗开关 */}
+                        <div style={{...styles.configItem, marginTop: 10, padding: '10px', background: roomConfig.maxPlayers % 2 !== 0 ? '#f0f0f0' : '#e8f8f5', borderRadius: 8, opacity: roomConfig.maxPlayers % 2 !== 0 ? 0.6 : 1, gridColumn: '1 / -1'}}>
+                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                <div style={{display:'flex', alignItems:'center', gap:6, fontWeight:'600', color: roomConfig.maxPlayers % 2 !== 0 ? '#999' : '#27ae60'}}>
+                                    <Shield size={16} /> 组队对抗模式 (2v2, 3v3...)
+                                </div>
+                                <label style={{position:'relative', display:'inline-block', width:40, height:20}}>
+                                    <input 
+                                        type="checkbox" 
+                                        style={{opacity:0, width:0, height:0}}
+                                        checked={roomConfig.isTeamMode && roomConfig.maxPlayers % 2 === 0}
+                                        disabled={roomConfig.maxPlayers % 2 !== 0}
+                                        onChange={(e) => updateConfig('isTeamMode', e.target.checked)}
+                                    />
+                                    <span style={{
+                                        position:'absolute', cursor: roomConfig.maxPlayers % 2 !== 0 ? 'not-allowed' : 'pointer', top:0, left:0, right:0, bottom:0, 
+                                        backgroundColor: (roomConfig.isTeamMode && roomConfig.maxPlayers % 2 === 0) ? '#27ae60' : '#ccc', 
+                                        transition:'.4s', borderRadius: 20
+                                    }}>
+                                        <span style={{
+                                            position:'absolute', content:"", height:16, width:16, left:2, bottom:2, 
+                                            backgroundColor:'white', transition:'.4s', borderRadius:'50%',
+                                            transform: (roomConfig.isTeamMode && roomConfig.maxPlayers % 2 === 0) ? 'translateX(20px)' : 'translateX(0)'
+                                        }}></span>
+                                    </span>
+                                </label>
+                            </div>
+                            <div style={{fontSize: 11, color: '#7f8c8d', marginTop: 4}}>
+                                {roomConfig.maxPlayers % 2 !== 0 ? "⚠️ 需要偶数人数 (4, 6...) 才能开启" : "开启后，间隔入座为队友"}
+                            </div>
+                        </div>
+                        
+                        {/* 出牌时限 */}
+                        <div style={styles.configItem}>
+                            <div style={styles.configLabel}>
+                                <span style={{display:'flex', alignItems:'center', gap:6}}><Clock size={14}/> 出牌时限</span>
+                                <span style={styles.configValue}>{roomConfig.turnTimeout / 1000}秒</span>
+                            </div>
+                            <div style={styles.radioGroup}>
+                                {[30, 60, 90, 120].map(sec => (
+                                    <button 
+                                        key={sec}
+                                        style={roomConfig.turnTimeout === sec * 1000 ? styles.radioBtnActive : styles.radioBtn}
+                                        onClick={() => updateConfig('turnTimeout', sec * 1000)}
+                                    >
+                                        {sec}s
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 剩余牌数显示配置 */}
+                    <div style={{marginTop: 20, paddingTop: 15, borderTop: '1px solid #f0f0f0'}}>
+                        <div style={{display:'flex', alignItems:'center', gap:6, color:'#7f8c8d', fontSize:14, marginBottom:10, fontWeight:600}}>
+                            <Eye size={14}/> 剩余牌数显示规则
+                        </div>
+                        <div style={styles.radioGroup}>
+                            <button 
+                                style={roomConfig.showCardCountMode === 0 ? styles.radioBtnActive : styles.radioBtn}
+                                onClick={() => updateConfig('showCardCountMode', 0)}
+                            >
+                                不显示
+                            </button>
+                            <button 
+                                style={roomConfig.showCardCountMode === 1 ? styles.radioBtnActive : styles.radioBtn}
+                                onClick={() => updateConfig('showCardCountMode', 1)}
+                            >
+                                ≤3张显示
+                            </button>
+                            <button 
+                                style={roomConfig.showCardCountMode === 2 ? styles.radioBtnActive : styles.radioBtn}
+                                onClick={() => updateConfig('showCardCountMode', 2)}
+                            >
+                                一直显示
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* 排名赏罚 */}
+                    <div style={{marginTop: 20, paddingTop: 20, borderTop: '1px solid #f0f0f0'}}>
+                         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 15}}>
+                            <div style={{display:'flex', alignItems:'center', gap:8, fontWeight:'600', color:'#555', fontSize:14}}>
+                                <Award size={16} /> 启用排名赏罚 (进贡/抓分)
+                            </div>
+                            <label style={{position:'relative', display:'inline-block', width:40, height:20}}>
+                                <input 
+                                    type="checkbox" 
+                                    style={{opacity:0, width:0, height:0}}
+                                    checked={roomConfig.enableRankPenalty}
+                                    onChange={(e) => updateConfig('enableRankPenalty', e.target.checked)}
+                                />
+                                <span style={{
+                                    position:'absolute', cursor:'pointer', top:0, left:0, right:0, bottom:0, 
+                                    backgroundColor: roomConfig.enableRankPenalty ? '#27ae60' : '#ccc', 
+                                    transition:'.4s', borderRadius: 20
+                                }}>
+                                    <span style={{
+                                        position:'absolute', content:"", height:16, width:16, left:2, bottom:2, 
+                                        backgroundColor:'white', transition:'.4s', borderRadius:'50%',
+                                        transform: roomConfig.enableRankPenalty ? 'translateX(20px)' : 'translateX(0)'
+                                    }}></span>
+                                </span>
+                            </label>
+                        </div>
+                        {roomConfig.enableRankPenalty && (
+                            <div style={{background:'#f9f9f9', padding: 15, borderRadius: 8, display:'flex', gap: 20, fontSize: 13}}>
+                                <div style={{flex:1}}>
+                                    <div style={{marginBottom:5, color:'#7f8c8d'}}>头尾赏罚</div>
+                                    <input 
+                                        type="number" style={{...styles.input, background:'white', height: 35, padding: '0 10px'}} 
+                                        value={roomConfig.rankPenaltyScores[0]}
+                                        onChange={e => {
+                                            const val = Math.max(0, parseInt(e.target.value) || 0);
+                                            updateConfig('rankPenaltyScores', [val, roomConfig.rankPenaltyScores[1]]);
+                                        }}
+                                    />
+                                </div>
+                                <div style={{flex:1}}>
+                                    <div style={{marginBottom:5, color:'#7f8c8d'}}>次级赏罚</div>
+                                    <input 
+                                        type="number" style={{...styles.input, background:'white', height: 35, padding: '0 10px'}} 
+                                        value={roomConfig.rankPenaltyScores[1]}
+                                        onChange={e => {
+                                            const val = Math.max(0, parseInt(e.target.value) || 0);
+                                            updateConfig('rankPenaltyScores', [roomConfig.rankPenaltyScores[0], val]);
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                </div>
+
+                <div style={{marginTop: 20, textAlign:'center'}}>
+                    <button style={{...styles.primaryButton, height: 50, fontSize: 16, marginTop:0}} onClick={() => setShowSettings(false)}>
+                        <Check size={18} style={{marginRight:5}}/> 完成设置
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+
+    // 简单封装 Users 图标
+    const UsersIcon = () => <User size={14}/>;
+
     return (
     <div style={styles.container}>
+      {showSettings && renderSettingsModal()}
+
       <div style={styles.lobbyCard} className="mobile-layout-column">
           
           <div className="mobile-lobby-content" style={{display:'flex', flexDirection:'column', height:'100%', width: '100%', overflow:'hidden', borderRadius: 20}}>
@@ -2045,26 +2314,54 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
             <div style={styles.lobbyHeader}>
                 <div style={{display:'flex', alignItems:'center', gap: 10}}>
                     <h2 style={{margin:0, fontSize: 24}}>房间: <span style={{fontFamily:'monospace', color:'#27ae60'}}>{roomId}</span></h2>
-                    {/* [新增] 组队模式标签 */}
+                    {/* 组队模式标签 */}
                     {isTeamMode && (
                         <span style={{background:'#27ae60', color:'white', fontSize:12, padding:'2px 8px', borderRadius:10, display:'flex', alignItems:'center', gap:4}}>
                             <Shield size={12}/> 组队模式
                         </span>
                     )}
                 </div>
-                <div style={{display:'flex', gap:15}}>
-                    <span style={styles.tag}><Target size={14}/> 目标 {roomConfig.targetScore}</span>
-                    <span style={styles.tag}><Layers size={14}/> {roomConfig.deckCount}副</span>
-                    <span style={styles.tag}><User size={14}/> {roomConfig.maxPlayers}人</span>
+                
+                {/* 头部右侧：信息标签 + 设置按钮 */}
+                <div style={{display:'flex', gap:10, alignItems:'center'}}>
+                    <div style={{display:'flex', gap:10}} className="hide-on-mobile">
+                        <span style={styles.tag}><Target size={14}/> 目标 {roomConfig.targetScore}</span>
+                        <span style={styles.tag}><Layers size={14}/> {roomConfig.deckCount}副</span>
+                        <span style={styles.tag}><User size={14}/> {roomConfig.maxPlayers}人</span>
+                    </div>
+
+                    {/* [新增] 房主设置按钮 */}
+                    {amIHost && (
+                        <button 
+                            onClick={() => setShowSettings(true)}
+                            style={{
+                                background: '#f1f2f6', border: '1px solid #ccc', borderRadius: '50%', 
+                                width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer', transition: 'all 0.2s', color: '#2c3e50'
+                            }}
+                            title="修改房间规则"
+                        >
+                            <Settings size={20} />
+                        </button>
+                    )}
                 </div>
             </div>
+            
+            {/* 移动端显示的配置概览 (作为补充) */}
+            <div style={{padding: '0 15px 10px 15px', display:'flex', gap:8, flexWrap:'wrap', fontSize:12, color:'#666'}} className="mobile-only-tags">
+                 <span style={styles.tag}><Target size={12}/> {roomConfig.targetScore}</span>
+                 <span style={styles.tag}><Layers size={12}/> {roomConfig.deckCount}副</span>
+                 <span style={styles.tag}><User size={12}/> {roomConfig.maxPlayers}人</span>
+                 {roomConfig.enableRankPenalty && <span style={{...styles.tag, color:'#e67e22', background:'#fdf2e9'}}><Award size={12}/> 赏罚</span>}
+            </div>
+            <style>{`@media (min-width: 769px) { .mobile-only-tags { display: none !important; } }`}</style>
 
             {/* 玩家列表区域 */}
             <div style={styles.playerGrid} className="mobile-lobby-grid">
                 {players.map((p, i) => {
-                    // --- [新增] 组队模式视觉逻辑 ---
-                    let teamColor = '#eee'; // 默认边框
-                    let teamBg = 'white';   // 默认背景
+                    // 组队模式视觉逻辑
+                    let teamColor = '#eee'; 
+                    let teamBg = 'white';   
                     let teamName = null;
                     
                     if (isTeamMode) {
@@ -2074,7 +2371,6 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
                         teamName = isRedTeam ? '红队' : '蓝队';
                     }
 
-                    // 自己的高亮处理 (在组队模式下叠加，普通模式下单独显示)
                     const isMe = p.id === mySocketId;
                     if (isMe && !isTeamMode) {
                         teamBg = '#f0fbf4';
@@ -2090,7 +2386,7 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
                             borderWidth: borderWidth,
                             position: 'relative'
                         }}>
-                            {/* [新增] 组队角标 */}
+                            {/* 组队角标 */}
                             {teamName && (
                                 <div style={{
                                     position: 'absolute', top: 0, left: 0, 
@@ -2102,13 +2398,12 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
                                 </div>
                             )}
 
-                            {/* --- [新增] 房主调位按钮 (所有模式通用) --- */}
+                            {/* 房主调位按钮 */}
                             {amIHost && players.length > 1 && (
                                 <div style={{
                                     position: 'absolute', right: 5, top: '50%', transform: 'translateY(-50%)',
                                     display:'flex', flexDirection:'column', gap:4
                                 }}>
-                                    {/* 上移按钮 (非第一位显示) */}
                                     {i > 0 && (
                                         <button 
                                             onClick={(e) => { e.stopPropagation(); handleSwitchSeat(i, i - 1); }}
@@ -2121,7 +2416,6 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
                                             <ArrowUp size={14} color="#666"/>
                                         </button>
                                     )}
-                                    {/* 下移按钮 (非最后一位显示) */}
                                     {i < players.length - 1 && (
                                         <button 
                                             onClick={(e) => { e.stopPropagation(); handleSwitchSeat(i, i + 1); }}
@@ -2150,7 +2444,7 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
                 })}
                 
                 {/* 虚拟空位 */}
-                {Array.from({length: roomConfig.maxPlayers - players.length}).map((_, i) => (
+                {Array.from({length: Math.max(0, roomConfig.maxPlayers - players.length)}).map((_, i) => (
                     <div key={`empty-${i}`} style={{...styles.lobbyPlayer, borderStyle: 'dashed', opacity: 0.5}}>
                         <div style={{...styles.avatarLarge, background:'#f0f0f0', color:'#ccc'}}>?</div>
                         <div style={{color:'#999'}}>等待加入</div>
@@ -2513,7 +2807,7 @@ FILE PATH: client\src\styles.js
 ================================================================================
 // 统一样式文件 - 移动端适配版
 // [完整版] 包含所有原有布局、拇指热区、以及新增的滑动选牌支持和剩余牌数徽章
-// [本次修复] 调整手牌区域位置，防止被左下角头像遮挡
+// [本次修复] 修复大厅人多时撑破屏幕的问题：给 lobbyCard 加限高，给 playerGrid 加滚动
 
 export const styles = {
   // ============================
@@ -2927,15 +3221,60 @@ export const styles = {
       alignItems: 'center'
   },
   
-  // 大厅页 (Lobby)
-  lobbyCard: { background: 'white', padding: 40, borderRadius: 20, width: '1000px', maxWidth: '95vw', minHeight: '600px', display: 'flex', flexDirection: 'column', boxShadow: '0 30px 60px rgba(0,0,0,0.5)' },
-  lobbyHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30, paddingBottom: 20, borderBottom: '1px solid #eee' },
+  // 大厅页 (Lobby) - [修复]
+  lobbyCard: { 
+      background: 'white', 
+      padding: 40, 
+      borderRadius: 20, 
+      width: '1000px', 
+      maxWidth: '95vw', 
+      minHeight: '600px',
+      // [核心修复] 限制最大高度，防止在大屏或人数过多时撑破屏幕
+      maxHeight: '85vh', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      boxShadow: '0 30px 60px rgba(0,0,0,0.5)',
+      // 确保内容溢出时不会破坏圆角或溢出 Card
+      overflow: 'hidden' 
+  },
+
+  lobbyHeader: { 
+      display: 'flex', 
+      justifyContent: 'space-between', 
+      alignItems: 'center', 
+      marginBottom: 30, 
+      paddingBottom: 20, 
+      borderBottom: '1px solid #eee',
+      // 防止头部被压缩
+      flexShrink: 0
+  },
+  
   tag: { background: '#f0f9f4', color: '#27ae60', padding: '5px 10px', borderRadius: 20, fontSize: 14, display: 'flex', alignItems: 'center', gap: 5 },
-  playerGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 20, flex: 1, alignContent: 'start' },
+  
+  playerGrid: { 
+      display: 'grid', 
+      gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', 
+      gap: 20, 
+      flex: 1, 
+      alignContent: 'start',
+      // [核心修复] 允许网格内部滚动
+      overflowY: 'auto',
+      minHeight: 0
+  },
+  
   lobbyPlayer: { border: '2px solid #eee', borderRadius: 12, padding: 25, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15, position: 'relative', transition: 'all 0.2s' },
   avatarLarge: { width: 80, height: 80, borderRadius: '50%', background: '#34495e', color: 'white', fontSize: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
   hostBadge: { position: 'absolute', top: 10, right: 10, background: '#f1c40f', color: '#333', fontSize: 12, padding: '4px 8px', borderRadius: 4, fontWeight: 'bold' },
-  lobbyFooter: { marginTop: 'auto', borderTop: '1px solid #eee', paddingTop: 20, display: 'flex', justifyContent: 'center' },
+  
+  lobbyFooter: { 
+      marginTop: 'auto', 
+      borderTop: '1px solid #eee', 
+      paddingTop: 20, 
+      display: 'flex', 
+      justifyContent: 'center',
+      // 防止底部被压缩
+      flexShrink: 0 
+  },
 };
 
 ================================================================================
@@ -2962,6 +3301,24 @@ export const getSuitSortValue = (cardVal) => {
     return suit * 100 + val; 
 };
 
+// 判断是否为分牌 (5, 10, K)
+const isScoreCard = (cardVal) => {
+    const normalized = cardVal % 54;
+    if (normalized >= 52) return false; // 王不是分牌
+    const val = normalized % 13;
+    // 0=A, 1=2, 2=3, 3=4(5), ..., 9(10), ..., 12(K)
+    return val === 4 || val === 9 || val === 12;
+};
+
+// 获取分牌的内部排序权重 (K > 10 > 5)
+const getScoreCardRank = (cardVal) => {
+    const val = (cardVal % 54) % 13;
+    if (val === 12) return 3; // K
+    if (val === 9) return 2;  // 10
+    if (val === 4) return 1;  // 5
+    return 0;
+};
+
 // 获取单张牌的显示信息
 export const getCardDisplay = (cardVal) => {
     const normalizedValue = cardVal % 54; 
@@ -2979,11 +3336,84 @@ export const getCardDisplay = (cardVal) => {
     return { suit, text, color, isScore };
 };
 
-// 手牌排序
+// 智能理牌逻辑
+export const arrangeHand = (cards) => {
+    const scoreCards = []; // 右侧：分牌
+    const otherCards = []; // 待分类的牌
+
+    // 1. 先把所有分牌(5, 10, K)提取出来 (不做特殊修正，严格分离)
+    cards.forEach(c => {
+        if (isScoreCard(c)) scoreCards.push(c);
+        else otherCards.push(c);
+    });
+
+    // 2. 对分牌进行排序：K > 10 > 5 (KKKK 1010 5555)
+    scoreCards.sort((a, b) => {
+        const rA = getScoreCardRank(a);
+        const rB = getScoreCardRank(b);
+        if (rA !== rB) return rB - rA; // 降序 (K=3, 10=2, 5=1)
+        return getSuitSortValue(b) - getSuitSortValue(a); // 同分按花色排
+    });
+
+    // 3. 对剩余牌进行分组
+    const groups = new Map();
+    otherCards.forEach(c => {
+        const val = getSortValue(c);
+        if (!groups.has(val)) groups.set(val, []);
+        groups.get(val).push(c);
+    });
+
+    const bombs = [];   // 左侧：炸弹
+    const triples = []; // 中间：三张
+    const pairs = [];   // 中间：对子
+    const singles = []; // 中间：单张
+
+    groups.forEach((groupCards, val) => {
+        const count = groupCards.length;
+        // 规则：数量 >= 4 视为炸弹
+        if (count >= 4) {
+            bombs.push({ val, cards: groupCards, count });
+        } else if (count === 3) {
+            triples.push({ val, cards: groupCards });
+        } else if (count === 2) {
+            pairs.push({ val, cards: groupCards });
+        } else {
+            singles.push({ val, cards: groupCards });
+        }
+    });
+
+    // 4. 排序炸弹：张数优先 (10张 > 8张 > 6张...)，其次点数
+    bombs.sort((a, b) => {
+        if (a.count !== b.count) return b.count - a.count; // 张数降序
+        return b.val - a.val; // 点数降序
+    });
+
+    // 5. 排序中间废牌：各自按点数降序
+    const sortByVal = (a, b) => b.val - a.val;
+    triples.sort(sortByVal);
+    pairs.sort(sortByVal);
+    singles.sort(sortByVal);
+
+    // 6. 展平数组
+    const flatBombs = bombs.flatMap(b => b.cards);
+    const flatTriples = triples.flatMap(t => t.cards);
+    const flatPairs = pairs.flatMap(p => p.cards);
+    const flatSingles = singles.flatMap(s => s.cards);
+
+    // 7. 拼接：左炸弹 + 中(三+对+单) + 右分牌
+    return [...flatBombs, ...flatTriples, ...flatPairs, ...flatSingles, ...scoreCards];
+};
+
+// 手牌排序入口
 export const sortHand = (cards, mode = 'POINT') => {
+    // 即使UI删除了 SUIT 入口，为了兼容性保留代码逻辑
     if (mode === 'SUIT') {
         return [...cards].sort((a, b) => getSuitSortValue(b) - getSuitSortValue(a));
     }
+    if (mode === 'ARRANGE') {
+        return arrangeHand(cards);
+    }
+    // 默认 POINT
     return [...cards].sort((a, b) => getSortValue(b) - getSortValue(a));
 };
 
@@ -3897,10 +4327,9 @@ class GameManager {
                         const wIdx = this.players.findIndex(p => p.id === wId);
                         const pCount = this.players.length;
                         
-                        // 按照出牌顺序（逆时针/索引递减）寻找最近的一位【还有手牌】的队友
+                        // [修正] 因为出牌顺序改为 index++ (递增)，所以接风搜索也要改为递增方向
                         for (let i = 1; i < pCount; i++) {
-                            // 注意：_advanceTurn 使用的是减法逻辑，所以这里也往回找
-                            const tIdx = (wIdx - i + pCount) % pCount; 
+                            const tIdx = (wIdx + i) % pCount; 
                             const potentialTeammate = this.players[tIdx];
                             
                             // 是队友 且 还是活跃状态
@@ -3918,9 +4347,7 @@ class GameManager {
                     }
                     
                     if (!teammateTookOver) {
-                        // 如果不是组队模式，或队友也都跑了 -> 保持默认行为（下家接风）
-                        // 此时 currentTurnIndex 已经由上方的 _advanceTurn() 指向了下家
-                        // infoMessage = `${currPlayer.name}: 不要 (下家接风)`; 
+                        // 正常下家接风
                     }
                 }
             }
@@ -4004,13 +4431,14 @@ class GameManager {
         return count;
     }
 
+    // [核心修复] 将轮转方向改为递增 (index + 1)
     _advanceTurn() {
         const playerCount = this.players.length;
         let nextIndex = this.gameState.currentTurnIndex;
         let attempts = 0;
         
         do {
-            nextIndex = (nextIndex - 1 + playerCount) % playerCount;
+            nextIndex = (nextIndex + 1) % playerCount; // <--- 改为 +1
             attempts++;
         } while (
             this.gameState.hands[this.players[nextIndex].id].length === 0 && 
@@ -4025,12 +4453,10 @@ class GameManager {
         
         const currentScoresDisplay = {};
         const playersInfo = {};
-        
         const handCounts = {};
 
         this.players.forEach(p => {
             currentScoresDisplay[p.id] = (this.grandScores[p.id] || 0) + (this.gameState.roundPoints[p.id] || 0);
-            // [关键修改] 将 team 信息暴露给前端
             playersInfo[p.id] = { 
                 isBot: p.isBot, 
                 isAutoPlay: p.isAutoPlay,
@@ -4062,27 +4488,43 @@ class GameManager {
         };
     }
 
+    // [核心修复] 完整的重连数据搬运
     reconnectPlayer(oldId, newId) {
+        console.log(`[GameManager] Moving data from ${oldId} to ${newId}`);
+
+        // 1. 搬运全局总分 (Key: socketId)
         if (this.grandScores[oldId] !== undefined) {
             this.grandScores[newId] = this.grandScores[oldId];
             delete this.grandScores[oldId];
         }
+
+        // 2. 搬运上局赢家标记
         if (this.lastWinnerId === oldId) this.lastWinnerId = newId;
 
+        // 3. 处理托管状态 (默认: 如果玩家重连回来，取消托管，让他自己玩)
         const player = this.players.find(p => p.id === newId);
-        if (player) player.isAutoPlay = false;
+        if (player) {
+             // 也可以选择保持 player.isAutoPlay = player.isAutoPlay; 
+             // 但通常玩家掉线回来是想自己操作的
+             player.isAutoPlay = false; 
+        }
 
+        // 4. 搬运当前局数据
         if (this.gameState) {
+            // 手牌
             if (this.gameState.hands[oldId]) {
                 this.gameState.hands[newId] = this.gameState.hands[oldId];
                 delete this.gameState.hands[oldId];
             }
+            // 本局得分
             if (this.gameState.roundPoints[oldId] !== undefined) {
                 this.gameState.roundPoints[newId] = this.gameState.roundPoints[oldId];
                 delete this.gameState.roundPoints[oldId];
             }
+            // 本回合赢家
             if (this.gameState.roundWinnerId === oldId) this.gameState.roundWinnerId = newId;
             
+            // 完赛排名 (Array)
             const rankIdx = this.gameState.finishedRank.indexOf(oldId);
             if (rankIdx !== -1) {
                 this.gameState.finishedRank[rankIdx] = newId;
@@ -4168,7 +4610,6 @@ class GameManager {
                         const loser = this.players.find(p=>p.id===loserId);
                         
                         // [新增] 队友保护判断
-                        // 逻辑：如果两人都有 team 属性，且 team 相等，则免罚
                         if (winner.team !== null && winner.team !== undefined && winner.team === loser.team) {
                              logLines.push(`[🛡️队友保护] 第${winnerIndex+1}名(${winner.name}) 与 倒数第${index+1}名(${loser.name}) 是队友，${score}分 免罚！`);
                         } else {
@@ -4221,8 +4662,27 @@ class SeatManager {
         const deck = new Deck(1);
         deck.shuffle();
         
+        // [修改] 优化抽牌池生成逻辑：优先保证点数不重复
+        // 这样玩家抽到的牌大概率是 3, 5, K, A 这种纯数字大小比较，不用比花色
+        const distinctCards = [];
+        const seenPoints = new Set();
+        const leftovers = [];
+
+        for (let card of deck.deck) {
+            const p = CardRules.getPoint(card);
+            if (!seenPoints.has(p)) {
+                seenPoints.add(p);
+                distinctCards.push(card);
+            } else {
+                leftovers.push(card);
+            }
+        }
+
+        // 优先用不重复的牌，如果不够（极少情况）再用剩下的补
+        const pool = [...distinctCards, ...leftovers];
+        
         // 取出等于玩家数量的牌作为“签”
-        this.availableCards = deck.deck.slice(0, players.length);
+        this.availableCards = pool.slice(0, players.length);
         
         // 记录谁抽了什么 { playerId: cardVal }
         this.drawResults = {};
@@ -4277,15 +4737,15 @@ class SeatManager {
             return {
                 ...p,
                 drawCard: card,
-                // 这里调用 CardRules.getSortValue，如果 CardRules 里没有这个函数，服务器就会崩溃
+                // 这里调用 CardRules.getSortValue
                 sortVal: CardRules.getSortValue(card) 
             };
         });
 
-        // 从大到小排
+        // 从大到小排 (点数大的在前 -> 1号位)
         results.sort((a, b) => {
             if (b.sortVal !== a.sortVal) return b.sortVal - a.sortVal;
-            // 花色比较
+            // 如果点数实在一样（虽然我们尽量避免了），再比花色
             return CardRules.getSuitSortValue(b.drawCard) - CardRules.getSuitSortValue(a.drawCard);
         });
 
@@ -4318,7 +4778,7 @@ module.exports = SeatManager;
 ================================================================================
 FILE PATH: server\index.js
 ================================================================================
-// 程序入口，只负责启动服务和 Socket 监听
+// 程序入口，负责启动服务、Socket 监听、常驻房间管理
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -4340,6 +4800,61 @@ const io = new Server(server, {
 // 内存数据库
 const rooms = {}; 
 
+// --- [新增] 常驻房间配置定义 ---
+const PERMANENT_ROOMS = {
+    '888': { 
+        deckCount: 2, 
+        maxPlayers: 4, 
+        targetScore: 1000,
+        turnTimeout: 60000,
+        showCardCountMode: 1,
+        isTeamMode: false,
+        enableRankPenalty: false,
+        rankPenaltyScores: [50, 20]
+    },
+    '666': { 
+        deckCount: 3, 
+        maxPlayers: 6, 
+        targetScore: 1000,
+        turnTimeout: 60000,
+        showCardCountMode: 1,
+        isTeamMode: true, // 默认开启组队
+        enableRankPenalty: false,
+        rankPenaltyScores: [50, 20]
+    }
+};
+
+/**
+ * 辅助函数：初始化/重置常驻房间
+ */
+function initPermanentRoom(roomId) {
+    const defaultConfig = PERMANENT_ROOMS[roomId];
+    if (!defaultConfig) return;
+
+    // 如果房间已存在，保留连接，只重置游戏状态
+    // 如果不存在，新建对象
+    if (!rooms[roomId]) {
+        rooms[roomId] = {
+            config: JSON.parse(JSON.stringify(defaultConfig)), // 深拷贝默认配置
+            players: [],
+            gameManager: null,
+            seatManager: null, 
+            destroyTimer: null,
+            isPermanent: true // 标记为常驻
+        };
+        console.log(`[System] Permanent Room ${roomId} initialized.`);
+    } else {
+        // 重置逻辑：还原配置，清空游戏状态
+        rooms[roomId].config = JSON.parse(JSON.stringify(defaultConfig));
+        rooms[roomId].gameManager = null;
+        rooms[roomId].seatManager = null;
+        console.log(`[System] Permanent Room ${roomId} reset to default.`);
+    }
+}
+
+// 启动时初始化常驻房间
+Object.keys(PERMANENT_ROOMS).forEach(rId => initPermanentRoom(rId));
+
 /**
  * 辅助函数：向房间内所有人广播最新状态
  */
@@ -4354,13 +4869,42 @@ function broadcastGameState(io, roomId, room, infoText = null) {
     io.to(roomId).emit('game_state_update', publicState);
 }
 
+// 辅助：广播房间基础信息 (用于大厅配置更新)
+function broadcastRoomInfo(io, roomId) {
+    const room = rooms[roomId];
+    if (!room) return;
+    
+    const currentGrandScores = room.gameManager ? room.gameManager.grandScores : {};
+    // 如果还没开始游戏，给一个默认的分数对象
+    if (Object.keys(currentGrandScores).length === 0) {
+        room.players.forEach(p => currentGrandScores[p.id] = 0);
+    }
+
+    const data = { 
+        roomId, 
+        config: room.config, 
+        players: room.players, 
+        grandScores: currentGrandScores 
+    };
+    io.to(roomId).emit('room_info', data);
+}
+
+
 io.on('connection', (socket) => {
     console.log(`[Connect] ${socket.id}`);
     socket.emit('your_id', socket.id);
 
     // --- 创建房间 ---
     socket.on('create_room', ({ roomId, username, config }) => {
-        if (rooms[roomId]) return socket.emit('error_msg', '房间已存在');
+        if (rooms[roomId]) {
+            // 如果是常驻房间，允许直接加入（视为 Join）
+            if (rooms[roomId].isPermanent) {
+                 // 转发给 join_room 逻辑
+                 // 这里简单处理：告诉客户端房间存在，让它走 Join 流程，或者直接报错
+                 return socket.emit('error_msg', '常驻房间已存在，请直接加入');
+            }
+            return socket.emit('error_msg', '房间已存在');
+        }
         
         const cleanName = String(username || '').trim();
         if (!cleanName) return socket.emit('error_msg', '用户名不能为空');
@@ -4383,12 +4927,7 @@ io.on('connection', (socket) => {
         socket.join(roomId);
         rooms[roomId].players.push({ id: socket.id, name: cleanName, isHost: true, online: true });
         
-        const initialScores = {};
-        rooms[roomId].players.forEach(p => initialScores[p.id] = 0);
-
-        const data = { roomId, config: roomConfig, players: rooms[roomId].players, grandScores: initialScores };
-        socket.emit('room_info', data); 
-        io.to(roomId).emit('room_info', data);
+        broadcastRoomInfo(io, roomId);
     });
 
     // --- 加入房间 ---
@@ -4423,14 +4962,8 @@ io.on('connection', (socket) => {
                 console.log(`[Room] Destruction cancelled for ${roomId} (player returned)`);
             }
 
-            if (room.gameManager) {
-                room.gameManager.reconnectPlayer(oldSocketId, socket.id);
-            }
-
-            // [核心修复] 如果正在抽签，也要通知 SeatManager 更新 ID
-            if (room.seatManager) {
-                room.seatManager.reconnectPlayer(oldSocketId, socket.id);
-            }
+            if (room.gameManager) room.gameManager.reconnectPlayer(oldSocketId, socket.id);
+            if (room.seatManager) room.seatManager.reconnectPlayer(oldSocketId, socket.id);
 
         } else {
             if (room.players.length >= room.config.maxPlayers) {
@@ -4439,28 +4972,23 @@ io.on('connection', (socket) => {
             
             socket.join(roomId);
             if (!room.players.find(u => u.id === socket.id)) {
-                room.players.push({ id: socket.id, name: cleanName, isHost: false, online: true });
+                // 判断是否需要成为房主：
+                // 1. 如果房间没人，新来的是房主
+                // 2. 如果常驻房间当前没有在线房主，新来的继承房主
+                const hasHost = room.players.some(p => p.isHost && p.online);
+                const isHost = !hasHost;
+
+                room.players.push({ id: socket.id, name: cleanName, isHost: isHost, online: true });
             }
         }
 
         socket.join(roomId);
         
-        let currentGrandScores = {};
-        if (room.gameManager) {
-            currentGrandScores = room.gameManager.grandScores;
-        } else {
-            room.players.forEach(p => currentGrandScores[p.id] = 0);
-        }
-        
-        const data = { roomId, config: room.config, players: room.players, grandScores: currentGrandScores };
-        
-        socket.emit('room_info', data);
+        // 广播最新的房间信息（包含房主变更、人数变更）
+        broadcastRoomInfo(io, roomId);
 
+        // 如果游戏正在进行，发送游戏状态
         const isGameRunning = room.gameManager && room.gameManager.gameState;
-        if (!isGameRunning) {
-            socket.to(roomId).emit('room_info', data);
-        }
-
         if (isGameRunning) {
             if (isReconnect) {
                 const hand = room.gameManager.getPlayerHand(socket.id);
@@ -4472,18 +5000,15 @@ io.on('connection', (socket) => {
             broadcastGameState(io, roomId, room);
         }
         
-        // [新增] 如果重连时正好在抽卡阶段，要把当前的抽卡状态发给重连者
+        // 重连抽卡状态补发
         if (room.seatManager && room.seatManager.drawResults) {
              socket.emit('enter_draw_phase', { totalCards: room.players.length });
-             // 补发历史记录
              Object.entries(room.seatManager.drawResults).forEach(([pid, val]) => {
                  const pName = room.players.find(p=>p.id===pid)?.name || '未知';
-                 // 反查 index
                  let cardIndex = -1;
                  room.seatManager.availableCards.forEach((c, idx) => {
                      if (c === val) cardIndex = idx;
                  });
-                 
                  socket.emit('seat_draw_update', {
                     index: cardIndex,
                     val: val,
@@ -4494,6 +5019,29 @@ io.on('connection', (socket) => {
         }
     });
     
+    // --- [新增] 更新房间配置 ---
+    socket.on('update_room_config', ({ roomId, config }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+
+        // 验证权限
+        const player = room.players.find(p => p.id === socket.id);
+        if (!player || !player.isHost) {
+            return socket.emit('error_msg', '只有房主可以修改规则');
+        }
+
+        // 验证游戏状态：游戏中不能改
+        if (room.gameManager || room.seatManager) {
+            return socket.emit('error_msg', '游戏进行中无法修改规则');
+        }
+
+        // 更新配置
+        room.config = { ...room.config, ...config };
+        
+        // 广播新的配置给所有人
+        broadcastRoomInfo(io, roomId);
+    });
+
     // 添加机器人
     socket.on('add_bot', ({ roomId }) => {
         const room = rooms[roomId];
@@ -4512,11 +5060,7 @@ io.on('connection', (socket) => {
             isBot: true 
         });
         
-        const currentGrandScores = room.gameManager ? room.gameManager.grandScores : {};
-        currentGrandScores[botId] = 0;
-
-        const data = { roomId, config: room.config, players: room.players, grandScores: currentGrandScores };
-        io.to(roomId).emit('room_info', data);
+        broadcastRoomInfo(io, roomId);
     });
 
     // 切换托管
@@ -4538,30 +5082,14 @@ io.on('connection', (socket) => {
             return socket.emit('error_msg', '只有房主可以调整座位');
         }
 
-        if (index1 < 0 || index1 >= room.players.length || index2 < 0 || index2 >= room.players.length) {
-            return;
-        }
-
-        if (room.gameManager && room.gameManager.gameState) {
-             return socket.emit('error_msg', '游戏中无法调整座位');
-        }
+        if (index1 < 0 || index1 >= room.players.length || index2 < 0 || index2 >= room.players.length) return;
+        if (room.gameManager && room.gameManager.gameState) return socket.emit('error_msg', '游戏中无法调整座位');
 
         const temp = room.players[index1];
         room.players[index1] = room.players[index2];
         room.players[index2] = temp;
 
-        const currentGrandScores = room.gameManager ? room.gameManager.grandScores : {};
-        if (Object.keys(currentGrandScores).length === 0) {
-            room.players.forEach(p => currentGrandScores[p.id] = 0);
-        }
-
-        const data = { 
-            roomId, 
-            config: room.config, 
-            players: room.players, 
-            grandScores: currentGrandScores 
-        };
-        io.to(roomId).emit('room_info', data);
+        broadcastRoomInfo(io, roomId);
     });
 
     // 抽卡交互逻辑
@@ -4570,9 +5098,7 @@ io.on('connection', (socket) => {
         if (!room || !room.seatManager) return;
 
         const result = room.seatManager.playerDraw(socket.id, cardIndex);
-        if (!result.success) {
-            return socket.emit('error_msg', result.msg);
-        }
+        if (!result.success) return socket.emit('error_msg', result.msg);
 
         const player = room.players.find(p => p.id === socket.id);
         io.to(roomId).emit('seat_draw_update', {
@@ -4585,7 +5111,6 @@ io.on('connection', (socket) => {
         if (result.isFinished) {
             setTimeout(() => {
                 const { newPlayers, drawDetails } = room.seatManager.finalizeSeats();
-                
                 room.players = newPlayers;
                 room.seatManager = null; 
 
@@ -4594,10 +5119,7 @@ io.on('connection', (socket) => {
                     details: drawDetails
                 });
 
-                setTimeout(() => {
-                    handleGameStart(roomId, false);
-                }, 3000);
-
+                setTimeout(() => handleGameStart(roomId, false), 3000);
             }, 1000); 
         }
     });
@@ -4636,13 +5158,17 @@ io.on('connection', (socket) => {
         const room = rooms[roomId];
         if (!room) return;
         
+        // 修正：如果人数为奇数，强制关闭组队模式，防止逻辑冲突
+        if (room.config.isTeamMode && room.players.length % 2 !== 0) {
+            room.config.isTeamMode = false;
+            io.to(roomId).emit('error_msg', '人数为奇数，已自动关闭组队模式');
+            broadcastRoomInfo(io, roomId); // 广播配置变更
+        }
+
         const isTeamMode = room.config.isTeamMode && (room.players.length % 2 === 0);
-        
         room.seatManager = new SeatManager(io, roomId, room.players, isTeamMode);
         
-        io.to(roomId).emit('enter_draw_phase', {
-            totalCards: room.players.length
-        });
+        io.to(roomId).emit('enter_draw_phase', { totalCards: room.players.length });
         
         const bots = room.players.filter(p => p.isBot);
         bots.forEach((bot, i) => {
@@ -4682,9 +5208,7 @@ io.on('connection', (socket) => {
         
         const result = room.gameManager.playCards(socket.id, cards);
 
-        if (!result.success) {
-            return socket.emit('play_error', result.error);
-        }
+        if (!result.success) return socket.emit('play_error', result.error);
 
         const currentHand = room.gameManager.gameState.hands[socket.id];
         io.to(socket.id).emit('hand_update', currentHand);
@@ -4715,7 +5239,6 @@ io.on('connection', (socket) => {
         if (!room || !room.gameManager) return;
 
         const result = room.gameManager.passTurn(socket.id);
-        
         if (!result.success) return socket.emit('play_error', result.error);
 
         broadcastGameState(io, roomId, room, result.logText || "PASS");
@@ -4729,23 +5252,34 @@ io.on('connection', (socket) => {
             if (idx === -1) return; 
 
             const player = r.players[idx];
+            
+            // 逻辑分支：如果在大厅阶段
             if (!r.gameManager && !r.seatManager) {
                 r.players.splice(idx, 1);
                 console.log(`[Disconnect] Lobby user ${player.name} removed from ${rId}`);
                 
+                // 处理房主移交逻辑
+                if (player.isHost && r.players.length > 0) {
+                    // 优先移交给非Bot，如果都是Bot则给第一个
+                    const nextHost = r.players.find(p => !p.isBot) || r.players[0];
+                    if (nextHost) nextHost.isHost = true;
+                }
+                
                 if (r.players.length === 0) {
-                    if (r.destroyTimer) clearTimeout(r.destroyTimer);
-                    delete rooms[rId];
-                    console.log(`[Room] Room ${rId} deleted (empty lobby).`);
+                    if (r.isPermanent) {
+                        // 常驻房间：无人时重置配置，但不删除
+                        initPermanentRoom(rId);
+                    } else {
+                        // 普通房间：删除
+                        if (r.destroyTimer) clearTimeout(r.destroyTimer);
+                        delete rooms[rId];
+                        console.log(`[Room] Room ${rId} deleted (empty lobby).`);
+                    }
                 } else {
-                    io.to(rId).emit('room_info', { 
-                        roomId: rId, 
-                        config: r.config, 
-                        players: r.players, 
-                        grandScores: r.gameManager ? r.gameManager.grandScores : {} 
-                    });
+                    broadcastRoomInfo(io, rId);
                 }
             } else {
+                // 游戏中掉线
                 player.online = false;
                 console.log(`[Disconnect] Game user ${player.name} (${socket.id}) dropped.`);
 
@@ -4754,9 +5288,15 @@ io.on('connection', (socket) => {
                 if (allHumansOffline) {
                     if (r.destroyTimer) clearTimeout(r.destroyTimer);
                     r.destroyTimer = setTimeout(() => {
-                        if (rooms[rId] && rooms[rId].players.filter(p => !p.isBot).every(p => !p.online)) {
-                            delete rooms[rId];
-                            console.log(`[Room] Room ${rId} destroyed due to inactivity.`);
+                        const currentRoom = rooms[rId];
+                        // 再次检查是否真的没人
+                        if (currentRoom && currentRoom.players.filter(p => !p.isBot).every(p => !p.online)) {
+                            if (currentRoom.isPermanent) {
+                                initPermanentRoom(rId); // 重置
+                            } else {
+                                delete rooms[rId]; // 销毁
+                                console.log(`[Room] Room ${rId} destroyed due to inactivity.`);
+                            }
                         }
                     }, 60000); 
                 }

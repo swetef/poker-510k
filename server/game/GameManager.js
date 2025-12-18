@@ -457,8 +457,6 @@ class GameManager {
     }
 
     // [核心修复] 将轮转方向改为递增 (index + 1)
-    // 这与 SeatManager 的排序 (从大到小) 配合，实现了“抽大牌者先出，然后轮到第二大的”
-    // 同时也与客户端的“右侧是下家”的逆时针布局相匹配
     _advanceTurn() {
         const playerCount = this.players.length;
         let nextIndex = this.gameState.currentTurnIndex;
@@ -480,7 +478,6 @@ class GameManager {
         
         const currentScoresDisplay = {};
         const playersInfo = {};
-        
         const handCounts = {};
 
         this.players.forEach(p => {
@@ -516,27 +513,43 @@ class GameManager {
         };
     }
 
+    // [核心修复] 完整的重连数据搬运
     reconnectPlayer(oldId, newId) {
+        console.log(`[GameManager] Moving data from ${oldId} to ${newId}`);
+
+        // 1. 搬运全局总分 (Key: socketId)
         if (this.grandScores[oldId] !== undefined) {
             this.grandScores[newId] = this.grandScores[oldId];
             delete this.grandScores[oldId];
         }
+
+        // 2. 搬运上局赢家标记
         if (this.lastWinnerId === oldId) this.lastWinnerId = newId;
 
+        // 3. 处理托管状态 (默认: 如果玩家重连回来，取消托管，让他自己玩)
         const player = this.players.find(p => p.id === newId);
-        if (player) player.isAutoPlay = false;
+        if (player) {
+             // 也可以选择保持 player.isAutoPlay = player.isAutoPlay; 
+             // 但通常玩家掉线回来是想自己操作的
+             player.isAutoPlay = false; 
+        }
 
+        // 4. 搬运当前局数据
         if (this.gameState) {
+            // 手牌
             if (this.gameState.hands[oldId]) {
                 this.gameState.hands[newId] = this.gameState.hands[oldId];
                 delete this.gameState.hands[oldId];
             }
+            // 本局得分
             if (this.gameState.roundPoints[oldId] !== undefined) {
                 this.gameState.roundPoints[newId] = this.gameState.roundPoints[oldId];
                 delete this.gameState.roundPoints[oldId];
             }
+            // 本回合赢家
             if (this.gameState.roundWinnerId === oldId) this.gameState.roundWinnerId = newId;
             
+            // 完赛排名 (Array)
             const rankIdx = this.gameState.finishedRank.indexOf(oldId);
             if (rankIdx !== -1) {
                 this.gameState.finishedRank[rankIdx] = newId;

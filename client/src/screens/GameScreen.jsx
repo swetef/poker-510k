@@ -1,6 +1,6 @@
 // 游戏主界面 - 深度适配移动端布局，增加了全屏按钮
 // [完整修复版] 修复移动端 Touch 事件 passive 报错，解决操作卡死/失效问题
-// [本次修改] 1. 保持逆时针布局 2. 增加“重选”按钮 (handleClearSelection)
+// [本次修改] 1. 增加身份同步检查，防止掉线重连后视角变成房主 2. 保持原有逆时针布局和功能
 import React, { useState, useRef, useEffect } from 'react';
 import { Coins, Layers, Crown, Clock, Bot, Zap, Maximize, Minimize, Shield, RotateCcw } from 'lucide-react';
 import { styles } from '../styles.js'; 
@@ -17,6 +17,29 @@ export const GameScreen = ({
     toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
     handleToggleAutoPlay, handleClearSelection // [新增] 接收清理函数
 }) => {
+    // [关键修复] 身份同步保护
+    // 掉线重连时，SocketID 会变。如果新 ID 还没同步到 players 列表，myIndex 会找不到(-1)
+    // 导致下方 safeMyIndex 默认为 0，从而错误渲染成房主视角。
+    // 这里我们强制检查：只有当我在玩家列表中时，才渲染游戏界面。
+    const myPlayerExists = players.some(p => p.id === mySocketId);
+
+    if (!myPlayerExists && players.length > 0) {
+        return (
+            <div style={{...styles.gameTable, display:'flex', alignItems:'center', justifyContent:'center'}}>
+                <div style={{
+                    color:'white', fontSize: 16, fontWeight: 'bold',
+                    background: 'rgba(0,0,0,0.6)', padding: '15px 30px', borderRadius: 20,
+                    backdropFilter: 'blur(5px)', border: '1px solid rgba(255,255,255,0.2)',
+                    display: 'flex', alignItems: 'center', gap: 10
+                }}>
+                   <div className="spin" style={{width: 20, height: 20, border: '3px solid rgba(255,255,255,0.3)', borderTop: '3px solid white', borderRadius: '50%'}}></div>
+                   正在同步数据...
+                </div>
+                <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+            </div>
+        );
+    }
+
     const isMyTurn = currentTurnId === mySocketId;
     const amIHost = players.find(p => p.id === mySocketId)?.isHost;
     
@@ -216,7 +239,8 @@ export const GameScreen = ({
     // 顺序: Me -> Right -> Top -> Left
     const renderPlayers = () => {
         const myIndex = players.findIndex(p => p.id === mySocketId);
-        const safeMyIndex = myIndex === -1 ? 0 : myIndex;
+        // [修改] 此时 myIndex 一定存在（已被上方 Loading 拦截），所以直接使用
+        const safeMyIndex = myIndex;
         
         const otherPlayers = [];
         for (let i = 1; i < players.length; i++) {
@@ -242,7 +266,6 @@ export const GameScreen = ({
         }
 
         // [核心修改] 分配逻辑调整：优先填右侧 (Right)，然后上方 (Top)，最后左侧 (Left)
-        // 注意：otherPlayers[0] 是下家，必须放在右边
         const rightGroup = otherPlayers.slice(0, countR);
         const topGroup = otherPlayers.slice(countR, countR + countT);
         const leftGroup = otherPlayers.slice(countR + countT);
@@ -261,7 +284,6 @@ export const GameScreen = ({
             } else {
                 const start = 20; 
                 const end = 80;
-                // 逆序排列：i=0 对应 80% (右), i=max 对应 20% (左)
                 const step = (end - start) / (countT - 1);
                 leftPos = `${end - i * step}%`; 
             }
@@ -381,7 +403,8 @@ export const GameScreen = ({
                         </button>
 
                         <button style={styles.sortButton} onClick={toggleSort}>
-                            <Layers size={16} style={{marginRight:5}}/> {sortMode === 'POINT' ? '点数' : '花色'}
+                            <Layers size={16} style={{marginRight:5}}/> 
+                            {sortMode === 'POINT' ? '点数' : (sortMode === 'SUIT' ? '花色' : '理牌')}
                         </button>
                     </div>
                 </div>

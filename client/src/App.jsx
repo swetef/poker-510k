@@ -286,8 +286,11 @@ export default function App() {
       if (myHand.length > 0) setMyHand(prev => sortHand(prev, sortMode));
   }, [sortMode]);
 
-  const toggleSort = () => setSortMode(prev => prev === 'POINT' ? 'SUIT' : 'POINT');
-  
+
+  const toggleSort = () => setSortMode(prev => prev === 'POINT' ? 'ARRANGE' : 'POINT');
+
+
+
   const handleRoomAction = () => {
       if (!isConnected) return; 
       if (!username || !roomId) return alert("请输入昵称和房间号");
@@ -309,6 +312,12 @@ export default function App() {
   
   const handleDrawCard = (index) => {
       socketRef.current.emit('draw_seat_card', { roomId, cardIndex: index });
+  };
+
+  // [新增] 更新房间配置的处理函数
+  const handleUpdateConfig = (newConfig) => {
+      socketRef.current.emit('update_room_config', { roomId, config: newConfig });
+      // 注意：本地 config 会通过 socket.on('room_info') 自动更新，所以这里不需要手动 setRoomConfig
   };
 
   const updateSelection = (cardVal, forceSelect = null) => {
@@ -355,6 +364,7 @@ export default function App() {
     setSelectedCards([]);
   };
 
+  // [恢复] 横屏提示组件 (之前版本遗漏)
   const renderLandscapeHint = () => (
       <div className="landscape-hint">
           <div className="phone-rotate-icon"></div>
@@ -399,6 +409,7 @@ export default function App() {
   return (
     <>
       {renderDisconnectAlert()}
+      {/* [恢复] 渲染横屏提示 */}
       {renderLandscapeHint()}
       
       {gameState === 'LOGIN' && <LoginScreen {...{
@@ -415,7 +426,8 @@ export default function App() {
           roomId, roomConfig, players, mySocketId, 
           handleStartGame, 
           handleAddBot,
-          handleSwitchSeat 
+          handleSwitchSeat,
+          handleUpdateConfig // [新增] 传入配置更新函数
       }} />}
       
       {gameState === 'DRAW_SEATS' && <DrawSeatScreen {...{

@@ -1,10 +1,15 @@
-// 大厅页 - 支持房主换座 + 组队模式显示 + 修复移动端溢出
-
-import React from 'react';
-import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown } from 'lucide-react';
+// 大厅页 - 支持房主换座 + 组队模式 + 房主修改规则
+import React, { useState } from 'react';
+import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Eye, Award, Check } from 'lucide-react';
 import { styles } from '../styles.js';
 
-export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleStartGame, handleAddBot, handleSwitchSeat }) => {
+export const LobbyScreen = ({ 
+    roomId, roomConfig, players, mySocketId, 
+    handleStartGame, 
+    handleAddBot,
+    handleSwitchSeat,
+    handleUpdateConfig // [新增] 接收 App.jsx 传来的更新函数
+}) => {
     
     // 判断自己是不是房主
     const amIHost = players.find(p => p.id === mySocketId)?.isHost;
@@ -12,8 +17,205 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
     // 判断是否开启了组队模式 (开关开启 且 人数是偶数)
     const isTeamMode = roomConfig.isTeamMode && roomConfig.maxPlayers % 2 === 0;
 
+    // --- 配置弹窗状态 ---
+    const [showSettings, setShowSettings] = useState(false);
+    
+    // 渲染配置滑块的辅助函数 (复用自 LoginScreen 风格)
+    const renderConfigSlider = (icon, label, value, min, max, step, onChange, suffix = '') => (
+        <div style={styles.configItem}>
+            <div style={styles.configLabel}>
+                <span style={{display:'flex', alignItems:'center', gap:6}}>{icon} {label}</span>
+                <span style={styles.configValue}>{value}{suffix}</span>
+            </div>
+            <input 
+                type="range" 
+                style={styles.rangeInput}
+                min={min} 
+                max={max} 
+                step={step || 1}
+                value={value} 
+                onChange={(e) => onChange(parseInt(e.target.value))}
+            />
+        </div>
+    );
+
+    // 统一更新函数
+    const updateConfig = (key, value) => {
+        const newConfig = { ...roomConfig, [key]: value };
+        // 立即发送 socket 请求
+        handleUpdateConfig(newConfig);
+    };
+
+    // 渲染设置弹窗内容
+    const renderSettingsModal = () => (
+        <div style={styles.modalOverlay}>
+            <div style={{...styles.modalContent, width: '90%', maxWidth: 500, padding: 25, textAlign:'left'}}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 20, borderBottom:'1px solid #eee', paddingBottom:10}}>
+                    <div style={{display:'flex', alignItems:'center', gap:8, fontSize:18, fontWeight:'bold', color:'#2c3e50'}}>
+                        <Settings size={20}/> 房间规则设置
+                    </div>
+                    <button onClick={()=>setShowSettings(false)} style={{background:'none', border:'none', cursor:'pointer', padding:5}}>
+                        <X size={20} color="#999"/>
+                    </button>
+                </div>
+
+                <div style={{maxHeight: '60vh', overflowY:'auto', paddingRight: 5}}>
+                    <div style={styles.configGrid}>
+                        {renderConfigSlider(<UsersIcon/>, "玩家人数", roomConfig.maxPlayers, 2, 12, 1, v=>updateConfig('maxPlayers', v), '人')}
+                        {renderConfigSlider(<Layers size={14}/>, "牌库数量", roomConfig.deckCount, 1, 8, 1, v=>updateConfig('deckCount', v), '副')}
+                        {renderConfigSlider(<Target size={14}/>, "获胜目标", roomConfig.targetScore, 500, 5000, 500, v=>updateConfig('targetScore', v), '分')}
+                        
+                        {/* 组队对抗开关 */}
+                        <div style={{...styles.configItem, marginTop: 10, padding: '10px', background: roomConfig.maxPlayers % 2 !== 0 ? '#f0f0f0' : '#e8f8f5', borderRadius: 8, opacity: roomConfig.maxPlayers % 2 !== 0 ? 0.6 : 1, gridColumn: '1 / -1'}}>
+                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                <div style={{display:'flex', alignItems:'center', gap:6, fontWeight:'600', color: roomConfig.maxPlayers % 2 !== 0 ? '#999' : '#27ae60'}}>
+                                    <Shield size={16} /> 组队对抗模式 (2v2, 3v3...)
+                                </div>
+                                <label style={{position:'relative', display:'inline-block', width:40, height:20}}>
+                                    <input 
+                                        type="checkbox" 
+                                        style={{opacity:0, width:0, height:0}}
+                                        checked={roomConfig.isTeamMode && roomConfig.maxPlayers % 2 === 0}
+                                        disabled={roomConfig.maxPlayers % 2 !== 0}
+                                        onChange={(e) => updateConfig('isTeamMode', e.target.checked)}
+                                    />
+                                    <span style={{
+                                        position:'absolute', cursor: roomConfig.maxPlayers % 2 !== 0 ? 'not-allowed' : 'pointer', top:0, left:0, right:0, bottom:0, 
+                                        backgroundColor: (roomConfig.isTeamMode && roomConfig.maxPlayers % 2 === 0) ? '#27ae60' : '#ccc', 
+                                        transition:'.4s', borderRadius: 20
+                                    }}>
+                                        <span style={{
+                                            position:'absolute', content:"", height:16, width:16, left:2, bottom:2, 
+                                            backgroundColor:'white', transition:'.4s', borderRadius:'50%',
+                                            transform: (roomConfig.isTeamMode && roomConfig.maxPlayers % 2 === 0) ? 'translateX(20px)' : 'translateX(0)'
+                                        }}></span>
+                                    </span>
+                                </label>
+                            </div>
+                            <div style={{fontSize: 11, color: '#7f8c8d', marginTop: 4}}>
+                                {roomConfig.maxPlayers % 2 !== 0 ? "⚠️ 需要偶数人数 (4, 6...) 才能开启" : "开启后，间隔入座为队友"}
+                            </div>
+                        </div>
+                        
+                        {/* 出牌时限 */}
+                        <div style={styles.configItem}>
+                            <div style={styles.configLabel}>
+                                <span style={{display:'flex', alignItems:'center', gap:6}}><Clock size={14}/> 出牌时限</span>
+                                <span style={styles.configValue}>{roomConfig.turnTimeout / 1000}秒</span>
+                            </div>
+                            <div style={styles.radioGroup}>
+                                {[30, 60, 90, 120].map(sec => (
+                                    <button 
+                                        key={sec}
+                                        style={roomConfig.turnTimeout === sec * 1000 ? styles.radioBtnActive : styles.radioBtn}
+                                        onClick={() => updateConfig('turnTimeout', sec * 1000)}
+                                    >
+                                        {sec}s
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 剩余牌数显示配置 */}
+                    <div style={{marginTop: 20, paddingTop: 15, borderTop: '1px solid #f0f0f0'}}>
+                        <div style={{display:'flex', alignItems:'center', gap:6, color:'#7f8c8d', fontSize:14, marginBottom:10, fontWeight:600}}>
+                            <Eye size={14}/> 剩余牌数显示规则
+                        </div>
+                        <div style={styles.radioGroup}>
+                            <button 
+                                style={roomConfig.showCardCountMode === 0 ? styles.radioBtnActive : styles.radioBtn}
+                                onClick={() => updateConfig('showCardCountMode', 0)}
+                            >
+                                不显示
+                            </button>
+                            <button 
+                                style={roomConfig.showCardCountMode === 1 ? styles.radioBtnActive : styles.radioBtn}
+                                onClick={() => updateConfig('showCardCountMode', 1)}
+                            >
+                                ≤3张显示
+                            </button>
+                            <button 
+                                style={roomConfig.showCardCountMode === 2 ? styles.radioBtnActive : styles.radioBtn}
+                                onClick={() => updateConfig('showCardCountMode', 2)}
+                            >
+                                一直显示
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* 排名赏罚 */}
+                    <div style={{marginTop: 20, paddingTop: 20, borderTop: '1px solid #f0f0f0'}}>
+                         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 15}}>
+                            <div style={{display:'flex', alignItems:'center', gap:8, fontWeight:'600', color:'#555', fontSize:14}}>
+                                <Award size={16} /> 启用排名赏罚 (进贡/抓分)
+                            </div>
+                            <label style={{position:'relative', display:'inline-block', width:40, height:20}}>
+                                <input 
+                                    type="checkbox" 
+                                    style={{opacity:0, width:0, height:0}}
+                                    checked={roomConfig.enableRankPenalty}
+                                    onChange={(e) => updateConfig('enableRankPenalty', e.target.checked)}
+                                />
+                                <span style={{
+                                    position:'absolute', cursor:'pointer', top:0, left:0, right:0, bottom:0, 
+                                    backgroundColor: roomConfig.enableRankPenalty ? '#27ae60' : '#ccc', 
+                                    transition:'.4s', borderRadius: 20
+                                }}>
+                                    <span style={{
+                                        position:'absolute', content:"", height:16, width:16, left:2, bottom:2, 
+                                        backgroundColor:'white', transition:'.4s', borderRadius:'50%',
+                                        transform: roomConfig.enableRankPenalty ? 'translateX(20px)' : 'translateX(0)'
+                                    }}></span>
+                                </span>
+                            </label>
+                        </div>
+                        {roomConfig.enableRankPenalty && (
+                            <div style={{background:'#f9f9f9', padding: 15, borderRadius: 8, display:'flex', gap: 20, fontSize: 13}}>
+                                <div style={{flex:1}}>
+                                    <div style={{marginBottom:5, color:'#7f8c8d'}}>头尾赏罚</div>
+                                    <input 
+                                        type="number" style={{...styles.input, background:'white', height: 35, padding: '0 10px'}} 
+                                        value={roomConfig.rankPenaltyScores[0]}
+                                        onChange={e => {
+                                            const val = Math.max(0, parseInt(e.target.value) || 0);
+                                            updateConfig('rankPenaltyScores', [val, roomConfig.rankPenaltyScores[1]]);
+                                        }}
+                                    />
+                                </div>
+                                <div style={{flex:1}}>
+                                    <div style={{marginBottom:5, color:'#7f8c8d'}}>次级赏罚</div>
+                                    <input 
+                                        type="number" style={{...styles.input, background:'white', height: 35, padding: '0 10px'}} 
+                                        value={roomConfig.rankPenaltyScores[1]}
+                                        onChange={e => {
+                                            const val = Math.max(0, parseInt(e.target.value) || 0);
+                                            updateConfig('rankPenaltyScores', [roomConfig.rankPenaltyScores[0], val]);
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                </div>
+
+                <div style={{marginTop: 20, textAlign:'center'}}>
+                    <button style={{...styles.primaryButton, height: 50, fontSize: 16, marginTop:0}} onClick={() => setShowSettings(false)}>
+                        <Check size={18} style={{marginRight:5}}/> 完成设置
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+
+    // 简单封装 Users 图标
+    const UsersIcon = () => <User size={14}/>;
+
     return (
     <div style={styles.container}>
+      {showSettings && renderSettingsModal()}
+
       <div style={styles.lobbyCard} className="mobile-layout-column">
           
           <div className="mobile-lobby-content" style={{display:'flex', flexDirection:'column', height:'100%', width: '100%', overflow:'hidden', borderRadius: 20}}>
@@ -22,26 +224,54 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
             <div style={styles.lobbyHeader}>
                 <div style={{display:'flex', alignItems:'center', gap: 10}}>
                     <h2 style={{margin:0, fontSize: 24}}>房间: <span style={{fontFamily:'monospace', color:'#27ae60'}}>{roomId}</span></h2>
-                    {/* [新增] 组队模式标签 */}
+                    {/* 组队模式标签 */}
                     {isTeamMode && (
                         <span style={{background:'#27ae60', color:'white', fontSize:12, padding:'2px 8px', borderRadius:10, display:'flex', alignItems:'center', gap:4}}>
                             <Shield size={12}/> 组队模式
                         </span>
                     )}
                 </div>
-                <div style={{display:'flex', gap:15}}>
-                    <span style={styles.tag}><Target size={14}/> 目标 {roomConfig.targetScore}</span>
-                    <span style={styles.tag}><Layers size={14}/> {roomConfig.deckCount}副</span>
-                    <span style={styles.tag}><User size={14}/> {roomConfig.maxPlayers}人</span>
+                
+                {/* 头部右侧：信息标签 + 设置按钮 */}
+                <div style={{display:'flex', gap:10, alignItems:'center'}}>
+                    <div style={{display:'flex', gap:10}} className="hide-on-mobile">
+                        <span style={styles.tag}><Target size={14}/> 目标 {roomConfig.targetScore}</span>
+                        <span style={styles.tag}><Layers size={14}/> {roomConfig.deckCount}副</span>
+                        <span style={styles.tag}><User size={14}/> {roomConfig.maxPlayers}人</span>
+                    </div>
+
+                    {/* [新增] 房主设置按钮 */}
+                    {amIHost && (
+                        <button 
+                            onClick={() => setShowSettings(true)}
+                            style={{
+                                background: '#f1f2f6', border: '1px solid #ccc', borderRadius: '50%', 
+                                width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer', transition: 'all 0.2s', color: '#2c3e50'
+                            }}
+                            title="修改房间规则"
+                        >
+                            <Settings size={20} />
+                        </button>
+                    )}
                 </div>
             </div>
+            
+            {/* 移动端显示的配置概览 (作为补充) */}
+            <div style={{padding: '0 15px 10px 15px', display:'flex', gap:8, flexWrap:'wrap', fontSize:12, color:'#666'}} className="mobile-only-tags">
+                 <span style={styles.tag}><Target size={12}/> {roomConfig.targetScore}</span>
+                 <span style={styles.tag}><Layers size={12}/> {roomConfig.deckCount}副</span>
+                 <span style={styles.tag}><User size={12}/> {roomConfig.maxPlayers}人</span>
+                 {roomConfig.enableRankPenalty && <span style={{...styles.tag, color:'#e67e22', background:'#fdf2e9'}}><Award size={12}/> 赏罚</span>}
+            </div>
+            <style>{`@media (min-width: 769px) { .mobile-only-tags { display: none !important; } }`}</style>
 
             {/* 玩家列表区域 */}
             <div style={styles.playerGrid} className="mobile-lobby-grid">
                 {players.map((p, i) => {
-                    // --- [新增] 组队模式视觉逻辑 ---
-                    let teamColor = '#eee'; // 默认边框
-                    let teamBg = 'white';   // 默认背景
+                    // 组队模式视觉逻辑
+                    let teamColor = '#eee'; 
+                    let teamBg = 'white';   
                     let teamName = null;
                     
                     if (isTeamMode) {
@@ -51,7 +281,6 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
                         teamName = isRedTeam ? '红队' : '蓝队';
                     }
 
-                    // 自己的高亮处理 (在组队模式下叠加，普通模式下单独显示)
                     const isMe = p.id === mySocketId;
                     if (isMe && !isTeamMode) {
                         teamBg = '#f0fbf4';
@@ -67,7 +296,7 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
                             borderWidth: borderWidth,
                             position: 'relative'
                         }}>
-                            {/* [新增] 组队角标 */}
+                            {/* 组队角标 */}
                             {teamName && (
                                 <div style={{
                                     position: 'absolute', top: 0, left: 0, 
@@ -79,13 +308,12 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
                                 </div>
                             )}
 
-                            {/* --- [新增] 房主调位按钮 (所有模式通用) --- */}
+                            {/* 房主调位按钮 */}
                             {amIHost && players.length > 1 && (
                                 <div style={{
                                     position: 'absolute', right: 5, top: '50%', transform: 'translateY(-50%)',
                                     display:'flex', flexDirection:'column', gap:4
                                 }}>
-                                    {/* 上移按钮 (非第一位显示) */}
                                     {i > 0 && (
                                         <button 
                                             onClick={(e) => { e.stopPropagation(); handleSwitchSeat(i, i - 1); }}
@@ -98,7 +326,6 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
                                             <ArrowUp size={14} color="#666"/>
                                         </button>
                                     )}
-                                    {/* 下移按钮 (非最后一位显示) */}
                                     {i < players.length - 1 && (
                                         <button 
                                             onClick={(e) => { e.stopPropagation(); handleSwitchSeat(i, i + 1); }}
@@ -127,7 +354,7 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
                 })}
                 
                 {/* 虚拟空位 */}
-                {Array.from({length: roomConfig.maxPlayers - players.length}).map((_, i) => (
+                {Array.from({length: Math.max(0, roomConfig.maxPlayers - players.length)}).map((_, i) => (
                     <div key={`empty-${i}`} style={{...styles.lobbyPlayer, borderStyle: 'dashed', opacity: 0.5}}>
                         <div style={{...styles.avatarLarge, background:'#f0f0f0', color:'#ccc'}}>?</div>
                         <div style={{color:'#999'}}>等待加入</div>

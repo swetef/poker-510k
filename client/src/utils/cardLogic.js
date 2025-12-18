@@ -19,6 +19,24 @@ export const getSuitSortValue = (cardVal) => {
     return suit * 100 + val; 
 };
 
+// 判断是否为分牌 (5, 10, K)
+const isScoreCard = (cardVal) => {
+    const normalized = cardVal % 54;
+    if (normalized >= 52) return false; // 王不是分牌
+    const val = normalized % 13;
+    // 0=A, 1=2, 2=3, 3=4(5), ..., 9(10), ..., 12(K)
+    return val === 4 || val === 9 || val === 12;
+};
+
+// 获取分牌的内部排序权重 (K > 10 > 5)
+const getScoreCardRank = (cardVal) => {
+    const val = (cardVal % 54) % 13;
+    if (val === 12) return 3; // K
+    if (val === 9) return 2;  // 10
+    if (val === 4) return 1;  // 5
+    return 0;
+};
+
 // 获取单张牌的显示信息
 export const getCardDisplay = (cardVal) => {
     const normalizedValue = cardVal % 54; 
@@ -36,11 +54,84 @@ export const getCardDisplay = (cardVal) => {
     return { suit, text, color, isScore };
 };
 
-// 手牌排序
+// 智能理牌逻辑
+export const arrangeHand = (cards) => {
+    const scoreCards = []; // 右侧：分牌
+    const otherCards = []; // 待分类的牌
+
+    // 1. 先把所有分牌(5, 10, K)提取出来 (不做特殊修正，严格分离)
+    cards.forEach(c => {
+        if (isScoreCard(c)) scoreCards.push(c);
+        else otherCards.push(c);
+    });
+
+    // 2. 对分牌进行排序：K > 10 > 5 (KKKK 1010 5555)
+    scoreCards.sort((a, b) => {
+        const rA = getScoreCardRank(a);
+        const rB = getScoreCardRank(b);
+        if (rA !== rB) return rB - rA; // 降序 (K=3, 10=2, 5=1)
+        return getSuitSortValue(b) - getSuitSortValue(a); // 同分按花色排
+    });
+
+    // 3. 对剩余牌进行分组
+    const groups = new Map();
+    otherCards.forEach(c => {
+        const val = getSortValue(c);
+        if (!groups.has(val)) groups.set(val, []);
+        groups.get(val).push(c);
+    });
+
+    const bombs = [];   // 左侧：炸弹
+    const triples = []; // 中间：三张
+    const pairs = [];   // 中间：对子
+    const singles = []; // 中间：单张
+
+    groups.forEach((groupCards, val) => {
+        const count = groupCards.length;
+        // 规则：数量 >= 4 视为炸弹
+        if (count >= 4) {
+            bombs.push({ val, cards: groupCards, count });
+        } else if (count === 3) {
+            triples.push({ val, cards: groupCards });
+        } else if (count === 2) {
+            pairs.push({ val, cards: groupCards });
+        } else {
+            singles.push({ val, cards: groupCards });
+        }
+    });
+
+    // 4. 排序炸弹：张数优先 (10张 > 8张 > 6张...)，其次点数
+    bombs.sort((a, b) => {
+        if (a.count !== b.count) return b.count - a.count; // 张数降序
+        return b.val - a.val; // 点数降序
+    });
+
+    // 5. 排序中间废牌：各自按点数降序
+    const sortByVal = (a, b) => b.val - a.val;
+    triples.sort(sortByVal);
+    pairs.sort(sortByVal);
+    singles.sort(sortByVal);
+
+    // 6. 展平数组
+    const flatBombs = bombs.flatMap(b => b.cards);
+    const flatTriples = triples.flatMap(t => t.cards);
+    const flatPairs = pairs.flatMap(p => p.cards);
+    const flatSingles = singles.flatMap(s => s.cards);
+
+    // 7. 拼接：左炸弹 + 中(三+对+单) + 右分牌
+    return [...flatBombs, ...flatTriples, ...flatPairs, ...flatSingles, ...scoreCards];
+};
+
+// 手牌排序入口
 export const sortHand = (cards, mode = 'POINT') => {
+    // 即使UI删除了 SUIT 入口，为了兼容性保留代码逻辑
     if (mode === 'SUIT') {
         return [...cards].sort((a, b) => getSuitSortValue(b) - getSuitSortValue(a));
     }
+    if (mode === 'ARRANGE') {
+        return arrangeHand(cards);
+    }
+    // 默认 POINT
     return [...cards].sort((a, b) => getSortValue(b) - getSortValue(a));
 };
 

@@ -1,6 +1,6 @@
 // 统一样式文件 - 移动端适配版
 // [完整版] 包含所有原有布局、拇指热区、以及新增的滑动选牌支持和剩余牌数徽章
-// [本次修复] 调整手牌区域位置，防止被左下角头像遮挡
+// [本次修复] 修复大厅人多时撑破屏幕的问题：给 lobbyCard 加限高，给 playerGrid 加滚动
 
 export const styles = {
   // ============================
@@ -414,13 +414,58 @@ export const styles = {
       alignItems: 'center'
   },
   
-  // 大厅页 (Lobby)
-  lobbyCard: { background: 'white', padding: 40, borderRadius: 20, width: '1000px', maxWidth: '95vw', minHeight: '600px', display: 'flex', flexDirection: 'column', boxShadow: '0 30px 60px rgba(0,0,0,0.5)' },
-  lobbyHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30, paddingBottom: 20, borderBottom: '1px solid #eee' },
+  // 大厅页 (Lobby) - [修复]
+  lobbyCard: { 
+      background: 'white', 
+      padding: 40, 
+      borderRadius: 20, 
+      width: '1000px', 
+      maxWidth: '95vw', 
+      minHeight: '600px',
+      // [核心修复] 限制最大高度，防止在大屏或人数过多时撑破屏幕
+      maxHeight: '85vh', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      boxShadow: '0 30px 60px rgba(0,0,0,0.5)',
+      // 确保内容溢出时不会破坏圆角或溢出 Card
+      overflow: 'hidden' 
+  },
+
+  lobbyHeader: { 
+      display: 'flex', 
+      justifyContent: 'space-between', 
+      alignItems: 'center', 
+      marginBottom: 30, 
+      paddingBottom: 20, 
+      borderBottom: '1px solid #eee',
+      // 防止头部被压缩
+      flexShrink: 0
+  },
+  
   tag: { background: '#f0f9f4', color: '#27ae60', padding: '5px 10px', borderRadius: 20, fontSize: 14, display: 'flex', alignItems: 'center', gap: 5 },
-  playerGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 20, flex: 1, alignContent: 'start' },
+  
+  playerGrid: { 
+      display: 'grid', 
+      gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', 
+      gap: 20, 
+      flex: 1, 
+      alignContent: 'start',
+      // [核心修复] 允许网格内部滚动
+      overflowY: 'auto',
+      minHeight: 0
+  },
+  
   lobbyPlayer: { border: '2px solid #eee', borderRadius: 12, padding: 25, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15, position: 'relative', transition: 'all 0.2s' },
   avatarLarge: { width: 80, height: 80, borderRadius: '50%', background: '#34495e', color: 'white', fontSize: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
   hostBadge: { position: 'absolute', top: 10, right: 10, background: '#f1c40f', color: '#333', fontSize: 12, padding: '4px 8px', borderRadius: 4, fontWeight: 'bold' },
-  lobbyFooter: { marginTop: 'auto', borderTop: '1px solid #eee', paddingTop: 20, display: 'flex', justifyContent: 'center' },
+  
+  lobbyFooter: { 
+      marginTop: 'auto', 
+      borderTop: '1px solid #eee', 
+      paddingTop: 20, 
+      display: 'flex', 
+      justifyContent: 'center',
+      // 防止底部被压缩
+      flexShrink: 0 
+  },
 };
