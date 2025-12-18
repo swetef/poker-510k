@@ -1,4 +1,4 @@
-// 牌库生成与洗牌 - [增强版] 支持公平不洗牌模式
+// 牌库生成与洗牌 - [增强版] 支持公平不洗牌 & 模拟线下叠牌模式
 
 const CardRules = require('./CardRules');
 
@@ -14,7 +14,7 @@ class Deck {
         }
     }
 
-    // 普通洗牌 (Fisher-Yates)
+    // 1. 普通洗牌 (Fisher-Yates) - 彻底打乱
     shuffle() {
         for (let i = this.deck.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -22,12 +22,10 @@ class Deck {
         }
     }
 
-    // [新增] 公平的“不洗牌”策略
-    // 逻辑：提取炸弹 -> 轮流分发给玩家 -> 填充散牌 -> 拼回牌库
+    // 2. [爽局] 公平的“均贫富”策略 (保留原逻辑)
     shuffleFairNoShuffle(playerCount) {
-        // 1. 先按点数归类所有牌
-        const groupMap = {}; // { 3: [card1, card2...], 4: [...], ... 17: [...] }
-        const looseCards = []; // 散牌池
+        const groupMap = {}; 
+        const looseCards = []; 
 
         this.deck.forEach(card => {
             const point = CardRules.getPoint(card);
@@ -35,94 +33,150 @@ class Deck {
             groupMap[point].push(card);
         });
 
-        // 2. 提取炸弹块
-        const bombChunks = []; // [ [3,3,3,3], [K,K,K,K,K] ... ]
+        const bombChunks = []; 
         
         Object.values(groupMap).forEach(cards => {
-            // 如果只有1-3张，直接扔进散牌
             if (cards.length < 4) {
                 looseCards.push(...cards);
                 return;
             }
-
-            // 如果牌很多（比如8副牌），可能有20张3。我们需要把它切成几个炸弹，而不是一个巨型炸弹
-            // 策略：每 4~6 张切成一个炸弹块，剩下的扔散牌
             let remaining = [...cards];
             while (remaining.length >= 4) {
-                // 随机切 4 到 6 张作为一个炸弹
                 const chunkSize = Math.min(remaining.length, 4 + Math.floor(Math.random() * 3));
                 const chunk = remaining.splice(0, chunkSize);
                 bombChunks.push(chunk);
             }
-            // 剩下的渣渣扔进散牌
             if (remaining.length > 0) looseCards.push(...remaining);
         });
 
-        // 打乱炸弹块的顺序，防止某人总是拿到大牌
+        // 打乱炸弹块的顺序，但块内部不乱
         for (let i = bombChunks.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [bombChunks[i], bombChunks[j]] = [bombChunks[j], bombChunks[i]];
         }
 
-        // 3. 均分炸弹 (核心公平逻辑)
         const playerBuckets = Array.from({ length: playerCount }, () => []);
         
-        // 轮流发炸弹 (Snake Draft 风格: 0,1,2,3 -> 3,2,1,0 也许更好，但随机顺序已经足够)
+        // 轮询分发炸弹 (均贫富)
         bombChunks.forEach((chunk, index) => {
             const playerIndex = index % playerCount;
             playerBuckets[playerIndex].push(...chunk);
         });
 
-        // 4. 均分散牌
-        // 先打乱散牌
+        // 随机打乱散牌
         for (let i = looseCards.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [looseCards[i], looseCards[j]] = [looseCards[j], looseCards[i]];
         }
-        // 轮流发散牌
+        // 轮询分发散牌
         looseCards.forEach((card, index) => {
             const playerIndex = index % playerCount;
             playerBuckets[playerIndex].push(card);
         });
 
-        // 5. 内部微调 (Internal Shuffle) & 重组
-        // 虽然每个玩家拿到了一堆好牌，但不能让他们看出规律（比如炸弹连在一起），所以每人手里的牌要简单洗一下
-        this.deck = []; // 清空主牌库，准备回填
-        
+        // 重组回 deck (虽然这步主要是为了兼容 dealSequential，但 Deck 状态还是要更新)
+        this.deck = []; 
         playerBuckets.forEach(bucket => {
-            // 简单洗一下这堆牌
+            // 对每个人的手牌进行一次内部微调，防止太过规律
             for (let i = bucket.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [bucket[i], bucket[j]] = [bucket[j], bucket[i]];
             }
-            // [关键] 按顺序拼回去！
-            // 因为 deal 函数是按顺序 slice 的： Player0 拿 0~N, Player1 拿 N~2N
-            // 所以我们这里直接 push 进去即可
             this.deck.push(...bucket);
         });
-
-        // 注意：这里不需要再调 this.shuffle() 了，因为已经构造好了顺序
     }
 
-    // [修改] 发牌入口
-    deal(playerCount, isNoShuffleMode = false) {
-        if (isNoShuffleMode) {
-            this.shuffleFairNoShuffle(playerCount);
-        } else {
-            this.shuffle(); // 经典全随机模式
+    // 3. [新模式] 模拟洗牌 (叠牌 + 切牌)
+    shuffleSimulation(lastRoundCards) {
+        // 如果没有上一局的牌（第一局），或者牌数不对，回退到普通洗牌
+        if (!lastRoundCards || lastRoundCards.length !== this.deck.length) {
+            console.log("[Deck] No valid last round cards, using random shuffle.");
+            this.shuffle();
+            return;
         }
 
+        console.log("[Deck] Using Simulation Shuffle (Stacking + Cutting)");
+        
+        // 直接复用上一局的牌堆顺序（模拟叠牌）
+        this.deck = [...lastRoundCards];
+
+        // 模拟切牌 (Cutting)：通常切 1-3 次
+        const cutCount = 1 + Math.floor(Math.random() * 2); // 1 to 2 times
+        for (let k = 0; k < cutCount; k++) {
+            // 随机选择切牌点 (20% - 80% 之间)
+            const minCut = Math.floor(this.deck.length * 0.2);
+            const maxCut = Math.floor(this.deck.length * 0.8);
+            const cutPoint = minCut + Math.floor(Math.random() * (maxCut - minCut));
+            
+            // 把下半部分移到上面
+            const topPart = this.deck.slice(0, cutPoint);
+            const bottomPart = this.deck.slice(cutPoint);
+            this.deck = [...bottomPart, ...topPart];
+        }
+        
+        // 注意：这里绝对不进行内部打乱 (shuffle)，保留连在一起的牌
+    }
+
+    // 发牌入口
+    // strategy: 'CLASSIC' | 'NO_SHUFFLE' | 'SIMULATION'
+    deal(playerCount, strategy = 'CLASSIC', lastRoundCards = null) {
+        
+        if (strategy === 'NO_SHUFFLE') {
+            // 均贫富模式：内部构造好每人的牌，顺序发即可
+            this.shuffleFairNoShuffle(playerCount);
+            return this._dealSequential(playerCount);
+        } else if (strategy === 'SIMULATION') {
+            // 模拟模式：切牌 + 块状发牌
+            this.shuffleSimulation(lastRoundCards);
+            return this._dealBlock(playerCount);
+        } else {
+            // 默认：全随机
+            this.shuffle();
+            return this._dealSequential(playerCount);
+        }
+    }
+
+    // 普通顺序发牌 (一人一张轮流)
+    // 适用于：全随机模式、已经构造好顺序的均贫富模式
+    _dealSequential(playerCount) {
         const hands = {};
         const totalCards = this.deck.length;
         const cardsPerPlayer = Math.floor(totalCards / playerCount); 
         
         for (let i = 0; i < playerCount; i++) {
             hands[i] = this.deck.slice(i * cardsPerPlayer, (i + 1) * cardsPerPlayer);
-            // 修正最后一个人可能少拿的问题（虽然上面的分配算法已经尽量平均了）
+            // 补齐余数给最后一个人（虽然通常整除）
             if (i === playerCount - 1) {
                  hands[i] = this.deck.slice(i * cardsPerPlayer);
             }
         }
+        return hands;
+    }
+
+    // 块状发牌 (一人一次拿多张)
+    // 适用于：模拟洗牌模式 (防止把叠好的牌拆散)
+    _dealBlock(playerCount) {
+        const hands = {};
+        for(let i=0; i<playerCount; i++) hands[i] = [];
+
+        // 块大小：比如每次拿 4 张
+        const blockSize = 4; 
+        let currentCardIdx = 0;
+        let turn = 0;
+
+        while (currentCardIdx < this.deck.length) {
+            const playerIdx = turn % playerCount;
+            
+            // 拿出这一块，如果不够 blockSize 就全拿
+            const actualSize = Math.min(blockSize, this.deck.length - currentCardIdx);
+            const chunk = this.deck.slice(currentCardIdx, currentCardIdx + actualSize);
+            
+            hands[playerIdx].push(...chunk);
+            
+            currentCardIdx += actualSize;
+            turn++;
+        }
+
         return hands;
     }
 }

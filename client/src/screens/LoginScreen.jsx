@@ -1,6 +1,6 @@
 // 登录页 - 适配移动端，包含自动全屏逻辑 + 手动全屏按钮 + 剩余牌数配置 + 组队开关 (移除抽卡开关，改为默认)
 import React, { useState } from 'react'; 
-import { User, Monitor, RefreshCw, Plus, LogIn, Clock, Layers, Users, Target, Wifi, WifiOff, Award, Maximize, Minimize, Eye, Shield, Sparkles } from 'lucide-react'; 
+import { User, Monitor, RefreshCw, Plus, LogIn, Clock, Layers, Users, Target, Wifi, WifiOff, Award, Maximize, Minimize, Eye, Shield, Sparkles, Shuffle } from 'lucide-react'; 
 import { styles } from '../styles.js';
 // [新增] 引入 useGame
 import { useGame } from '../context/GameContext.jsx';
@@ -155,34 +155,53 @@ export const LoginScreen = () => {
                                     {renderConfigSlider(<Layers size={14}/>, "牌库数量", roomConfig.deckCount, 1, 8, 1, v=>setRoomConfig({...roomConfig, deckCount:v}), '副')}
                                     {renderConfigSlider(<Target size={14}/>, "获胜目标", roomConfig.targetScore, 500, 5000, 500, v=>setRoomConfig({...roomConfig, targetScore:v}), '分')}
                                     
-                                    {/* [新增] 不洗牌模式开关 */}
-                                    <div style={{...styles.configItem, marginTop: 10, padding: '10px', background: 'linear-gradient(to right, #f6d365 0%, #fda085 100%)', borderRadius: 8, gridColumn: '1 / -1', border: '1px solid rgba(255,255,255,0.5)'}}>
-                                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                                            <div style={{display:'flex', alignItems:'center', gap:6, fontWeight:'600', color: 'white', textShadow: '0 1px 2px rgba(0,0,0,0.2)'}}>
-                                                <Sparkles size={18} /> 🎲 不洗牌模式 (爽局)
-                                            </div>
-                                            <label style={{position:'relative', display:'inline-block', width:40, height:20}}>
-                                                <input 
-                                                    type="checkbox" 
-                                                    style={{opacity:0, width:0, height:0}}
-                                                    checked={roomConfig.isNoShuffleMode}
-                                                    onChange={(e) => setRoomConfig({...roomConfig, isNoShuffleMode: e.target.checked})}
-                                                />
-                                                <span style={{
-                                                    position:'absolute', cursor:'pointer', top:0, left:0, right:0, bottom:0, 
-                                                    backgroundColor: roomConfig.isNoShuffleMode ? '#2ecc71' : 'rgba(0,0,0,0.2)', 
-                                                    transition:'.4s', borderRadius: 20
-                                                }}>
-                                                    <span style={{
-                                                        position:'absolute', content:"", height:16, width:16, left:2, bottom:2, 
-                                                        backgroundColor:'white', transition:'.4s', borderRadius:'50%',
-                                                        transform: roomConfig.isNoShuffleMode ? 'translateX(20px)' : 'translateX(0)'
-                                                    }}></span>
-                                                </span>
-                                            </label>
+                                    {/* [修改] 洗牌策略选择器 (替代原不洗牌开关) */}
+                                    <div style={{...styles.configItem, marginTop: 10, padding: '10px', background: '#f8f9fa', borderRadius: 8, gridColumn: '1 / -1', border: '1px solid #eee'}}>
+                                        <div style={{display:'flex', alignItems:'center', gap:6, fontWeight:'600', color: '#2c3e50', marginBottom: 10}}>
+                                            <Shuffle size={16} /> 洗牌策略
                                         </div>
-                                        <div style={{fontSize: 11, color: 'white', marginTop: 4, opacity: 0.9}}>
-                                            {roomConfig.isNoShuffleMode ? "🔥 已开启！炸弹满天飞，均贫富算法保证公平" : "普通模式，完全随机洗牌"}
+                                        <div style={{display:'flex', gap: 10}}>
+                                            <button 
+                                                style={{
+                                                    flex: 1, padding: '8px', borderRadius: 6, fontSize: 12, fontWeight: 'bold',
+                                                    border: (!roomConfig.shuffleStrategy || roomConfig.shuffleStrategy === 'CLASSIC') ? '1px solid #2ecc71' : '1px solid #ddd',
+                                                    background: (!roomConfig.shuffleStrategy || roomConfig.shuffleStrategy === 'CLASSIC') ? '#eafaf1' : 'white',
+                                                    color: (!roomConfig.shuffleStrategy || roomConfig.shuffleStrategy === 'CLASSIC') ? '#2ecc71' : '#7f8c8d',
+                                                    cursor: 'pointer'
+                                                }}
+                                                onClick={() => setRoomConfig({...roomConfig, shuffleStrategy: 'CLASSIC'})}
+                                            >
+                                                🎲 普通随机
+                                            </button>
+                                            <button 
+                                                style={{
+                                                    flex: 1, padding: '8px', borderRadius: 6, fontSize: 12, fontWeight: 'bold',
+                                                    border: roomConfig.shuffleStrategy === 'NO_SHUFFLE' ? '1px solid #e67e22' : '1px solid #ddd',
+                                                    background: roomConfig.shuffleStrategy === 'NO_SHUFFLE' ? '#fdf2e9' : 'white',
+                                                    color: roomConfig.shuffleStrategy === 'NO_SHUFFLE' ? '#e67e22' : '#7f8c8d',
+                                                    cursor: 'pointer'
+                                                }}
+                                                onClick={() => setRoomConfig({...roomConfig, shuffleStrategy: 'NO_SHUFFLE'})}
+                                            >
+                                                🔥 均贫富(爽局)
+                                            </button>
+                                            <button 
+                                                style={{
+                                                    flex: 1, padding: '8px', borderRadius: 6, fontSize: 12, fontWeight: 'bold',
+                                                    border: roomConfig.shuffleStrategy === 'SIMULATION' ? '1px solid #9b59b6' : '1px solid #ddd',
+                                                    background: roomConfig.shuffleStrategy === 'SIMULATION' ? '#f5eef8' : 'white',
+                                                    color: roomConfig.shuffleStrategy === 'SIMULATION' ? '#9b59b6' : '#7f8c8d',
+                                                    cursor: 'pointer'
+                                                }}
+                                                onClick={() => setRoomConfig({...roomConfig, shuffleStrategy: 'SIMULATION'})}
+                                            >
+                                                🃏 模拟叠牌(新)
+                                            </button>
+                                        </div>
+                                        <div style={{fontSize: 11, color: '#999', marginTop: 6, lineHeight: '1.4'}}>
+                                            {(!roomConfig.shuffleStrategy || roomConfig.shuffleStrategy === 'CLASSIC') && "完全随机洗牌，运气至上。"}
+                                            {roomConfig.shuffleStrategy === 'NO_SHUFFLE' && "系统平均分配炸弹，保证每人都有好牌。"}
+                                            {roomConfig.shuffleStrategy === 'SIMULATION' && "保留上局出牌顺序 + 简单切牌，还原线下手感。"}
                                         </div>
                                     </div>
 
@@ -218,8 +237,6 @@ export const LoginScreen = () => {
                                         </div>
                                     </div>
                                     
-                                    {/* [注] 抽卡开关已移除，现在是强制默认流程 */}
-
                                     {/* 倒计时选择 */}
                                     <div style={styles.configItem}>
                                         <div style={styles.configLabel}>

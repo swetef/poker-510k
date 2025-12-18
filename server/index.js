@@ -20,7 +20,7 @@ const io = new Server(server, {
 // 内存数据库
 const rooms = {}; 
 
-// --- [修改] 常驻房间配置定义 ---
+// --- 常驻房间配置定义 ---
 const PERMANENT_ROOMS = {
     '888': { 
         deckCount: 2, 
@@ -31,7 +31,7 @@ const PERMANENT_ROOMS = {
         isTeamMode: false,
         enableRankPenalty: false,
         rankPenaltyScores: [50, 20],
-        isNoShuffleMode: false // [新增] 888 房间默认标准模式
+        shuffleStrategy: 'CLASSIC' // 888 房间默认标准模式
     },
     '666': { 
         deckCount: 3, 
@@ -42,7 +42,7 @@ const PERMANENT_ROOMS = {
         isTeamMode: true, 
         enableRankPenalty: false,
         rankPenaltyScores: [50, 20],
-        isNoShuffleMode: true // [新增] 666 房间默认开启爽局模式
+        shuffleStrategy: 'NO_SHUFFLE' // 666 房间默认开启均贫富(爽局)
     }
 };
 
@@ -121,8 +121,6 @@ io.on('connection', (socket) => {
         if (rooms[roomId]) {
             // 如果是常驻房间，允许直接加入（视为 Join）
             if (rooms[roomId].isPermanent) {
-                 // 转发给 join_room 逻辑
-                 // 这里简单处理：告诉客户端房间存在，让它走 Join 流程，或者直接报错
                  return socket.emit('error_msg', '常驻房间已存在，请直接加入');
             }
             return socket.emit('error_msg', '房间已存在');
@@ -135,7 +133,7 @@ io.on('connection', (socket) => {
             deckCount: 1, 
             maxPlayers: 3, 
             targetScore: 500, 
-            isNoShuffleMode: false, // [新增] 默认关闭
+            shuffleStrategy: 'CLASSIC', // 默认经典
             ...config 
         };
         
@@ -217,7 +215,8 @@ io.on('connection', (socket) => {
                 const hand = room.gameManager.getPlayerHand(socket.id);
                 socket.emit('game_started', { 
                     hand: hand, 
-                    grandScores: room.gameManager.grandScores 
+                    grandScores: room.gameManager.grandScores,
+                    handCounts: room.gameManager.getPublicState().handCounts
                 });
             }
             broadcastGameState(io, roomId, room);
@@ -242,7 +241,7 @@ io.on('connection', (socket) => {
         }
     });
     
-    // --- [修改] 更新房间配置 ---
+    // --- 更新房间配置 ---
     socket.on('update_room_config', ({ roomId, config }) => {
         const room = rooms[roomId];
         if (!room) return;
@@ -258,9 +257,14 @@ io.on('connection', (socket) => {
             return socket.emit('error_msg', '游戏进行中无法修改规则');
         }
 
-        // 确保布尔值正确传递
+        // [修复] 同时处理新旧两种参数
         if (config.isNoShuffleMode !== undefined) {
-            room.config.isNoShuffleMode = !!config.isNoShuffleMode;
+            // 兼容旧逻辑
+            room.config.shuffleStrategy = config.isNoShuffleMode ? 'NO_SHUFFLE' : 'CLASSIC';
+        }
+        if (config.shuffleStrategy) {
+            // 新逻辑
+            room.config.shuffleStrategy = config.shuffleStrategy;
         }
 
         // 更新配置
@@ -291,7 +295,7 @@ io.on('connection', (socket) => {
         broadcastRoomInfo(io, roomId);
     });
 
-    // [新增] 踢人功能
+    // 踢人功能
     socket.on('kick_player', ({ roomId, targetId }) => {
         const room = rooms[roomId];
         if (!room) return;
@@ -321,7 +325,6 @@ io.on('connection', (socket) => {
         // 5. 如果是真人，通知他被踢了
         if (!targetPlayer.isBot) {
             io.to(targetPlayer.id).emit('kicked', '你已被房主移出房间');
-            // 让该 socket 离开房间 channel
             const targetSocket = io.sockets.sockets.get(targetPlayer.id);
             if (targetSocket) {
                 targetSocket.leave(roomId);
@@ -395,11 +398,13 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 游戏流程
+    // 游戏流程控制
     const handleGameStart = (roomId, isNextRound) => {
         const room = rooms[roomId];
         if (!room) return;
 
+        // 如果是新的一局（isNextRound=false），或者 GameManager 实例不存在，则创建新实例
+        // 如果是下一轮（isNextRound=true），则复用实例（以保留 collectedCards）
         if (!isNextRound || !room.gameManager) {
             room.gameManager = new GameManager(room.config, room.players, io, roomId);
         }
@@ -489,7 +494,9 @@ io.on('connection', (socket) => {
             if (rInfo.isGrandOver) {
                 io.to(roomId).emit('grand_game_over', { 
                     grandWinner: rInfo.roundWinnerName, 
-                    grandScores: rInfo.grandScores 
+                    grandScores: rInfo.grandScores,
+                    matchHistory: rInfo.matchHistory,
+                    detail: rInfo.detail
                 });
                 room.gameManager = null; 
             } else {
@@ -497,7 +504,8 @@ io.on('connection', (socket) => {
                     roundWinner: rInfo.roundWinnerName,
                     pointsEarned: rInfo.pointsEarned,
                     detail: rInfo.detail,
-                    grandScores: rInfo.grandScores
+                    grandScores: rInfo.grandScores,
+                    matchHistory: rInfo.matchHistory
                 });
             }
         } else {
@@ -505,7 +513,7 @@ io.on('connection', (socket) => {
         }
     });
 
-       socket.on('pass_turn', ({ roomId }) => {
+    socket.on('pass_turn', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
 
@@ -515,18 +523,16 @@ io.on('connection', (socket) => {
         broadcastGameState(io, roomId, room, result.logText || "PASS");
     });
 
-    // [新增] 提示请求监听
+    // 提示请求监听
     socket.on('request_hint', ({ roomId }) => {
-    const room = rooms[roomId];
-    if (room && room.gameManager) {
-        // 调用 GameManager 的 getHint 方法
-        const cards = room.gameManager.getHint(socket.id);
-        // 发送回给客户端
-        socket.emit('hint_response', cards);
-    }
-});
+        const room = rooms[roomId];
+        if (room && room.gameManager) {
+            const cards = room.gameManager.getHint(socket.id);
+            socket.emit('hint_response', cards);
+        }
+    });
 
-
+    // 断开连接处理
     socket.on('disconnect', () => {
         Object.keys(rooms).forEach(rId => {
             const r = rooms[rId];
@@ -543,17 +549,14 @@ io.on('connection', (socket) => {
                 
                 // 处理房主移交逻辑
                 if (player.isHost && r.players.length > 0) {
-                    // 优先移交给非Bot，如果都是Bot则给第一个
                     const nextHost = r.players.find(p => !p.isBot) || r.players[0];
                     if (nextHost) nextHost.isHost = true;
                 }
                 
                 if (r.players.length === 0) {
                     if (r.isPermanent) {
-                        // 常驻房间：无人时重置配置，但不删除
-                        initPermanentRoom(rId);
+                        initPermanentRoom(rId); // 重置
                     } else {
-                        // 普通房间：删除
                         if (r.destroyTimer) clearTimeout(r.destroyTimer);
                         delete rooms[rId];
                         console.log(`[Room] Room ${rId} deleted (empty lobby).`);
@@ -572,7 +575,6 @@ io.on('connection', (socket) => {
                     if (r.destroyTimer) clearTimeout(r.destroyTimer);
                     r.destroyTimer = setTimeout(() => {
                         const currentRoom = rooms[rId];
-                        // 再次检查是否真的没人
                         if (currentRoom && currentRoom.players.filter(p => !p.isBot).every(p => !p.online)) {
                             if (currentRoom.isPermanent) {
                                 initPermanentRoom(rId); // 重置
@@ -587,7 +589,6 @@ io.on('connection', (socket) => {
         });
     });
 });
-
 // 这一段的意思是：如果是在线上环境，就把 React 打包好的文件(build)发给浏览器
 if (process.env.NODE_ENV === 'production') {
     // 1. 指定静态文件目录

@@ -20,6 +20,9 @@ class GameManager {
         this.timer = null;
         this.botTimer = null;
         this.turnStartTime = 0; 
+
+        // [新增] 收集本局所有打出的牌（按顺序），用于下一局“模拟洗牌”
+        this.collectedCards = [];
     }
 
     // [修改] 获取提示 - 返回所有可行解
@@ -69,13 +72,21 @@ class GameManager {
             this.players.forEach(p => this.grandScores[p.id] = 0);
             this.lastWinnerId = null;
             this.matchHistory = []; // 新比赛清空历史
+            this.collectedCards = []; // [新增] 第一局清空收集区
         }
 
         const deck = new Deck(this.config.deckCount);
         
-        // [修改] 传入 isNoShuffleMode 参数
-        const hands = deck.deal(this.players.length, this.config.isNoShuffleMode);
-        console.log(`[Game] Round started. Mode: ${this.config.isNoShuffleMode ? 'No Shuffle (Fair)' : 'Classic'}`);
+        // [修改] 解析洗牌策略 (兼容旧的 isNoShuffleMode)
+        let strategy = this.config.shuffleStrategy || (this.config.isNoShuffleMode ? 'NO_SHUFFLE' : 'CLASSIC');
+        
+        console.log(`[Game] Round started. Strategy: ${strategy}, Previous Collected: ${this.collectedCards.length}`);
+
+        // [修改] 传入 strategy 和 collectedCards
+        const hands = deck.deal(this.players.length, strategy, this.collectedCards);
+        
+        // [新增] 发牌后，清空收集区，准备收集这一局的新牌
+        this.collectedCards = [];
 
         let startIndex = 0;
         if (this.lastWinnerId) {
@@ -302,6 +313,9 @@ class GameManager {
 
         this._removeCardsFromHand(playerId, cards);
         
+        // [新增] 收集打出的牌 (模拟堆叠)
+        this.collectedCards.push(...cards);
+
         // 1. 基础分计算
         this.gameState.pendingTablePoints += CardRules.calculateTotalScore(cards);
 
@@ -655,7 +669,12 @@ class GameManager {
 
     _concludeRound() {
         const lastPlayer = this.players.find(p => this.gameState.hands[p.id].length > 0);
+        
         if (lastPlayer) {
+            // [新增] 收集输家的剩余手牌，确保牌数守恒
+            const remaining = this.gameState.hands[lastPlayer.id];
+            this.collectedCards.push(...remaining);
+
             this.gameState.finishedRank.push(lastPlayer.id);
         }
         
