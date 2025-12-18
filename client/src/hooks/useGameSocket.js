@@ -1,25 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
-import io from 'socket.io-client';
 import { sortHand } from '../utils/cardLogic.js';
 import SoundManager from '../utils/SoundManager.js';
-
-// 连接地址判断逻辑
-const getSocketUrl = () => {
-    const { hostname, protocol, port } = window.location;
-    if (protocol === 'https:') { return '/'; }
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        if (port !== '3001') { return `${protocol}//${hostname}:3001`; }
-    }
-    if (hostname.startsWith('192.168.') || hostname.startsWith('10.')) {
-        if (port !== '3001') { return `${protocol}//${hostname}:3001`; }
-    }
-    return '/';
-};
-
-const SOCKET_URL = getSocketUrl();
+// [新增] 引入连接 Hook
+import { useSocketConnection } from './useSocketConnection.js';
 
 export const useGameSocket = () => {
-    // --- 状态定义 ---
+    // 1. 获取基础连接能力
+    const { socket, isConnected, mySocketId } = useSocketConnection();
+
+    // [调试] 监听 Socket 注入状态，方便排查问题
+    useEffect(() => {
+        if (!socket) {
+            console.log("[GameSocket] 等待 Socket 初始化...");
+        } else {
+            console.log(`[GameSocket] Socket 就绪, ID: ${mySocketId}, 已连接: ${isConnected}`);
+        }
+    }, [socket, isConnected, mySocketId]);
+
+    // --- 游戏状态定义 (保持不变) ---
     const [gameState, setGameState] = useState('LOGIN'); 
     const [username, setUsername] = useState('');
     const [roomId, setRoomId] = useState('');
@@ -57,8 +55,6 @@ export const useGameSocket = () => {
     const [gameLogs, setGameLogs] = useState([]);
 
     const [sortMode, setSortMode] = useState('POINT'); 
-    const [isConnected, setIsConnected] = useState(false); 
-    const [mySocketId, setMySocketId] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
 
     const [turnRemaining, setTurnRemaining] = useState(60); 
@@ -66,85 +62,52 @@ export const useGameSocket = () => {
 
     const [drawState, setDrawState] = useState(null); 
 
-    // [新增] 提示缓存状态
-    const [availableHints, setAvailableHints] = useState([]); // 缓存所有提示方案
-    const [hintIndex, setHintIndex] = useState(0);            // 当前显示的索引
-    const lastHintRef = useRef({ turnId: null, lastPlayed: [] }); // 用于验证缓存是否过期
+    // 提示缓存状态
+    const [availableHints, setAvailableHints] = useState([]); 
+    const [hintIndex, setHintIndex] = useState(0);            
+    const lastHintRef = useRef({ turnId: null, lastPlayed: [] }); 
 
     // --- Refs ---
-    const socketRef = useRef(null);
     const isDragging = useRef(false); 
     const dragStartMode = useRef(true); 
     const sortModeRef = useRef('POINT');
     const usernameRef = useRef(username); 
-    const mySocketIdRef = useRef(null);   
+    const mySocketIdRef = useRef(mySocketId); // Sync with prop
     const roomIdRef = useRef(roomId);
     
-    // [关键修复] 增加 lastPlayedRef，确保 Socket 闭包中能拿到最新的 lastPlayed
     const lastPlayedRef = useRef(lastPlayed); 
-    
     const backupHandRef = useRef([]);
 
     // --- 监听 Effect ---
     useEffect(() => { usernameRef.current = username; }, [username]);
     useEffect(() => { mySocketIdRef.current = mySocketId; }, [mySocketId]);
     useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
-    
-    // [关键修复] 同步 Ref
     useEffect(() => { lastPlayedRef.current = lastPlayed; }, [lastPlayed]); 
-
+    
     useEffect(() => {
         sortModeRef.current = sortMode;
         if (myHand.length > 0) setMyHand(prev => sortHand(prev, sortMode));
     }, [sortMode]);
 
-    // --- Socket 连接逻辑 ---
-    const connectSocket = () => {
-        if (socketRef.current) {
-            socketRef.current.disconnect();
+    // [重构] 自动重连逻辑：当连接恢复时，尝试重新加入房间
+    useEffect(() => {
+        if (isConnected && socket && roomIdRef.current && usernameRef.current) {
+            console.log(`[Auto-Rejoin] 自动恢复身份: ${usernameRef.current} @ Room ${roomIdRef.current}`);
+            socket.emit('join_room', { 
+                roomId: roomIdRef.current, 
+                username: usernameRef.current 
+            });
         }
+    }, [isConnected, socket]); // 依赖 isConnected 变化
 
-        console.log(`正在连接服务器: ${SOCKET_URL}`);
-        
-        const socket = io(SOCKET_URL, { 
-            reconnectionAttempts: 20,   
-            reconnectionDelay: 2000,    
-            timeout: 20000,
-            autoConnect: true
-        });
-        
-        socketRef.current = socket;
+    // --- 游戏业务事件监听 ---
+    useEffect(() => {
+        if (!socket) return;
 
-        socket.on('connect', () => {
-            console.log("Socket 连接成功!");
-            setIsConnected(true); 
-            
-            if (roomIdRef.current && usernameRef.current) {
-                console.log(`[Auto-Rejoin] 自动恢复身份: ${usernameRef.current} @ Room ${roomIdRef.current}`);
-                socket.emit('join_room', { 
-                    roomId: roomIdRef.current, 
-                    username: usernameRef.current 
-                });
-            }
-        });
-        
-        socket.on('disconnect', () => {
-            console.log("Socket 断开连接");
-            setIsConnected(false); 
-        });
-        
-        socket.on('connect_error', (err) => {
-            console.warn("连接错误 (详细):", err.message);
-        });
+        // 定义所有处理函数
+        const onErrorMsg = (msg) => { setIsLoading(false); alert(msg); };
 
-        socket.on('your_id', (id) => {
-            setMySocketId(id);
-            mySocketIdRef.current = id;
-        });
-        
-        socket.on('error_msg', (msg) => { setIsLoading(false); alert(msg); });
-
-        socket.on('room_info', (data) => {
+        const onRoomInfo = (data) => {
             setRoomId(data.roomId);
             setRoomConfig(data.config);
             setPlayers(data.players);
@@ -153,30 +116,24 @@ export const useGameSocket = () => {
                 setGameState('LOBBY'); 
             }
             setIsLoading(false);
-        });
+        };
 
-        socket.on('enter_draw_phase', (data) => {
-            setDrawState({ 
-                totalCards: data.totalCards, 
-                history: [] 
-            });
+        const onEnterDrawPhase = (data) => {
+            setDrawState({ totalCards: data.totalCards, history: [] });
             setGameState('DRAW_SEATS');
             SoundManager.play('deal');
-        });
+        };
 
-        socket.on('seat_draw_update', (data) => {
-            setDrawState(prev => ({
-                ...prev,
-                history: [...prev.history, data]
-            }));
+        const onSeatDrawUpdate = (data) => {
+            setDrawState(prev => ({ ...prev, history: [...prev.history, data] }));
             SoundManager.play('deal'); 
-        });
+        };
 
-        socket.on('seat_draw_finished', (data) => {
+        const onSeatDrawFinished = (data) => {
             setPlayers(data.players); 
-        });
+        };
 
-        socket.on('game_started', (data) => {
+        const onGameStarted = (data) => {
             if (data.hand) {
                 setMyHand(sortHand(data.hand, sortModeRef.current));
             }
@@ -194,15 +151,14 @@ export const useGameSocket = () => {
             setPlayersInfo({});
             if (data.handCounts) setHandCounts(data.handCounts);
             
-            // 清空提示缓存
             setAvailableHints([]);
             setHintIndex(0);
 
             SoundManager.play('deal');
             backupHandRef.current = []; 
-        });
+        };
 
-        socket.on('game_state_update', (data) => {
+        const onGameStateUpdate = (data) => {
             setCurrentTurnId(data.currentTurnId);
             
             if (data.turnRemaining !== undefined) {
@@ -215,10 +171,7 @@ export const useGameSocket = () => {
                 }
             }
 
-            // [关键修改] 使用 JSON 比较来检测 lastPlayed 是否真的变了
-            // 如果上家出牌变了，或者轮次变了，清空提示缓存
-            // 注意：这里我们使用 Ref 的当前值来比较，虽然在这里直接用 data.lastPlayed 也是新的，
-            // 但为了逻辑一致性，我们主要关注的是“缓存失效”的时机。
+            // 缓存失效检测
             if (data.lastPlayed) {
                 const newPlayedStr = JSON.stringify(data.lastPlayed);
                 const oldPlayedStr = JSON.stringify(lastHintRef.current.lastPlayed);
@@ -227,7 +180,6 @@ export const useGameSocket = () => {
                     setHintIndex(0);
                 }
             } else if (data.lastPlayed === null || (Array.isArray(data.lastPlayed) && data.lastPlayed.length === 0)) {
-                // 如果桌上清空了（比如新一轮），也清空缓存
                 if (lastHintRef.current.lastPlayed.length > 0) {
                     setAvailableHints([]);
                     setHintIndex(0);
@@ -252,18 +204,17 @@ export const useGameSocket = () => {
             if (data.currentTurnId === mySocketIdRef.current) {
                 SoundManager.play('alert');
             }
-        });
+        };
 
-        socket.on('hand_update', (newHand) => {
+        const onHandUpdate = (newHand) => {
             setMyHand(sortHand(newHand, sortModeRef.current)); 
             setSelectedCards([]);
-            // 手牌变了，之前的提示肯定无效了
             setAvailableHints([]);
             setHintIndex(0);
             backupHandRef.current = [];
-        });
+        };
 
-        socket.on('play_error', (msg) => { 
+        const onPlayError = (msg) => { 
             setInfoMessage(msg); 
             setTimeout(()=>setInfoMessage(''), 2000); 
             SoundManager.play('lose'); 
@@ -273,50 +224,68 @@ export const useGameSocket = () => {
                 backupHandRef.current = [];
                 setInfoMessage("出牌无效，手牌已回滚");
             }
-        }); 
+        }; 
         
-        socket.on('round_over', (data) => {
+        const onRoundOver = (data) => {
             setRoundResult(data);
             if (data.grandScores) setPlayerScores(data.grandScores);
             const amIWinner = data.roundWinner === usernameRef.current;
             SoundManager.play(amIWinner ? 'win' : 'lose');
-        });
+        };
 
-        socket.on('grand_game_over', (data) => {
+        const onGrandGameOver = (data) => {
             setGrandResult(data);
             SoundManager.play('win'); 
-        });
+        };
 
-        // [修改] 监听提示返回 - 处理多组解
-        socket.on('hint_response', (hints) => {
+        const onHintResponse = (hints) => {
             if (hints && hints.length > 0) {
-                // 缓存提示列表
                 setAvailableHints(hints);
                 setHintIndex(0);
-                
-                // 立即展示第一个
                 setSelectedCards(hints[0]);
-                
-                // 记录状态用于校验
                 lastHintRef.current = {
-                    turnId: mySocketIdRef.current, // 记录是我的回合请求的
-                    // [关键修复] 使用 lastPlayedRef.current 而不是 lastPlayed (闭包陷阱)
+                    turnId: mySocketIdRef.current, 
                     lastPlayed: [...lastPlayedRef.current] 
                 };
-                
-                // 为了调试，可以打印一下
-                // console.log("Hint received, cached for:", lastPlayedRef.current);
             } else {
                 setInfoMessage('没有打得过的牌');
                 setTimeout(()=>setInfoMessage(''), 1000);
             }
-        });
-    };
+        };
+
+        // 绑定事件
+        socket.on('error_msg', onErrorMsg);
+        socket.on('room_info', onRoomInfo);
+        socket.on('enter_draw_phase', onEnterDrawPhase);
+        socket.on('seat_draw_update', onSeatDrawUpdate);
+        socket.on('seat_draw_finished', onSeatDrawFinished);
+        socket.on('game_started', onGameStarted);
+        socket.on('game_state_update', onGameStateUpdate);
+        socket.on('hand_update', onHandUpdate);
+        socket.on('play_error', onPlayError);
+        socket.on('round_over', onRoundOver);
+        socket.on('grand_game_over', onGrandGameOver);
+        socket.on('hint_response', onHintResponse);
+
+        return () => {
+            // 解绑事件
+            socket.off('error_msg', onErrorMsg);
+            socket.off('room_info', onRoomInfo);
+            socket.off('enter_draw_phase', onEnterDrawPhase);
+            socket.off('seat_draw_update', onSeatDrawUpdate);
+            socket.off('seat_draw_finished', onSeatDrawFinished);
+            socket.off('game_started', onGameStarted);
+            socket.off('game_state_update', onGameStateUpdate);
+            socket.off('hand_update', onHandUpdate);
+            socket.off('play_error', onPlayError);
+            socket.off('round_over', onRoundOver);
+            socket.off('grand_game_over', onGrandGameOver);
+            socket.off('hint_response', onHintResponse);
+        };
+    }, [socket, gameState]); // 依赖 socket 和 gameState 变化重新绑定
 
     // --- 初始化 Effect ---
     useEffect(() => {
-        connectSocket();
-
         const initAudio = () => {
             SoundManager.init();
             window.removeEventListener('click', initAudio);
@@ -327,7 +296,6 @@ export const useGameSocket = () => {
         window.addEventListener('mouseup', handleGlobalMouseUp);
         
         return () => { 
-            if (socketRef.current) socketRef.current.disconnect(); 
             window.removeEventListener('mouseup', handleGlobalMouseUp); 
         };
     }, []);
@@ -341,25 +309,25 @@ export const useGameSocket = () => {
         setIsLoading(true);
         const event = isCreatorMode ? 'create_room' : 'join_room';
         const payload = isCreatorMode ? { roomId, username, config: roomConfig } : { roomId, username };
-        socketRef.current.emit(event, payload);
+        socket.emit(event, payload);
     };
     
-    const handleStartGame = () => socketRef.current.emit('start_game', { roomId });
-    const handleNextRound = () => socketRef.current.emit('next_round', { roomId });
-    const handleAddBot = () => socketRef.current.emit('add_bot', { roomId });
-    const handleToggleAutoPlay = () => socketRef.current.emit('toggle_auto_play', { roomId });
+    const handleStartGame = () => socket.emit('start_game', { roomId });
+    const handleNextRound = () => socket.emit('next_round', { roomId });
+    const handleAddBot = () => socket.emit('add_bot', { roomId });
+    const handleToggleAutoPlay = () => socket.emit('toggle_auto_play', { roomId });
 
     const handleSwitchSeat = (index1, index2) => {
         if (!isCreatorMode && !players.find(p=>p.id===mySocketId)?.isHost) return;
-        socketRef.current.emit('switch_seat', { roomId, index1, index2 });
+        socket.emit('switch_seat', { roomId, index1, index2 });
     };
     
     const handleDrawCard = (index) => {
-        socketRef.current.emit('draw_seat_card', { roomId, cardIndex: index });
+        socket.emit('draw_seat_card', { roomId, cardIndex: index });
     };
 
     const handleUpdateConfig = (newConfig) => {
-        socketRef.current.emit('update_room_config', { roomId, config: newConfig });
+        socket.emit('update_room_config', { roomId, config: newConfig });
     };
 
     const updateSelection = (cardVal, forceSelect = null) => {
@@ -397,38 +365,33 @@ export const useGameSocket = () => {
         setLastPlayerName(username); 
         setSelectedCards([]); 
         SoundManager.play('play');
-        socketRef.current.emit('play_cards', { roomId, cards: cardsToPlay });
+        socket.emit('play_cards', { roomId, cards: cardsToPlay });
     };
     
     const handlePass = () => {
-        socketRef.current.emit('pass_turn', { roomId });
+        socket.emit('pass_turn', { roomId });
         setSelectedCards([]);
     };
     
     const handleKickPlayer = (targetId) => {
-        if (socketRef.current) {
-            socketRef.current.emit('kick_player', { roomId, targetId });
+        if (socket) {
+            socket.emit('kick_player', { roomId, targetId });
         }
     };
 
-    // [修改] 请求提示 - 支持循环切换
     const handleRequestHint = () => {
-        // 1. 检查缓存是否有效
-        // 必须是我的回合，且上家出的牌没变 (使用 JSON 字符串比较)
         const isCacheValid = 
             availableHints.length > 0 && 
             currentTurnId === mySocketIdRef.current &&
             JSON.stringify(lastPlayed) === JSON.stringify(lastHintRef.current.lastPlayed);
 
         if (isCacheValid) {
-            // 2. 有缓存，切下一个
             const nextIndex = (hintIndex + 1) % availableHints.length;
             setHintIndex(nextIndex);
             setSelectedCards(availableHints[nextIndex]);
         } else {
-            // 3. 无缓存，请求新的
-            setAvailableHints([]); // 清空旧的
-            socketRef.current.emit('request_hint', { roomId });
+            setAvailableHints([]);
+            socket.emit('request_hint', { roomId });
         }
     };
 

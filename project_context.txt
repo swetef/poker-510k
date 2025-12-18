@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/18 16:41:47
+Project Context Generated at 2025/12/18 16:58:41
 
 
 ================================================================================
@@ -176,7 +176,8 @@ export default function App() {
       toggleSort, handleRoomAction, handleStartGame, handleNextRound,
       handleAddBot, handleToggleAutoPlay, handleSwitchSeat, handleDrawCard,
       handleUpdateConfig, handleClearSelection, handleMouseDown,
-      handleMouseEnter, handlePlayCards, handlePass, handleKickPlayer
+      handleMouseEnter, handlePlayCards, handlePass, handleKickPlayer,
+      handleRequestHint // [修复] 确保这里已经从 Hook 中解构出来
   } = useGameSocket();
 
   const renderLandscapeHint = () => (
@@ -241,7 +242,7 @@ export default function App() {
           handleAddBot,
           handleSwitchSeat,
           handleUpdateConfig,
-          handleKickPlayer // [新增]
+          handleKickPlayer
       }} />}
       
       {gameState === 'DRAW_SEATS' && <DrawSeatScreen {...{
@@ -258,7 +259,8 @@ export default function App() {
           mySocketId, roundResult, grandResult, roomConfig,
           turnRemaining, finishedRank, handCounts, 
           toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
-          handleToggleAutoPlay, handleClearSelection 
+          handleToggleAutoPlay, handleClearSelection,
+          handleRequestHint // [关键修复] 将方法传递给 GameScreen
       }} />}
     </>
   );
@@ -831,6 +833,11 @@ export const useGameSocket = () => {
 
     const [drawState, setDrawState] = useState(null); 
 
+    // [新增] 提示缓存状态
+    const [availableHints, setAvailableHints] = useState([]); // 缓存所有提示方案
+    const [hintIndex, setHintIndex] = useState(0);            // 当前显示的索引
+    const lastHintRef = useRef({ turnId: null, lastPlayed: [] }); // 用于验证缓存是否过期
+
     // --- Refs ---
     const socketRef = useRef(null);
     const isDragging = useRef(false); 
@@ -839,12 +846,19 @@ export const useGameSocket = () => {
     const usernameRef = useRef(username); 
     const mySocketIdRef = useRef(null);   
     const roomIdRef = useRef(roomId);
+    
+    // [关键修复] 增加 lastPlayedRef，确保 Socket 闭包中能拿到最新的 lastPlayed
+    const lastPlayedRef = useRef(lastPlayed); 
+    
     const backupHandRef = useRef([]);
 
     // --- 监听 Effect ---
     useEffect(() => { usernameRef.current = username; }, [username]);
     useEffect(() => { mySocketIdRef.current = mySocketId; }, [mySocketId]);
     useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
+    
+    // [关键修复] 同步 Ref
+    useEffect(() => { lastPlayedRef.current = lastPlayed; }, [lastPlayed]); 
 
     useEffect(() => {
         sortModeRef.current = sortMode;
@@ -946,6 +960,11 @@ export const useGameSocket = () => {
             setTurnRemaining(60);
             setPlayersInfo({});
             if (data.handCounts) setHandCounts(data.handCounts);
+            
+            // 清空提示缓存
+            setAvailableHints([]);
+            setHintIndex(0);
+
             SoundManager.play('deal');
             backupHandRef.current = []; 
         });
@@ -960,6 +979,25 @@ export const useGameSocket = () => {
             if (data.lastPlayed && data.lastPlayed.length > 0) {
                 if (data.lastPlayerName !== usernameRef.current) {
                     SoundManager.play('play'); 
+                }
+            }
+
+            // [关键修改] 使用 JSON 比较来检测 lastPlayed 是否真的变了
+            // 如果上家出牌变了，或者轮次变了，清空提示缓存
+            // 注意：这里我们使用 Ref 的当前值来比较，虽然在这里直接用 data.lastPlayed 也是新的，
+            // 但为了逻辑一致性，我们主要关注的是“缓存失效”的时机。
+            if (data.lastPlayed) {
+                const newPlayedStr = JSON.stringify(data.lastPlayed);
+                const oldPlayedStr = JSON.stringify(lastHintRef.current.lastPlayed);
+                if (newPlayedStr !== oldPlayedStr) {
+                    setAvailableHints([]);
+                    setHintIndex(0);
+                }
+            } else if (data.lastPlayed === null || (Array.isArray(data.lastPlayed) && data.lastPlayed.length === 0)) {
+                // 如果桌上清空了（比如新一轮），也清空缓存
+                if (lastHintRef.current.lastPlayed.length > 0) {
+                    setAvailableHints([]);
+                    setHintIndex(0);
                 }
             }
 
@@ -986,6 +1024,9 @@ export const useGameSocket = () => {
         socket.on('hand_update', (newHand) => {
             setMyHand(sortHand(newHand, sortModeRef.current)); 
             setSelectedCards([]);
+            // 手牌变了，之前的提示肯定无效了
+            setAvailableHints([]);
+            setHintIndex(0);
             backupHandRef.current = [];
         });
 
@@ -1013,12 +1054,25 @@ export const useGameSocket = () => {
             SoundManager.play('win'); 
         });
 
-        // [新增] 监听提示返回
-        socket.on('hint_response', (cards) => {
-            if (cards && cards.length > 0) {
-                setSelectedCards(cards);
-                setInfoMessage('已自动选牌');
-                setTimeout(()=>setInfoMessage(''), 1000);
+        // [修改] 监听提示返回 - 处理多组解
+        socket.on('hint_response', (hints) => {
+            if (hints && hints.length > 0) {
+                // 缓存提示列表
+                setAvailableHints(hints);
+                setHintIndex(0);
+                
+                // 立即展示第一个
+                setSelectedCards(hints[0]);
+                
+                // 记录状态用于校验
+                lastHintRef.current = {
+                    turnId: mySocketIdRef.current, // 记录是我的回合请求的
+                    // [关键修复] 使用 lastPlayedRef.current 而不是 lastPlayed (闭包陷阱)
+                    lastPlayed: [...lastPlayedRef.current] 
+                };
+                
+                // 为了调试，可以打印一下
+                // console.log("Hint received, cached for:", lastPlayedRef.current);
             } else {
                 setInfoMessage('没有打得过的牌');
                 setTimeout(()=>setInfoMessage(''), 1000);
@@ -1117,10 +1171,32 @@ export const useGameSocket = () => {
         socketRef.current.emit('pass_turn', { roomId });
         setSelectedCards([]);
     };
+    
+    const handleKickPlayer = (targetId) => {
+        if (socketRef.current) {
+            socketRef.current.emit('kick_player', { roomId, targetId });
+        }
+    };
 
-    // [新增] 请求提示
+    // [修改] 请求提示 - 支持循环切换
     const handleRequestHint = () => {
-        socketRef.current.emit('request_hint', { roomId });
+        // 1. 检查缓存是否有效
+        // 必须是我的回合，且上家出的牌没变 (使用 JSON 字符串比较)
+        const isCacheValid = 
+            availableHints.length > 0 && 
+            currentTurnId === mySocketIdRef.current &&
+            JSON.stringify(lastPlayed) === JSON.stringify(lastHintRef.current.lastPlayed);
+
+        if (isCacheValid) {
+            // 2. 有缓存，切下一个
+            const nextIndex = (hintIndex + 1) % availableHints.length;
+            setHintIndex(nextIndex);
+            setSelectedCards(availableHints[nextIndex]);
+        } else {
+            // 3. 无缓存，请求新的
+            setAvailableHints([]); // 清空旧的
+            socketRef.current.emit('request_hint', { roomId });
+        }
     };
 
     return {
@@ -1140,7 +1216,7 @@ export const useGameSocket = () => {
         toggleSort, handleRoomAction, handleStartGame, handleNextRound,
         handleAddBot, handleToggleAutoPlay, handleSwitchSeat, handleDrawCard,
         handleUpdateConfig, handleClearSelection, handleMouseDown,
-        handleMouseEnter, handlePlayCards, handlePass, handleRequestHint
+        handleMouseEnter, handlePlayCards, handlePass, handleKickPlayer, handleRequestHint
     };
 };
 
@@ -3784,94 +3860,162 @@ FILE PATH: server\game\BotLogic.js
 const CardRules = require('./CardRules');
 
 const BotLogic = {
-    // 决策函数：返回建议打出的手牌数组
+    // [兼容旧接口] 机器人决策仍只取第一个（通常是最小的）
     decideMove: (hand, lastPlayedCards, deckCount) => {
+        const solutions = BotLogic.findAllSolutions(hand, lastPlayedCards, deckCount);
+        return solutions.length > 0 ? solutions[0] : null;
+    },
+
+    // [新接口] 找出所有可行的出牌方案
+    findAllSolutions: (hand, lastPlayedCards, deckCount) => {
         try {
-            // 1. 自由出牌：出最小单张
-            if (!lastPlayedCards || lastPlayedCards.length === 0) {
-                if (hand.length === 0) return null;
-                return [hand[0]]; 
-            }
-
-            // 2. 分析上家牌型
-            const lastHandState = CardRules.analyze(lastPlayedCards, deckCount);
-            if (lastHandState.type === 'INVALID') return null; 
-
-            // 整理手牌
+            const solutions = [];
+            
+            // 1. 预处理手牌：分组 + 排序
             const grouped = {};
+            const points = [];
             hand.forEach(c => {
                 const p = CardRules.getPoint(c);
-                if (!grouped[p]) grouped[p] = [];
+                if (!grouped[p]) {
+                    grouped[p] = [];
+                    points.push(p);
+                }
                 grouped[p].push(c);
             });
-            const uniquePoints = Object.keys(grouped).map(Number).sort((a,b) => a-b);
+            // 点数去重并排序
+            points.sort((a, b) => a - b); 
+            // 去除重复点数 (比如 points 里可能有多个 3，如果不去重遍历会重复，但这里我们用 Set 或 includes 判断去重)
+            const uniquePoints = [...new Set(points)].sort((a,b)=>a-b);
 
-            // --- 策略 A：同牌型管牌 (单/对/三) ---
-            if (['SINGLE', 'PAIR', 'TRIPLE'].includes(lastHandState.type)) {
-                const countNeeded = lastHandState.type === 'SINGLE' ? 1 : 
-                                    lastHandState.type === 'PAIR' ? 2 : 3;
-                
-                for (let p of uniquePoints) {
-                    if (p > lastHandState.val && grouped[p].length >= countNeeded) {
-                        // 尽量不拆炸弹 (如果该点数有 >=4 张，跳过，除非只剩炸弹)
-                        if (grouped[p].length >= 4 && uniquePoints.length > 1) continue;
-                        return grouped[p].slice(0, countNeeded);
-                    }
-                }
-            }
-            
-            // --- 策略 B：炸弹压制 ---
-            const currentLevel = lastHandState.level || 0;
-            
-            // 1. 寻找 510K (Level 1 & 2)
-            // 只有当当前牌型等级 < 2 (杂色或普通牌) 时才考虑用 510K
-            if (currentLevel < 2) { 
-                const fives = grouped[5] || [];
-                const tens = grouped[10] || [];
-                const kings = grouped[13] || []; // K
+            // --- 辅助函数：查找所有炸弹 ---
+            const findAllBombs = (minLevel = 0, minVal = 0) => {
+                const bombList = [];
 
-                if (fives.length > 0 && tens.length > 0 && kings.length > 0) {
-                    // 优先找纯色 (Level 2)
-                    for (let f of fives) {
-                        for (let t of tens) {
-                            for (let k of kings) {
-                                const s1 = CardRules.getSuit(f);
-                                const s2 = CardRules.getSuit(t);
-                                const s3 = CardRules.getSuit(k);
-                                if (s1 === s2 && s2 === s3) {
-                                    const bomb = [f, t, k];
-                                    if (CardRules.canPlay(bomb, lastPlayedCards, deckCount)) return bomb;
+                // A. 510K (Level 1 & 2)
+                if (minLevel <= 2) {
+                    const fives = grouped[5] || [];
+                    const tens = grouped[10] || [];
+                    const kings = grouped[13] || []; // K
+                    
+                    if (fives.length > 0 && tens.length > 0 && kings.length > 0) {
+                        // 简单起见，只组装一套 510K (优先纯色)
+                        // 如果要穷举所有 510K 组合会太多，这里简化为：有一套就提示一套
+                        let foundPure = false;
+                        for (let f of fives) {
+                            for (let t of tens) {
+                                for (let k of kings) {
+                                    const s1 = CardRules.getSuit(f);
+                                    const s2 = CardRules.getSuit(t);
+                                    const s3 = CardRules.getSuit(k);
+                                    if (s1 === s2 && s2 === s3) {
+                                        // 纯色 510K (Level 2)
+                                        if (2 > minLevel || (2 === minLevel && 100 > minVal)) { // 纯色value此处暂定
+                                            bombList.push({ cards: [f, t, k], level: 2, val: 999 }); // 纯色优先
+                                            foundPure = true;
+                                        }
+                                    }
                                 }
+                                if(foundPure) break;
                             }
+                            if(foundPure) break;
+                        }
+                        
+                        if (!foundPure && minLevel <= 1) {
+                            // 杂色 510K (Level 1)
+                            bombList.push({ cards: [fives[0], tens[0], kings[0]], level: 1, val: 1 });
                         }
                     }
+                }
 
-                    // 其次找杂色 (Level 1)
-                    if (currentLevel < 1) {
-                        const mixedBomb = [fives[0], tens[0], kings[0]];
-                        if (CardRules.canPlay(mixedBomb, lastPlayedCards, deckCount)) return mixedBomb;
+                // B. 普通炸弹 (Level 3)
+                // 遍历所有点数，看是否有 >= 4 张
+                for (let p of uniquePoints) {
+                    const count = grouped[p].length;
+                    if (count >= 4) {
+                        // 如果要求 Level 3，比较 Val；如果 minLevel < 3，直接加入
+                        if (minLevel < 3 || (minLevel === 3 && p > minVal)) {
+                            bombList.push({ cards: grouped[p], level: 3, val: p });
+                        }
+                    }
+                }
+
+                // C. 天王炸 (Level 4)
+                const jokers = hand.filter(c => CardRules.getPoint(c) >= 16);
+                if (jokers.length === deckCount * 2) {
+                    if (minLevel < 4) {
+                        bombList.push({ cards: jokers, level: 4, val: 999 });
+                    }
+                }
+
+                return bombList;
+            };
+
+            // --- 场景 1: 自由出牌 (First Play) ---
+            if (!lastPlayedCards || lastPlayedCards.length === 0) {
+                // 自由出牌时，循环提示：最小单张 -> 最小对子 -> 最小三张 -> 炸弹
+                // 1. 最小单张
+                if (uniquePoints.length > 0) solutions.push([grouped[uniquePoints[0]][0]]);
+                // 2. 最小对子
+                for (let p of uniquePoints) {
+                    if (grouped[p].length >= 2) {
+                        solutions.push(grouped[p].slice(0, 2));
+                        break; 
+                    }
+                }
+                // 3. 最小三张
+                for (let p of uniquePoints) {
+                    if (grouped[p].length >= 3) {
+                        solutions.push(grouped[p].slice(0, 3));
+                        break;
+                    }
+                }
+                // 4. 所有炸弹
+                const bombs = findAllBombs(-1, -1);
+                bombs.forEach(b => solutions.push(b.cards));
+                
+                return solutions;
+            }
+
+            // --- 场景 2: 管牌 (Beat It) ---
+            const lastState = CardRules.analyze(lastPlayedCards, deckCount);
+            if (lastState.type === 'INVALID') return [];
+
+            // 策略 A: 同牌型压制 (单/对/三)
+            if (['SINGLE', 'PAIR', 'TRIPLE'].includes(lastState.type)) {
+                const countNeeded = lastState.type === 'SINGLE' ? 1 : (lastState.type === 'PAIR' ? 2 : 3);
+                
+                for (let p of uniquePoints) {
+                    // 必须点数更大，且张数够
+                    if (p > lastState.val && grouped[p].length >= countNeeded) {
+                        // 即使是炸弹（4张），如果被拆成单/对/三来管，也是合规的（虽然有点亏）
+                        // 为了提示全面，我们把它加进去
+                        solutions.push(grouped[p].slice(0, countNeeded));
                     }
                 }
             }
+            
+            // 策略 B: 连对/飞机 (简化处理：只提示炸弹，或者精准匹配)
+            // 复杂的连对穷举比较耗时，这里暂时略过连对的同型管法，直接推荐炸弹
 
-            // 2. 寻找普通炸弹 (Level 3)
-            for (let p of uniquePoints) {
-                if (grouped[p].length >= 4) {
-                    const bombCards = grouped[p];
-                    if (CardRules.canPlay(bombCards, lastPlayedCards, deckCount)) return bombCards;
+            // 策略 C: 炸弹压制
+            const currentLevel = lastState.level || 0;
+            const currentVal = lastState.val || 0;
+            
+            const bombs = findAllBombs(currentLevel, currentVal);
+            // 此时 bombs 里的已经是符合等级要求的了，除了同级比较
+            // findAllBombs 里已经做了简单的 minLevel 过滤，这里再细致排一下
+            
+            bombs.forEach(b => {
+                // 严格校验能不能管
+                if (CardRules.canPlay(b.cards, lastPlayedCards, deckCount)) {
+                    solutions.push(b.cards);
                 }
-            }
+            });
 
-            // 3. 寻找天王炸 (Level 4)
-            const jokers = hand.filter(c => CardRules.getPoint(c) >= 16);
-            if (jokers.length === deckCount * 2) {
-                 if (CardRules.canPlay(jokers, lastPlayedCards, deckCount)) return jokers;
-            }
-
-            return null; // 管不上
+            return solutions;
         } catch (e) {
-            console.error("BotLogic error:", e);
-            return null;
+            console.error("BotLogic findAllSolutions error:", e);
+            return [];
         }
     }
 };
@@ -4199,21 +4343,19 @@ class GameManager {
         this.turnStartTime = 0; 
     }
 
-    // [新增] 获取提示 (供 Socket 调用)
+    // [修改] 获取提示 - 返回所有可行解
     getHint(playerId) {
         try {
-            // console.log(`[GameManager] Player ${playerId} requested hint.`);
             if (!this.gameState) return [];
             const hand = this.gameState.hands[playerId];
             if (!hand) return [];
 
             const lastPlayed = this.gameState.lastPlayedCards;
             
-            // 复用 Bot 逻辑计算最优解 (BotLogic 已更新支持杂色510K)
-            const result = BotLogic.decideMove(hand, lastPlayed, this.config.deckCount);
+            // 使用新方法 findAllSolutions 获取所有可行牌型
+            const results = BotLogic.findAllSolutions(hand, lastPlayed, this.config.deckCount);
             
-            // if (result) console.log(`[GameManager] Hint found: ${result.length} cards`);
-            return result || [];
+            return results || [];
         } catch (error) {
             console.error("[GameManager] getHint error:", error);
             return [];
@@ -4338,6 +4480,7 @@ class GameManager {
             // 尝试获取出牌策略
             let cardsToPlay = null;
             try {
+                // [修改] Bot 使用 decideMove (内部会调用 findAllSolutions 取第一个)
                 cardsToPlay = BotLogic.decideMove(sortedHand, cardsToBeat, this.config.deckCount);
             } catch (err) {
                 console.error("[Bot Error] Logic crashed:", err);

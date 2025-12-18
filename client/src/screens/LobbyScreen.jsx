@@ -2,15 +2,21 @@
 import React, { useState } from 'react';
 import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Eye, Award, Check } from 'lucide-react';
 import { styles } from '../styles.js';
+// [新增] 引入 useGame
+import { useGame } from '../context/GameContext.jsx';
 
-export const LobbyScreen = ({ 
-    roomId, roomConfig, players, mySocketId, 
-    handleStartGame, 
-    handleAddBot,
-    handleSwitchSeat,
-    handleUpdateConfig,
-    handleKickPlayer // [新增]
-}) => {
+// [修改] 移除 Props 参数
+export const LobbyScreen = () => {
+    
+    // [新增] 从 Context 获取数据
+    const { 
+        roomId, roomConfig, players, mySocketId, 
+        handleStartGame, 
+        handleAddBot,
+        handleSwitchSeat,
+        handleUpdateConfig,
+        handleKickPlayer // [新增]
+    } = useGame();
     
     // 判断自己是不是房主
     const amIHost = players.find(p => p.id === mySocketId)?.isHost;

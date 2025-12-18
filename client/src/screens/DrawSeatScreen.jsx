@@ -2,13 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { styles } from '../styles.js';
 import { Card } from '../components/BaseUI.jsx'; 
 import { Shuffle } from 'lucide-react';
+// [新增] 引入 useGame
+import { useGame } from '../context/GameContext.jsx';
 
-export const DrawSeatScreen = ({ 
-    roomId, players, mySocketId, 
-    drawState, // { totalCards, history: [...] }
-    handleDrawCard,
-    roomConfig // 接收配置，用于判断显示什么文案
-}) => {
+// [修改] 移除 Props 参数
+export const DrawSeatScreen = () => {
+
+    // [新增] 从 Context 获取数据
+    const { 
+        roomId, players, mySocketId, 
+        drawState, // { totalCards, history: [...] }
+        handleDrawCard,
+        roomConfig // 接收配置，用于判断显示什么文案
+    } = useGame();
+
     // 本地状态用于动画展示
     const [flippedCards, setFlippedCards] = useState({}); // { index: { val: 54, playerName: 'xxx' } }
     const [infoText, setInfoText] = useState("请点击一张卡背进行抽签");

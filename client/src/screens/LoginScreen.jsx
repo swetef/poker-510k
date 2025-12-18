@@ -2,17 +2,23 @@
 import React, { useState } from 'react'; 
 import { User, Monitor, RefreshCw, Plus, LogIn, Clock, Layers, Users, Target, Wifi, WifiOff, Award, Maximize, Minimize, Eye, Shield } from 'lucide-react'; 
 import { styles } from '../styles.js';
+// [新增] 引入 useGame
+import { useGame } from '../context/GameContext.jsx';
 
-export const LoginScreen = ({ 
-    username, setUsername, 
-    roomId, setRoomId, 
-    roomConfig, setRoomConfig, 
-    isCreatorMode, setIsCreatorMode, 
-    handleRoomAction, 
-    isLoading,
-    isConnected 
-}) => {
+// [修改] 移除 Props 参数
+export const LoginScreen = () => {
     
+    // [新增] 从 Context 获取数据
+    const { 
+        username, setUsername, 
+        roomId, setRoomId, 
+        roomConfig, setRoomConfig, 
+        isCreatorMode, setIsCreatorMode, 
+        handleRoomAction, 
+        isLoading,
+        isConnected 
+    } = useGame();
+
     // 全屏状态管理
     const [isFullScreen, setIsFullScreen] = useState(false);
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { RefreshCw, AlertCircle } from 'lucide-react'; 
-import { useGameSocket } from './hooks/useGameSocket.js'; // 引入新 Hook
+// [修改] 引入 useGame
+import { useGame } from './context/GameContext.jsx';
 
 import { LoginScreen } from './screens/LoginScreen.jsx';
 import { LobbyScreen } from './screens/LobbyScreen.jsx';
@@ -8,27 +9,8 @@ import { GameScreen } from './screens/GameScreen.jsx';
 import { DrawSeatScreen } from './screens/DrawSeatScreen.jsx';
 
 export default function App() {
-  // 核心逻辑已移交 Hook，App 瘦身成功！
-  const {
-      // State
-      gameState, username, roomId, roomConfig, isCreatorMode,
-      players, myHand, selectedCards, lastPlayed,
-      currentTurnId, lastPlayerName, infoMessage,
-      roundResult, grandResult, playerScores, roundPoints,
-      playersInfo, finishedRank, pendingPoints, gameLogs,
-      sortMode, isConnected, mySocketId, isLoading,
-      turnRemaining, handCounts, drawState,
-
-      // Setters
-      setUsername, setRoomId, setRoomConfig, setIsCreatorMode,
-
-      // Actions
-      toggleSort, handleRoomAction, handleStartGame, handleNextRound,
-      handleAddBot, handleToggleAutoPlay, handleSwitchSeat, handleDrawCard,
-      handleUpdateConfig, handleClearSelection, handleMouseDown,
-      handleMouseEnter, handlePlayCards, handlePass, handleKickPlayer,
-      handleRequestHint // [修复] 确保这里已经从 Hook 中解构出来
-  } = useGameSocket();
+  // [修改] 直接从 Context 获取需要的状态
+  const { gameState, isConnected } = useGame();
 
   const renderLandscapeHint = () => (
       <div className="landscape-hint">
@@ -76,42 +58,14 @@ export default function App() {
       {renderDisconnectAlert()}
       {renderLandscapeHint()}
       
-      {gameState === 'LOGIN' && <LoginScreen {...{
-          username, setUsername, 
-          roomId, setRoomId, 
-          roomConfig, setRoomConfig, 
-          isCreatorMode, setIsCreatorMode, 
-          handleRoomAction, 
-          isLoading,
-          isConnected 
-      }} />}
+      {/* [修改] 子组件不再需要传参，它们会自己去 Context 里拿数据 */}
+      {gameState === 'LOGIN' && <LoginScreen />}
       
-      {gameState === 'LOBBY' && <LobbyScreen {...{
-          roomId, roomConfig, players, mySocketId, 
-          handleStartGame, 
-          handleAddBot,
-          handleSwitchSeat,
-          handleUpdateConfig,
-          handleKickPlayer
-      }} />}
+      {gameState === 'LOBBY' && <LobbyScreen />}
       
-      {gameState === 'DRAW_SEATS' && <DrawSeatScreen {...{
-          roomId, players, mySocketId,
-          drawState, handleDrawCard,
-          roomConfig 
-      }} />}
+      {gameState === 'DRAW_SEATS' && <DrawSeatScreen />}
       
-      {gameState === 'GAME' && <GameScreen {...{
-          roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
-          infoMessage, winner: null, 
-          playerScores, roundPoints,
-          playersInfo, pendingPoints, gameLogs, sortMode, 
-          mySocketId, roundResult, grandResult, roomConfig,
-          turnRemaining, finishedRank, handCounts, 
-          toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
-          handleToggleAutoPlay, handleClearSelection,
-          handleRequestHint // [关键修复] 将方法传递给 GameScreen
-      }} />}
+      {gameState === 'GAME' && <GameScreen />}
     </>
   );
 }

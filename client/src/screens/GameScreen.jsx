@@ -7,19 +7,27 @@ import { ScoreTable } from '../components/ScoreTable.jsx';
 import TimerComponent from '../components/CountDownTimer.jsx'; 
 import { calculateCardSpacing, getCardIndexFromTouch } from '../utils/cardLogic.js'; 
 
-export const GameScreen = ({ 
-    roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
-    infoMessage: serverInfoMessage, winner, 
-    playerScores, // 总分 (Grand + Round)
-    roundPoints, // 本局得分
-    playersInfo = {}, 
-    pendingPoints, gameLogs, sortMode,
-    mySocketId, roundResult, grandResult, roomConfig,
-    turnRemaining, finishedRank = [], 
-    handCounts = {}, 
-    toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
-    handleToggleAutoPlay, handleClearSelection, handleRequestHint // [修改] 接收 handleRequestHint
-}) => {
+// [新增] 引入 useGame
+import { useGame } from '../context/GameContext.jsx';
+
+// [修改] 移除 Props 参数
+export const GameScreen = () => {
+
+    // [新增] 从 Context 获取所有数据
+    const { 
+        roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
+        infoMessage: serverInfoMessage, winner, 
+        playerScores, // 总分 (Grand + Round)
+        roundPoints, // 本局得分
+        playersInfo = {}, 
+        pendingPoints, gameLogs, sortMode,
+        mySocketId, roundResult, grandResult, roomConfig,
+        turnRemaining, finishedRank = [], 
+        handCounts = {}, 
+        toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
+        handleToggleAutoPlay, handleClearSelection, handleRequestHint 
+    } = useGame();
+
     // 身份同步保护
     const myPlayerExists = players.some(p => p.id === mySocketId);
     if (!myPlayerExists && players.length > 0) {
