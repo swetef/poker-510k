@@ -1,13 +1,12 @@
 // 游戏主界面 - 深度适配移动端布局，增加了全屏按钮
 // [完整修复版] 修复移动端 Touch 事件 passive 报错，解决操作卡死/失效问题
-// [本次修改] 调整座位渲染顺序为逆时针 (Me -> Right -> Top -> Left)
+// [本次修改] 1. 保持逆时针布局 2. 增加“重选”按钮 (handleClearSelection)
 import React, { useState, useRef, useEffect } from 'react';
-import { Coins, Layers, Crown, Clock, Bot, Zap, Maximize, Minimize, Shield, Users } from 'lucide-react';
+import { Coins, Layers, Crown, Clock, Bot, Zap, Maximize, Minimize, Shield, RotateCcw } from 'lucide-react';
 import { styles } from '../styles.js'; 
 import { Card, MiniCard, PlayerAvatar, GameLogPanel } from '../components/BaseUI.jsx';
 import TimerComponent from '../components/CountDownTimer.jsx'; 
 import { calculateCardSpacing, getCardIndexFromTouch } from '../utils/cardLogic.js'; 
-import SoundManager from '../utils/SoundManager.js';
 
 export const GameScreen = ({ 
     roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
@@ -16,7 +15,7 @@ export const GameScreen = ({
     turnRemaining, finishedRank = [], 
     handCounts = {}, 
     toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
-    handleToggleAutoPlay 
+    handleToggleAutoPlay, handleClearSelection // [新增] 接收清理函数
 }) => {
     const isMyTurn = currentTurnId === mySocketId;
     const amIHost = players.find(p => p.id === mySocketId)?.isHost;
@@ -75,7 +74,6 @@ export const GameScreen = ({
     const dragStartMode = useRef(true); // true = select, false = deselect
 
     // [核心修复] 使用 Ref 保存最新的状态和回调，防止 useEffect 闭包陷阱
-    // 这样我们在事件监听器里永远能拿到最新的 myHand 和 selectedCards
     const stateRef = useRef({ myHand, selectedCards, cardSpacing, handleMouseDown });
     useEffect(() => {
         stateRef.current = { myHand, selectedCards, cardSpacing, handleMouseDown };
@@ -214,8 +212,7 @@ export const GameScreen = ({
         }
     };
 
-    // --- 玩家位置计算逻辑 ---
-    // [修改] 改为逆时针布局 (Counter-Clockwise)
+    // --- 玩家位置计算逻辑 (保持逆时针布局) ---
     // 顺序: Me -> Right -> Top -> Left
     const renderPlayers = () => {
         const myIndex = players.findIndex(p => p.id === mySocketId);
@@ -251,14 +248,12 @@ export const GameScreen = ({
         const leftGroup = otherPlayers.slice(countR + countT);
 
         // 1. 右侧 (Right) - 逆时针顺序：Me -> Right(下) -> Right(上)
-        // 所以 i=0 (Next Player) 应该是 55% (下), i=1 应该是 35% (上)
         rightGroup.forEach((p, i) => {
             const topPos = countR === 1 ? '40%' : (i === 0 ? '55%' : '35%');
             layoutConfig.push({ p, pos: { top: topPos, right: 10, transform: 'translateY(-50%)' }, timerPos: 'left' });
         });
 
         // 2. 上方 (Top) - 逆时针顺序：Right(上) -> Top(右) -> Top(左) -> Left(上)
-        // 所以 i=0 应该靠右 (80%), i=last 应该靠左 (20%)
         topGroup.forEach((p, i) => {
             let leftPos;
             if (countT === 1) {
@@ -274,7 +269,6 @@ export const GameScreen = ({
         });
 
         // 3. 左侧 (Left) - 逆时针顺序：Top(左) -> Left(上) -> Left(下) -> Me
-        // 所以 i=0 应该是 35% (上), i=1 应该是 55% (下)
         leftGroup.forEach((p, i) => {
             const topPos = countL === 1 ? '40%' : (i === 0 ? '35%' : '55%'); 
             layoutConfig.push({ p, pos: { top: topPos, left: 30, transform: 'translateY(-50%)' }, timerPos: 'right' });
@@ -460,7 +454,6 @@ export const GameScreen = ({
                         filter: amIAutoPlay ? 'grayscale(0.6)' : 'none',
                         pointerEvents: amIAutoPlay ? 'none' : 'auto' 
                     }}
-                    // [修改] 移除了 onTouchXxx 属性绑定，改用 useEffect 绑定
                 >
                     {amIAutoPlay && (
                         <div style={{
@@ -489,6 +482,22 @@ export const GameScreen = ({
                 <div style={styles.actionBar}>
                     {!winner && !roundResult && !grandResult && (
                         <div style={{display:'flex', alignItems: 'center', gap: 20}}>
+                            
+                            {/* [新增] 重选按钮：只要有选中牌就显示，方便任何时候重置 */}
+                            {selectedCards.length > 0 && (
+                                <button 
+                                    style={{
+                                        ...styles.passButton, 
+                                        background: '#95a5a6', 
+                                        padding: '8px 15px',
+                                        display: 'flex', alignItems: 'center', gap: 5
+                                    }} 
+                                    onClick={handleClearSelection}
+                                >
+                                    <RotateCcw size={16} /> 重选
+                                </button>
+                            )}
+
                             {amIAutoPlay ? (
                                 <button 
                                     style={{

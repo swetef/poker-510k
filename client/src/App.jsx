@@ -319,6 +319,11 @@ export default function App() {
     });
   };
 
+  // [新增] 一键清空选中手牌
+  const handleClearSelection = () => {
+      setSelectedCards([]);
+  };
+
   const handleMouseDown = (cardVal) => {
     isDragging.current = true;
     dragStartMode.current = !selectedCards.includes(cardVal); 
@@ -425,7 +430,7 @@ export default function App() {
           mySocketId, roundResult, grandResult, roomConfig,
           turnRemaining, finishedRank, handCounts, 
           toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
-          handleToggleAutoPlay 
+          handleToggleAutoPlay, handleClearSelection // [新增] 传入清理函数
       }} />}
     </>
   );
