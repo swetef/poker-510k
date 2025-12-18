@@ -12,29 +12,13 @@ import { DrawSeatScreen } from './screens/DrawSeatScreen.jsx';
 // [核心修复] 重写连接地址判断逻辑
 const getSocketUrl = () => {
     const { hostname, protocol, port } = window.location;
-    
-    // 如果是 HTTPS，通常是线上环境，直接用相对路径
-    if (protocol === 'https:') {
-        return '/';
-    }
-
-    // 1. 本地 localhost/127.0.0.1 环境
+    if (protocol === 'https:') { return '/'; }
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        // 如果当前浏览器端口不是后端端口 (3001)，说明在用 Vite (5173/5174等)，强制指向 3001
-        if (port !== '3001') {
-            return `${protocol}//${hostname}:3001`;
-        }
+        if (port !== '3001') { return `${protocol}//${hostname}:3001`; }
     }
-    
-    // 2. 局域网 IP 访问 (192.168.x.x 等)
     if (hostname.startsWith('192.168.') || hostname.startsWith('10.')) {
-        // 同理，如果不是 3001 端口，强制指向 3001
-        if (port !== '3001') {
-            return `${protocol}//${hostname}:3001`;
-        }
+        if (port !== '3001') { return `${protocol}//${hostname}:3001`; }
     }
-    
-    // 3. 其他情况 (生产环境，或者就是运行在 3001 上)
     return '/';
 };
 
@@ -70,6 +54,9 @@ export default function App() {
   const [roundResult, setRoundResult] = useState(null); 
   const [grandResult, setGrandResult] = useState(null); 
   const [playerScores, setPlayerScores] = useState({});
+  // [新增] 专门用于存储小局分数，以显示 (+50)
+  const [roundPoints, setRoundPoints] = useState({});
+
   const [playersInfo, setPlayersInfo] = useState({});
   const [finishedRank, setFinishedRank] = useState([]); 
   
@@ -101,7 +88,6 @@ export default function App() {
   useEffect(() => { mySocketIdRef.current = mySocketId; }, [mySocketId]);
   useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
 
-  // [修改] 整合后的连接逻辑
   const connectSocket = () => {
     if (socketRef.current) {
         socketRef.current.disconnect();
@@ -109,13 +95,10 @@ export default function App() {
 
     console.log(`正在连接服务器: ${SOCKET_URL}`);
     
-    // [修复] 移除 transports: ['websocket'] 强制配置
-    // 允许 Socket.io 自动协商 (Polling -> WebSocket)，解决 "WebSocket closed before connection established" 报错
     const socket = io(SOCKET_URL, { 
         reconnectionAttempts: 20,   
         reconnectionDelay: 2000,    
         timeout: 20000,
-        // transports: ['websocket'], // <--- 已注释掉
         autoConnect: true
     });
     
@@ -192,6 +175,9 @@ export default function App() {
         setPendingPoints(0);
         setFinishedRank([]); 
         if (data.grandScores) setPlayerScores(data.grandScores);
+        // 新局开始，小局分清零
+        setRoundPoints({});
+
         setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: '🏁 新一局开始！' }]); 
         setGameState('GAME');
         setTurnRemaining(60);
@@ -222,6 +208,9 @@ export default function App() {
             setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: data.infoText }]);
         }
         if (data.scores) setPlayerScores(data.scores);
+        // [新增] 接收小局分
+        if (data.roundPoints) setRoundPoints(data.roundPoints);
+
         if (data.playersInfo) setPlayersInfo(data.playersInfo);
         if (data.handCounts) setHandCounts(data.handCounts);
         if (data.finishedRank) setFinishedRank(data.finishedRank);
@@ -289,8 +278,6 @@ export default function App() {
 
   const toggleSort = () => setSortMode(prev => prev === 'POINT' ? 'ARRANGE' : 'POINT');
 
-
-
   const handleRoomAction = () => {
       if (!isConnected) return; 
       if (!username || !roomId) return alert("请输入昵称和房间号");
@@ -314,10 +301,8 @@ export default function App() {
       socketRef.current.emit('draw_seat_card', { roomId, cardIndex: index });
   };
 
-  // [新增] 更新房间配置的处理函数
   const handleUpdateConfig = (newConfig) => {
       socketRef.current.emit('update_room_config', { roomId, config: newConfig });
-      // 注意：本地 config 会通过 socket.on('room_info') 自动更新，所以这里不需要手动 setRoomConfig
   };
 
   const updateSelection = (cardVal, forceSelect = null) => {
@@ -328,7 +313,6 @@ export default function App() {
     });
   };
 
-  // [新增] 一键清空选中手牌
   const handleClearSelection = () => {
       setSelectedCards([]);
   };
@@ -364,7 +348,6 @@ export default function App() {
     setSelectedCards([]);
   };
 
-  // [恢复] 横屏提示组件 (之前版本遗漏)
   const renderLandscapeHint = () => (
       <div className="landscape-hint">
           <div className="phone-rotate-icon"></div>
@@ -409,7 +392,6 @@ export default function App() {
   return (
     <>
       {renderDisconnectAlert()}
-      {/* [恢复] 渲染横屏提示 */}
       {renderLandscapeHint()}
       
       {gameState === 'LOGIN' && <LoginScreen {...{
@@ -427,7 +409,7 @@ export default function App() {
           handleStartGame, 
           handleAddBot,
           handleSwitchSeat,
-          handleUpdateConfig // [新增] 传入配置更新函数
+          handleUpdateConfig 
       }} />}
       
       {gameState === 'DRAW_SEATS' && <DrawSeatScreen {...{
@@ -438,11 +420,13 @@ export default function App() {
       
       {gameState === 'GAME' && <GameScreen {...{
           roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
-          infoMessage, winner: null, playerScores, playersInfo, pendingPoints, gameLogs, sortMode, 
+          infoMessage, winner: null, 
+          playerScores, roundPoints, // [新增] 传入 roundPoints
+          playersInfo, pendingPoints, gameLogs, sortMode, 
           mySocketId, roundResult, grandResult, roomConfig,
           turnRemaining, finishedRank, handCounts, 
           toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
-          handleToggleAutoPlay, handleClearSelection // [新增] 传入清理函数
+          handleToggleAutoPlay, handleClearSelection 
       }} />}
     </>
   );

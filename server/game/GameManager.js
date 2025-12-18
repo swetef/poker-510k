@@ -9,10 +9,13 @@ class GameManager {
         this.io = io; 
         this.roomId = roomId;
 
-        this.grandScores = {};
+        this.grandScores = {}; // 总大分
         this.players.forEach(p => this.grandScores[p.id] = 0);
         this.lastWinnerId = null;
         this.gameState = null; 
+        
+        // [新增] 比赛历史记录，用于结算页面展示表格
+        this.matchHistory = []; 
         
         this.timer = null;
         this.botTimer = null;
@@ -46,6 +49,7 @@ class GameManager {
         if (!isNextRound) {
             this.players.forEach(p => this.grandScores[p.id] = 0);
             this.lastWinnerId = null;
+            this.matchHistory = []; // [新增] 新比赛清空历史
         }
 
         const deck = new Deck(this.config.deckCount);
@@ -226,20 +230,26 @@ class GameManager {
 
     _handleWin(result, winnerId) {
         const rInfo = result.roundResult;
+
+        // [新增] 构造包含所有信息的结算对象
+        const settlementData = {
+            roundWinner: rInfo.roundWinnerName,
+            pointsEarned: rInfo.pointsEarned,
+            detail: rInfo.detail,       // 文字版日志
+            matchHistory: this.matchHistory, // [关键] 完整的历史记录
+            grandScores: rInfo.grandScores,
+            roundIndex: this.matchHistory.length
+        };
+
         if (rInfo.isGrandOver) {
             this.io.to(this.roomId).emit('grand_game_over', { 
                 grandWinner: rInfo.roundWinnerName, 
-                grandScores: rInfo.grandScores 
+                ...settlementData
             });
             this.gameState = null; 
             this._clearTimer(); 
         } else {
-            this.io.to(this.roomId).emit('round_over', {
-                roundWinner: rInfo.roundWinnerName,
-                pointsEarned: rInfo.pointsEarned,
-                detail: rInfo.detail,
-                grandScores: rInfo.grandScores
-            });
+            this.io.to(this.roomId).emit('round_over', settlementData);
             this._clearTimer();
         }
     }
@@ -477,11 +487,16 @@ class GameManager {
         if (!this.gameState) return null;
         
         const currentScoresDisplay = {};
+        const roundPointsDisplay = {}; // [新增] 每一小局的独立分数
         const playersInfo = {};
         const handCounts = {};
 
         this.players.forEach(p => {
-            currentScoresDisplay[p.id] = (this.grandScores[p.id] || 0) + (this.gameState.roundPoints[p.id] || 0);
+            const grand = this.grandScores[p.id] || 0;
+            const round = this.gameState.roundPoints[p.id] || 0;
+            currentScoresDisplay[p.id] = grand + round;
+            roundPointsDisplay[p.id] = round; // [新增]
+            
             playersInfo[p.id] = { 
                 isBot: p.isBot, 
                 isAutoPlay: p.isAutoPlay,
@@ -506,6 +521,7 @@ class GameManager {
             lastPlayed: this.gameState.lastPlayedCards,
             lastPlayerName: winnerObj ? winnerObj.name : '',
             scores: currentScoresDisplay,
+            roundPoints: roundPointsDisplay, // [新增] 传输小局分
             pendingPoints: this.gameState.pendingTablePoints,
             finishedRank: this.gameState.finishedRank,
             playersInfo: playersInfo,
@@ -526,11 +542,9 @@ class GameManager {
         // 2. 搬运上局赢家标记
         if (this.lastWinnerId === oldId) this.lastWinnerId = newId;
 
-        // 3. 处理托管状态 (默认: 如果玩家重连回来，取消托管，让他自己玩)
+        // 3. 处理托管状态
         const player = this.players.find(p => p.id === newId);
         if (player) {
-             // 也可以选择保持 player.isAutoPlay = player.isAutoPlay; 
-             // 但通常玩家掉线回来是想自己操作的
              player.isAutoPlay = false; 
         }
 
@@ -555,6 +569,15 @@ class GameManager {
                 this.gameState.finishedRank[rankIdx] = newId;
             }
         }
+
+        // [新增] 修复重连时历史记录 ID 映射
+        this.matchHistory.forEach(match => {
+            if (match.scores[oldId] !== undefined) {
+                match.scores[newId] = match.scores[oldId];
+                delete match.scores[oldId];
+            }
+        });
+
         return true;
     }
 
@@ -597,24 +620,28 @@ class GameManager {
         const firstWinnerId = fullRankIds[0];
         this.lastWinnerId = firstWinnerId;
 
-        let logLines = [];
+        let logLines = []; // [用于前端文字显示]
+        let penaltyDetails = []; // [用于前端 Table 的日志数组]
 
         let totalCardPenalty = 0;
-        let cardPenaltyDetail = "";
+        let currentRoundScores = {};
+        this.players.forEach(p => {
+            currentRoundScores[p.id] = (this.gameState.roundPoints[p.id] || 0);
+        });
 
         this.players.forEach(p => {
             const handPts = CardRules.calculateTotalScore(this.gameState.hands[p.id]);
             if (handPts > 0) {
                 totalCardPenalty += handPts;
-                cardPenaltyDetail += `${p.name}-${handPts} `;
             }
-            this.grandScores[p.id] += (this.gameState.roundPoints[p.id] || 0);
         });
 
         // 头游收分逻辑
         if (firstWinnerId && totalCardPenalty > 0) {
-            this.grandScores[firstWinnerId] += totalCardPenalty;
-            logLines.push(`[手牌罚分] 输家共计 ${totalCardPenalty} 分，归第一名 ${this.players.find(p=>p.id===firstWinnerId)?.name}。`);
+            currentRoundScores[firstWinnerId] += totalCardPenalty;
+            const winnerName = this.players.find(p=>p.id===firstWinnerId)?.name;
+            logLines.push(`[手牌罚分] 输家共计 ${totalCardPenalty} 分，归第一名 ${winnerName}。`);
+            penaltyDetails.push(`第一名 ${winnerName} 获得剩余手牌分 ${totalCardPenalty}`);
         }
 
         // 排名赏罚 + [新增] 队友保护逻辑
@@ -637,20 +664,35 @@ class GameManager {
                         // [新增] 队友保护判断
                         if (winner.team !== null && winner.team !== undefined && winner.team === loser.team) {
                              logLines.push(`[🛡️队友保护] 第${winnerIndex+1}名(${winner.name}) 与 倒数第${index+1}名(${loser.name}) 是队友，${score}分 免罚！`);
+                             penaltyDetails.push(`[队友保护] ${winner.name} 免收 ${loser.name} ${score} 分`);
                         } else {
                             // 正常罚分
-                            this.grandScores[winnerId] += score;
-                            this.grandScores[loserId] -= score;
+                            currentRoundScores[winnerId] += score;
+                            currentRoundScores[loserId] -= score;
                             logLines.push(`[排名赏罚] 第${winnerIndex+1}名 ${winner.name} 收取 倒数第${index+1}名 ${loser.name} ${score} 分。`);
+                            penaltyDetails.push(`${loser.name} 进贡 ${winner.name} ${score} 分`);
                         }
                     }
                 }
             });
         }
 
+        // 更新总分
+        this.players.forEach(p => {
+            this.grandScores[p.id] += currentRoundScores[p.id];
+        });
+
+        // [新增] 存入 matchHistory
+        this.matchHistory.push({
+            roundIndex: this.matchHistory.length + 1,
+            scores: {...currentRoundScores}, 
+            winnerId: firstWinnerId,
+            details: penaltyDetails
+        });
+
         const firstWinnerName = this.players.find(p => p.id === firstWinnerId)?.name || '未知';
         const isGrandOver = this.grandScores[firstWinnerId] >= this.config.targetScore;
-        const totalPointsEarned = (this.gameState.roundPoints[firstWinnerId] || 0) + totalCardPenalty;
+        const totalPointsEarned = currentRoundScores[firstWinnerId]; // 使用包含罚分后的最终当局得分
 
         return {
             roundWinnerName: firstWinnerName,
