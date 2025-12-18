@@ -72,7 +72,10 @@ class GameManager {
         }
 
         const deck = new Deck(this.config.deckCount);
-        const hands = deck.deal(this.players.length);
+        
+        // [修改] 传入 isNoShuffleMode 参数
+        const hands = deck.deal(this.players.length, this.config.isNoShuffleMode);
+        console.log(`[Game] Round started. Mode: ${this.config.isNoShuffleMode ? 'No Shuffle (Fair)' : 'Classic'}`);
 
         let startIndex = 0;
         if (this.lastWinnerId) {

@@ -20,7 +20,7 @@ const io = new Server(server, {
 // 内存数据库
 const rooms = {}; 
 
-// --- [新增] 常驻房间配置定义 ---
+// --- [修改] 常驻房间配置定义 ---
 const PERMANENT_ROOMS = {
     '888': { 
         deckCount: 2, 
@@ -30,7 +30,8 @@ const PERMANENT_ROOMS = {
         showCardCountMode: 1,
         isTeamMode: false,
         enableRankPenalty: false,
-        rankPenaltyScores: [50, 20]
+        rankPenaltyScores: [50, 20],
+        isNoShuffleMode: false // [新增] 888 房间默认标准模式
     },
     '666': { 
         deckCount: 3, 
@@ -38,9 +39,10 @@ const PERMANENT_ROOMS = {
         targetScore: 1000,
         turnTimeout: 60000,
         showCardCountMode: 1,
-        isTeamMode: true, // 默认开启组队
+        isTeamMode: true, 
         enableRankPenalty: false,
-        rankPenaltyScores: [50, 20]
+        rankPenaltyScores: [50, 20],
+        isNoShuffleMode: true // [新增] 666 房间默认开启爽局模式
     }
 };
 
@@ -133,6 +135,7 @@ io.on('connection', (socket) => {
             deckCount: 1, 
             maxPlayers: 3, 
             targetScore: 500, 
+            isNoShuffleMode: false, // [新增] 默认关闭
             ...config 
         };
         
@@ -239,7 +242,7 @@ io.on('connection', (socket) => {
         }
     });
     
-    // --- [新增] 更新房间配置 ---
+    // --- [修改] 更新房间配置 ---
     socket.on('update_room_config', ({ roomId, config }) => {
         const room = rooms[roomId];
         if (!room) return;
@@ -253,6 +256,11 @@ io.on('connection', (socket) => {
         // 验证游戏状态：游戏中不能改
         if (room.gameManager || room.seatManager) {
             return socket.emit('error_msg', '游戏进行中无法修改规则');
+        }
+
+        // 确保布尔值正确传递
+        if (config.isNoShuffleMode !== undefined) {
+            room.config.isNoShuffleMode = !!config.isNoShuffleMode;
         }
 
         // 更新配置

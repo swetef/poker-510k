@@ -1,6 +1,6 @@
 // 登录页 - 适配移动端，包含自动全屏逻辑 + 手动全屏按钮 + 剩余牌数配置 + 组队开关 (移除抽卡开关，改为默认)
 import React, { useState } from 'react'; 
-import { User, Monitor, RefreshCw, Plus, LogIn, Clock, Layers, Users, Target, Wifi, WifiOff, Award, Maximize, Minimize, Eye, Shield } from 'lucide-react'; 
+import { User, Monitor, RefreshCw, Plus, LogIn, Clock, Layers, Users, Target, Wifi, WifiOff, Award, Maximize, Minimize, Eye, Shield, Sparkles } from 'lucide-react'; 
 import { styles } from '../styles.js';
 // [新增] 引入 useGame
 import { useGame } from '../context/GameContext.jsx';
@@ -155,6 +155,37 @@ export const LoginScreen = () => {
                                     {renderConfigSlider(<Layers size={14}/>, "牌库数量", roomConfig.deckCount, 1, 8, 1, v=>setRoomConfig({...roomConfig, deckCount:v}), '副')}
                                     {renderConfigSlider(<Target size={14}/>, "获胜目标", roomConfig.targetScore, 500, 5000, 500, v=>setRoomConfig({...roomConfig, targetScore:v}), '分')}
                                     
+                                    {/* [新增] 不洗牌模式开关 */}
+                                    <div style={{...styles.configItem, marginTop: 10, padding: '10px', background: 'linear-gradient(to right, #f6d365 0%, #fda085 100%)', borderRadius: 8, gridColumn: '1 / -1', border: '1px solid rgba(255,255,255,0.5)'}}>
+                                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                            <div style={{display:'flex', alignItems:'center', gap:6, fontWeight:'600', color: 'white', textShadow: '0 1px 2px rgba(0,0,0,0.2)'}}>
+                                                <Sparkles size={18} /> 🎲 不洗牌模式 (爽局)
+                                            </div>
+                                            <label style={{position:'relative', display:'inline-block', width:40, height:20}}>
+                                                <input 
+                                                    type="checkbox" 
+                                                    style={{opacity:0, width:0, height:0}}
+                                                    checked={roomConfig.isNoShuffleMode}
+                                                    onChange={(e) => setRoomConfig({...roomConfig, isNoShuffleMode: e.target.checked})}
+                                                />
+                                                <span style={{
+                                                    position:'absolute', cursor:'pointer', top:0, left:0, right:0, bottom:0, 
+                                                    backgroundColor: roomConfig.isNoShuffleMode ? '#2ecc71' : 'rgba(0,0,0,0.2)', 
+                                                    transition:'.4s', borderRadius: 20
+                                                }}>
+                                                    <span style={{
+                                                        position:'absolute', content:"", height:16, width:16, left:2, bottom:2, 
+                                                        backgroundColor:'white', transition:'.4s', borderRadius:'50%',
+                                                        transform: roomConfig.isNoShuffleMode ? 'translateX(20px)' : 'translateX(0)'
+                                                    }}></span>
+                                                </span>
+                                            </label>
+                                        </div>
+                                        <div style={{fontSize: 11, color: 'white', marginTop: 4, opacity: 0.9}}>
+                                            {roomConfig.isNoShuffleMode ? "🔥 已开启！炸弹满天飞，均贫富算法保证公平" : "普通模式，完全随机洗牌"}
+                                        </div>
+                                    </div>
+
                                     {/* 组队对抗开关 */}
                                     <div style={{...styles.configItem, marginTop: 10, padding: '10px', background: roomConfig.maxPlayers % 2 !== 0 ? '#f0f0f0' : '#e8f8f5', borderRadius: 8, opacity: roomConfig.maxPlayers % 2 !== 0 ? 0.6 : 1, gridColumn: '1 / -1'}}>
                                         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
