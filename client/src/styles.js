@@ -353,7 +353,7 @@ export const styles = {
       bottom: 'max(25px, env(safe-area-inset-bottom))',
       
       // [关键修改] 加大左侧间距 (65 -> 110)，防止被左下角头像遮挡
-      left: 70,
+      left: 90,
       
       right: 10, 
       height: 160,            

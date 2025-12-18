@@ -182,7 +182,12 @@ class GameManager {
                     } else {
                         const analysis = CardRules.analyze(cardsToPlay, this.config.deckCount);
                         const desc = CardRules.getAnalysisText(analysis);
-                        this._broadcastUpdate(`${botPlayer.name}: ${desc}`);
+                        // [修改] 如果 Bot 打出了天王炸，日志也需要带上加分信息
+                        let logText = `${botPlayer.name}: ${desc}`;
+                        if (analysis.type === 'BOMB_KING') {
+                             logText += ` (+${this.config.deckCount * 100}分)`;
+                        }
+                        this._broadcastUpdate(logText);
                     }
                 } else {
                     console.error(`[Bot Error] Play failed: ${result.error}`);
@@ -296,7 +301,18 @@ class GameManager {
         }
 
         this._removeCardsFromHand(playerId, cards);
+        
+        // 1. 基础分计算
         this.gameState.pendingTablePoints += CardRules.calculateTotalScore(cards);
+
+        // [新增] 2. 天王炸弹额外加分逻辑
+        const analysis = CardRules.analyze(cards, this.config.deckCount);
+        if (analysis.type === 'BOMB_KING') {
+            // 响应你的第3点需求：集齐所有王的炸弹，加分到公共积分池，分值为牌副数*100
+            const kingBombBonus = this.config.deckCount * 100;
+            this.gameState.pendingTablePoints += kingBombBonus;
+        }
+
         this.gameState.lastPlayedCards = cards;
         this.gameState.consecutivePasses = 0;
         this.gameState.roundWinnerId = playerId;
@@ -308,13 +324,32 @@ class GameManager {
             }
         }
         
-        const analysis = CardRules.analyze(cards, this.config.deckCount);
         const cardDesc = CardRules.getAnalysisText(analysis);
-        const logText = `${currPlayer.name}: ${cardDesc}`;
+        let logText = `${currPlayer.name}: ${cardDesc}`;
+        // 如果是天王炸，在日志里也显示一下加分
+        if (analysis.type === 'BOMB_KING') {
+            logText += ` (+${this.config.deckCount * 100}分)`;
+        }
 
         const activeCount = this._getActivePlayerCount();
         
-        if (activeCount <= 1) {
+        // [新增] 3. 组队模式结束判断 (响应你的第2点需求)
+        let isTeamFinished = false;
+        const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
+        if (isTeamMode) {
+            const pTeam = currPlayer.team;
+            // 检查该队所有成员是否手牌都为0
+            if (pTeam !== undefined && pTeam !== null) {
+                const teamMembers = this.players.filter(p => p.team === pTeam);
+                const allDone = teamMembers.every(p => this.gameState.hands[p.id].length === 0);
+                if (allDone) {
+                    isTeamFinished = true;
+                }
+            }
+        }
+        
+        // 结束条件：只剩1人 OR 某队全员出完
+        if (activeCount <= 1 || isTeamFinished) {
             this._clearTimer();
             const roundResult = this._concludeRound();
             return { 
