@@ -12,6 +12,25 @@ const CardRules = {
         if (base === 1) return 15; // 2
         return base + 1; // 3 => 3
     },
+
+    // [新增] 缺失的排序权重函数 (修复崩溃核心)
+    getSortValue: (cardVal) => {
+        const normalized = cardVal % 54;
+        if (normalized === 52) return 16;
+        if (normalized === 53) return 17;
+        const base = normalized % 13;
+        if (base === 0) return 14; 
+        if (base === 1) return 15; 
+        return base + 1;
+    },
+
+    // [新增] 缺失的花色排序函数 (修复崩溃核心)
+    getSuitSortValue: (cardVal) => {
+        if (cardVal >= 52) return cardVal * 100;
+        const suit = Math.floor(cardVal / 13) % 4; 
+        const val = cardVal % 13;
+        return suit * 100 + val; 
+    },
     
     // [新增] 辅助：点数转显示文本
     getPointText: (point) => {

@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/18 09:56:49
+Project Context Generated at 2025/12/18 13:04:58
 
 
 ================================================================================
@@ -150,23 +150,41 @@ FILE PATH: client\src\App.jsx
 ================================================================================
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
-import { Smartphone } from 'lucide-react'; 
+import { Smartphone, RefreshCw, AlertCircle } from 'lucide-react'; 
 
 import { sortHand } from './utils/cardLogic.js';
 import SoundManager from './utils/SoundManager.js';
 import { LoginScreen } from './screens/LoginScreen.jsx';
 import { LobbyScreen } from './screens/LobbyScreen.jsx';
 import { GameScreen } from './screens/GameScreen.jsx';
+import { DrawSeatScreen } from './screens/DrawSeatScreen.jsx';
 
+// [核心修复] 重写连接地址判断逻辑
 const getSocketUrl = () => {
-    const { hostname, protocol } = window.location;
-    const isLocal = hostname === 'localhost' || 
-                    hostname === '127.0.0.1' || 
-                    hostname.startsWith('192.168.') || 
-                    hostname.startsWith('10.');
-    if (isLocal) {
-        return `${protocol}//${hostname}:3001`;
+    const { hostname, protocol, port } = window.location;
+    
+    // 如果是 HTTPS，通常是线上环境，直接用相对路径
+    if (protocol === 'https:') {
+        return '/';
     }
+
+    // 1. 本地 localhost/127.0.0.1 环境
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        // 如果当前浏览器端口不是后端端口 (3001)，说明在用 Vite (5173/5174等)，强制指向 3001
+        if (port !== '3001') {
+            return `${protocol}//${hostname}:3001`;
+        }
+    }
+    
+    // 2. 局域网 IP 访问 (192.168.x.x 等)
+    if (hostname.startsWith('192.168.') || hostname.startsWith('10.')) {
+        // 同理，如果不是 3001 端口，强制指向 3001
+        if (port !== '3001') {
+            return `${protocol}//${hostname}:3001`;
+        }
+    }
+    
+    // 3. 其他情况 (生产环境，或者就是运行在 3001 上)
     return '/';
 };
 
@@ -184,8 +202,9 @@ export default function App() {
       turnTimeout: 60000,
       enableRankPenalty: false,    
       rankPenaltyScores: [30, 15],
-      showCardCountMode: 1, // 默认：少于3张显示
-      isTeamMode: false     // 组队模式
+      showCardCountMode: 1, 
+      isTeamMode: false,
+      enableDrawSeat: false 
   });
   
   const [isCreatorMode, setIsCreatorMode] = useState(false); 
@@ -213,9 +232,9 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
 
   const [turnRemaining, setTurnRemaining] = useState(60); 
-
-  // 用于存储每个玩家的剩余牌数
   const [handCounts, setHandCounts] = useState({});
+
+  const [drawState, setDrawState] = useState(null); 
 
   const socketRef = useRef(null);
   const isDragging = useRef(false); 
@@ -224,33 +243,45 @@ export default function App() {
   const usernameRef = useRef(username); 
   const mySocketIdRef = useRef(null);   
   
-  // [新增] 用于乐观更新失败时的回滚备份
+  const roomIdRef = useRef(roomId);
+  
   const backupHandRef = useRef([]);
 
   useEffect(() => { usernameRef.current = username; }, [username]);
   useEffect(() => { mySocketIdRef.current = mySocketId; }, [mySocketId]);
+  useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
 
-  useEffect(() => {
+  // [修改] 整合后的连接逻辑
+  const connectSocket = () => {
+    if (socketRef.current) {
+        socketRef.current.disconnect();
+    }
+
     console.log(`正在连接服务器: ${SOCKET_URL}`);
     
+    // [修复] 移除 transports: ['websocket'] 强制配置
+    // 允许 Socket.io 自动协商 (Polling -> WebSocket)，解决 "WebSocket closed before connection established" 报错
     const socket = io(SOCKET_URL, { 
-        reconnectionAttempts: 10,   
-        reconnectionDelay: 1000,    
-        timeout: 20000,             
-        transports: ['websocket', 'polling'] 
+        reconnectionAttempts: 20,   
+        reconnectionDelay: 2000,    
+        timeout: 20000,
+        // transports: ['websocket'], // <--- 已注释掉
+        autoConnect: true
     });
     
     socketRef.current = socket;
 
-    const initAudio = () => {
-        SoundManager.init();
-        window.removeEventListener('click', initAudio);
-    };
-    window.addEventListener('click', initAudio);
-
     socket.on('connect', () => {
         console.log("Socket 连接成功!");
         setIsConnected(true); 
+        
+        if (roomIdRef.current && usernameRef.current) {
+             console.log(`[Auto-Rejoin] 自动恢复身份: ${usernameRef.current} @ Room ${roomIdRef.current}`);
+             socket.emit('join_room', { 
+                 roomId: roomIdRef.current, 
+                 username: usernameRef.current 
+             });
+        }
     });
     
     socket.on('disconnect', () => {
@@ -259,21 +290,46 @@ export default function App() {
     });
     
     socket.on('connect_error', (err) => {
-        console.warn("连接错误:", err);
+        console.warn("连接错误 (详细):", err.message);
     });
 
     socket.on('your_id', (id) => {
         setMySocketId(id);
         mySocketIdRef.current = id;
     });
+    
     socket.on('error_msg', (msg) => { setIsLoading(false); alert(msg); });
 
     socket.on('room_info', (data) => {
         setRoomId(data.roomId);
         setRoomConfig(data.config);
         setPlayers(data.players);
-        setGameState('LOBBY'); 
+        
+        if (gameState !== 'GAME' && gameState !== 'DRAW_SEATS') {
+             setGameState('LOBBY'); 
+        }
         setIsLoading(false);
+    });
+
+    socket.on('enter_draw_phase', (data) => {
+        setDrawState({ 
+            totalCards: data.totalCards, 
+            history: [] 
+        });
+        setGameState('DRAW_SEATS');
+        SoundManager.play('deal');
+    });
+
+    socket.on('seat_draw_update', (data) => {
+        setDrawState(prev => ({
+            ...prev,
+            history: [...prev.history, data]
+        }));
+        SoundManager.play('deal'); 
+    });
+
+    socket.on('seat_draw_finished', (data) => {
+        setPlayers(data.players); 
     });
 
     socket.on('game_started', (data) => {
@@ -290,10 +346,9 @@ export default function App() {
         setGameState('GAME');
         setTurnRemaining(60);
         setPlayersInfo({});
-        // 初始牌数
         if (data.handCounts) setHandCounts(data.handCounts);
         SoundManager.play('deal');
-        backupHandRef.current = []; // 新局开始清空备份
+        backupHandRef.current = []; 
     });
 
     socket.on('game_state_update', (data) => {
@@ -303,8 +358,6 @@ export default function App() {
              setTurnRemaining(data.turnRemaining);
         }
 
-        // [修改] 只有当出牌人不是自己时，才播放出牌音效
-        // 因为如果是自己，点击按钮的瞬间已经在本地播放过了 (防止重音和延迟)
         if (data.lastPlayed && data.lastPlayed.length > 0) {
              if (data.lastPlayerName !== usernameRef.current) {
                 SoundManager.play('play'); 
@@ -320,12 +373,8 @@ export default function App() {
         }
         if (data.scores) setPlayerScores(data.scores);
         if (data.playersInfo) setPlayersInfo(data.playersInfo);
-        
-        // 更新手牌数
         if (data.handCounts) setHandCounts(data.handCounts);
-
         if (data.finishedRank) setFinishedRank(data.finishedRank);
-
         if (data.pendingPoints !== undefined) setPendingPoints(data.pendingPoints);
 
         if (data.currentTurnId === mySocketIdRef.current) {
@@ -336,7 +385,6 @@ export default function App() {
     socket.on('hand_update', (newHand) => {
         setMyHand(sortHand(newHand, sortModeRef.current)); 
         setSelectedCards([]);
-        // 服务器确认手牌更新了，说明操作成功，清空备份
         backupHandRef.current = [];
     });
 
@@ -345,7 +393,6 @@ export default function App() {
         setTimeout(()=>setInfoMessage(''), 2000); 
         SoundManager.play('lose'); 
         
-        // [新增] 发生错误（如牌型不对/网络错误），回滚本地手牌
         if (backupHandRef.current.length > 0) {
             setMyHand(backupHandRef.current);
             backupHandRef.current = [];
@@ -364,10 +411,24 @@ export default function App() {
         setGrandResult(data);
         SoundManager.play('win'); 
     });
+  };
+
+  useEffect(() => {
+    connectSocket();
+
+    const initAudio = () => {
+        SoundManager.init();
+        window.removeEventListener('click', initAudio);
+    };
+    window.addEventListener('click', initAudio);
 
     const handleGlobalMouseUp = () => { isDragging.current = false; };
     window.addEventListener('mouseup', handleGlobalMouseUp);
-    return () => { socket.disconnect(); window.removeEventListener('mouseup', handleGlobalMouseUp); };
+    
+    return () => { 
+        if (socketRef.current) socketRef.current.disconnect(); 
+        window.removeEventListener('mouseup', handleGlobalMouseUp); 
+    };
   }, []);
 
   useEffect(() => {
@@ -389,12 +450,15 @@ export default function App() {
   const handleStartGame = () => socketRef.current.emit('start_game', { roomId });
   const handleNextRound = () => socketRef.current.emit('next_round', { roomId });
   const handleAddBot = () => socketRef.current.emit('add_bot', { roomId });
-  
   const handleToggleAutoPlay = () => socketRef.current.emit('toggle_auto_play', { roomId });
 
   const handleSwitchSeat = (index1, index2) => {
       if (!isCreatorMode && !players.find(p=>p.id===mySocketId)?.isHost) return;
       socketRef.current.emit('switch_seat', { roomId, index1, index2 });
+  };
+  
+  const handleDrawCard = (index) => {
+      socketRef.current.emit('draw_seat_card', { roomId, cardIndex: index });
   };
 
   const updateSelection = (cardVal, forceSelect = null) => {
@@ -418,41 +482,24 @@ export default function App() {
     }
   };
 
-  // [修改] 乐观更新版出牌函数
   const handlePlayCards = () => {
     if (selectedCards.length === 0) return alert("请先选牌");
-    
-    // 1. 复制要出的牌
     const cardsToPlay = [...selectedCards];
-
-    // 2. 备份当前手牌，万一服务器报错，用于回滚
     backupHandRef.current = [...myHand];
-
-    // 3. 【乐观更新】立即从 UI 上移除手牌
     const nextHand = myHand.filter(c => !cardsToPlay.includes(c));
     setMyHand(nextHand);
-
-    // 4. 【乐观更新】立即在桌面上显示刚出的牌 (为了好看，本地也排个序)
     setLastPlayed(sortHand(cardsToPlay, sortModeRef.current));
-    setLastPlayerName(username); // 临时显示自己的名字
-    setSelectedCards([]); // 清空选中状态
-
-    // 5. 【无延迟】立即播放音效
+    setLastPlayerName(username); 
+    setSelectedCards([]); 
     SoundManager.play('play');
-
-    // 6. 最后再发送给服务器
     socketRef.current.emit('play_cards', { roomId, cards: cardsToPlay });
   };
   
   const handlePass = () => {
-    // 不要（Pass）通常不需要乐观更新，因为没有复杂的视觉变化
     socketRef.current.emit('pass_turn', { roomId });
     setSelectedCards([]);
   };
 
-  // --- Render Helpers ---
-
-  // 横屏引导层
   const renderLandscapeHint = () => (
       <div className="landscape-hint">
           <div className="phone-rotate-icon"></div>
@@ -470,8 +517,33 @@ export default function App() {
       </div>
   );
 
+  const renderDisconnectAlert = () => (
+      !isConnected && (
+          <div style={{
+              position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+              background: '#e74c3c', color: 'white', padding: '10px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
+          }}>
+              <AlertCircle size={20} />
+              <span style={{fontWeight: 'bold'}}>连接已断开，正在尝试重连...</span>
+              <button 
+                onClick={() => window.location.reload()} 
+                style={{
+                    background: 'white', color: '#e74c3c', border: 'none', 
+                    borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 'bold',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
+                }}
+              >
+                  <RefreshCw size={12} /> 刷新重连
+              </button>
+          </div>
+      )
+  );
+
   return (
     <>
+      {renderDisconnectAlert()}
       {renderLandscapeHint()}
       
       {gameState === 'LOGIN' && <LoginScreen {...{
@@ -489,6 +561,12 @@ export default function App() {
           handleStartGame, 
           handleAddBot,
           handleSwitchSeat 
+      }} />}
+      
+      {gameState === 'DRAW_SEATS' && <DrawSeatScreen {...{
+          roomId, players, mySocketId,
+          drawState, handleDrawCard,
+          roomConfig 
       }} />}
       
       {gameState === 'GAME' && <GameScreen {...{
@@ -1257,10 +1335,171 @@ createRoot(document.getElementById('root')).render(
 
 
 ================================================================================
+FILE PATH: client\src\screens\DrawSeatScreen.jsx
+================================================================================
+import React, { useState, useEffect } from 'react';
+import { styles } from '../styles.js';
+import { Card } from '../components/BaseUI.jsx'; 
+import { Shuffle } from 'lucide-react';
+
+export const DrawSeatScreen = ({ 
+    roomId, players, mySocketId, 
+    drawState, // { totalCards, history: [...] }
+    handleDrawCard,
+    roomConfig // 接收配置，用于判断显示什么文案
+}) => {
+    // 本地状态用于动画展示
+    const [flippedCards, setFlippedCards] = useState({}); // { index: { val: 54, playerName: 'xxx' } }
+    const [infoText, setInfoText] = useState("请点击一张卡背进行抽签");
+
+    // 监听服务器数据更新
+    useEffect(() => {
+        if (drawState && drawState.history) {
+            const newFlipped = {};
+            drawState.history.forEach(item => {
+                newFlipped[item.index] = { val: item.val, playerName: item.name };
+            });
+            setFlippedCards(newFlipped);
+
+            // 检查自己是否抽了
+            const myLog = drawState.history.find(h => h.playerId === mySocketId);
+            if (myLog) {
+                setInfoText(`等待其他玩家完成抽签...`);
+            }
+        }
+    }, [drawState, mySocketId]);
+
+    const onCardClick = (index) => {
+        if (flippedCards[index]) return; // 已经翻开了
+        
+        // 检查自己是否已经抽过
+        const myName = players.find(p=>p.id===mySocketId)?.name;
+        if (Object.values(flippedCards).some(c => c.playerName === myName)) {
+             return; 
+        }
+        
+        handleDrawCard(index);
+    };
+
+    // 判断是否是真正的组队模式 (开启了开关 且 人数是偶数)
+    const isTeamMode = roomConfig && roomConfig.isTeamMode && (players.length % 2 === 0);
+
+    return (
+        <div style={styles.gameTable}>
+            {/* [修复说明] styles.gameSafeArea 默认带有 pointerEvents: 'none'。
+               这会导致其子元素无法接收点击事件。下面的卡片元素通过 pointerEvents: 'auto' 重新开启了交互。
+            */}
+            <div style={{...styles.gameSafeArea, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center'}}>
+                
+                <div style={{
+                    background: 'rgba(0,0,0,0.6)', padding: '20px 30px', borderRadius: 20, 
+                    marginBottom: 40, backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)',
+                    textAlign: 'center', color: 'white'
+                }}>
+                    <h2 style={{margin: '0 0 10px 0', fontSize: 24, display:'flex', alignItems:'center', justifyContent:'center', gap:10}}>
+                        <Shuffle size={24} color="#f1c40f"/> 赛前抽卡定座
+                    </h2>
+                    
+                    <div style={{fontSize: 14, color: '#bdc3c7', maxWidth: 400, lineHeight: '1.6'}}>
+                        {isTeamMode ? (
+                            <>
+                                点数<span style={{color:'#e74c3c', fontWeight:'bold'}}>大</span>的半数玩家 → <span style={{color:'#e74c3c'}}>红队</span> (1, 3, 5号位)<br/>
+                                点数<span style={{color:'#3498db', fontWeight:'bold'}}>小</span>的半数玩家 → <span style={{color:'#3498db'}}>蓝队</span> (2, 4, 6号位)
+                            </>
+                        ) : (
+                            <>
+                                抽签决定座位顺序<br/>
+                                <span style={{color:'#f1c40f'}}>点数越大，座位越靠前 (1号位起)</span>
+                            </>
+                        )}
+                        <br/>
+                        <span style={{fontSize: 12, opacity: 0.8, marginTop: 5, display:'block'}}>(2 &gt; A &gt; K &gt; ... &gt; 3)</span>
+                    </div>
+                </div>
+
+                <div style={{
+                    display: 'flex', gap: 15, flexWrap: 'wrap', justifyContent: 'center', 
+                    maxWidth: 800, padding: 10
+                }}>
+                    {Array.from({ length: players.length }).map((_, index) => {
+                        const flipData = flippedCards[index];
+                        const isFlipped = !!flipData;
+                        const isMine = isFlipped && flipData.playerName === players.find(p=>p.id===mySocketId)?.name;
+
+                        return (
+                            <div key={index} style={{position: 'relative', width: 80, height: 110, display:'flex', flexDirection:'column', alignItems:'center'}}>
+                                {/* 玩家名字标签 */}
+                                {isFlipped && (
+                                    <div style={{
+                                        position: 'absolute', top: -25, width: 120, textAlign: 'center',
+                                        fontSize: 12, color: isMine ? '#f1c40f' : 'white', fontWeight: 'bold',
+                                        textShadow: '0 1px 2px black', whiteSpace:'nowrap'
+                                    }}>
+                                        {flipData.playerName}
+                                    </div>
+                                )}
+
+                                {isFlipped ? (
+                                    // 翻开后的牌
+                                    <div style={{
+                                        transform: isMine ? 'scale(1.1)' : 'scale(1)', 
+                                        transition: 'all 0.3s',
+                                        pointerEvents: 'auto' 
+                                    }}>
+                                        <Card 
+                                            cardVal={flipData.val} 
+                                            index={0} 
+                                            isSelected={isMine} 
+                                            onClick={()=>{}} 
+                                            onMouseEnter={()=>{}} 
+                                            spacing={0}
+                                        />
+                                    </div>
+                                ) : (
+                                    // 卡背
+                                    <div 
+                                        onClick={() => onCardClick(index)}
+                                        style={{
+                                            width: 55, height: 70, 
+                                            background: 'linear-gradient(135deg, #2c3e50 0%, #34495e 100%)',
+                                            borderRadius: 6,
+                                            border: '2px solid #bdc3c7',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            cursor: 'pointer',
+                                            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+                                            transition: 'transform 0.2s',
+                                            pointerEvents: 'auto'
+                                        }}
+                                        onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
+                                        onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                    >
+                                        <div style={{
+                                            width: 40, height: 55, border: '1px dashed rgba(255,255,255,0.3)', 
+                                            borderRadius: 4, display:'flex', alignItems:'center', justifyContent:'center'
+                                        }}>
+                                            <span style={{fontSize: 20, opacity: 0.5, color: 'white'}}>?</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+
+                <div style={{marginTop: 40, color: '#f1c40f', fontSize: 18, fontWeight: 'bold', textShadow: '0 2px 4px rgba(0,0,0,0.5)', height: 30}}>
+                    {infoText}
+                </div>
+
+            </div>
+        </div>
+    );
+};
+
+================================================================================
 FILE PATH: client\src\screens\GameScreen.jsx
 ================================================================================
 // 游戏主界面 - 深度适配移动端布局，增加了全屏按钮
-// [完整无删减版] + 组队分数结算展示
+// [完整修复版] 修复移动端 Touch 事件 passive 报错，解决操作卡死/失效问题
 import React, { useState, useRef, useEffect } from 'react';
 import { Coins, Layers, Crown, Clock, Bot, Zap, Maximize, Minimize, Shield, Users } from 'lucide-react';
 import { styles } from '../styles.js'; 
@@ -1271,7 +1510,7 @@ import SoundManager from '../utils/SoundManager.js';
 
 export const GameScreen = ({ 
     roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
-    infoMessage: serverInfoMessage, winner, playerScores, playersInfo, pendingPoints, gameLogs, sortMode,
+    infoMessage: serverInfoMessage, winner, playerScores, playersInfo = {}, pendingPoints, gameLogs, sortMode,
     mySocketId, roundResult, grandResult, roomConfig,
     turnRemaining, finishedRank = [], 
     handCounts = {}, 
@@ -1317,6 +1556,7 @@ export const GameScreen = ({
         players.forEach(p => {
             const pInfo = playersInfo[p.id];
             const score = playerScores[p.id] || 0;
+            // [安全修复] 增加 ?. 保护
             if (pInfo && pInfo.team !== undefined && pInfo.team !== null) {
                 hasTeams = true;
                 if (pInfo.team === 0) redScore += score;
@@ -1327,14 +1567,22 @@ export const GameScreen = ({
         return { hasTeams, redScore, blueScore };
     };
 
-    // --- 滑动选牌逻辑 ---
+    // --- 滑动选牌逻辑 (Ref 重构版) ---
     const handContainerRef = useRef(null);
     const lastTouchedIndex = useRef(null);
     const isDragging = useRef(false);
-const dragStartMode = useRef(true); // true = select, false = deselect
+    const dragStartMode = useRef(true); // true = select, false = deselect
 
-    const handleTouchStart = (e) => {
-        // [关键修改] 阻止默认事件，防止后续触发 click/mousedown 导致双重操作
+    // [核心修复] 使用 Ref 保存最新的状态和回调，防止 useEffect 闭包陷阱
+    // 这样我们在事件监听器里永远能拿到最新的 myHand 和 selectedCards
+    const stateRef = useRef({ myHand, selectedCards, cardSpacing, handleMouseDown });
+    useEffect(() => {
+        stateRef.current = { myHand, selectedCards, cardSpacing, handleMouseDown };
+    }, [myHand, selectedCards, cardSpacing, handleMouseDown]);
+
+    // 逻辑处理函数（不直接绑定到 DOM，而是通过 Effect 绑定）
+    const onTouchStartLogic = (e) => {
+        // [关键] 必须在这里阻止默认事件，且 passive 必须为 false
         if (e.cancelable) e.preventDefault();
         
         const touch = e.touches[0];
@@ -1342,36 +1590,31 @@ const dragStartMode = useRef(true); // true = select, false = deselect
         if (!container) return;
 
         const rect = container.getBoundingClientRect();
+        const { myHand: currHand, selectedCards: currSelection, cardSpacing: currSpacing, handleMouseDown: currToggle } = stateRef.current;
         
-        // 1. 先算出横坐标对应的牌是哪一张 (为了做精确的高度检测，必须先知道点的是谁)
-        const index = getCardIndexFromTouch(touch.clientX, rect.left, cardSpacing, myHand.length);
-        const cardVal = myHand[index];
+        // 1. 算出索引
+        const index = getCardIndexFromTouch(touch.clientX, rect.left, currSpacing, currHand.length);
+        const cardVal = currHand[index];
 
         if (cardVal === undefined) return;
 
-        // 2. [核心优化] 动态高度检测
-        // 解决问题：防止点击“坐着”的牌上方的空气时触发选中
-        const isSelected = selectedCards.includes(cardVal);
-        const CARD_HEIGHT = 70;    // 牌的基础高度 (styles.card.height)
-        const POP_HEIGHT = 35;     // 站起来的上浮高度 (transform translateY)
-        const TOLERANCE = 10;      // 容错空间 (手指可能比牌大一点)
+        // 2. 动态高度检测
+        const isSelected = currSelection.includes(cardVal);
+        const CARD_HEIGHT = 70;    
+        const POP_HEIGHT = 35;     
+        const TOLERANCE = 10;      
 
-        // 如果牌已经站起来了，有效高度 = 基础 + 上浮 + 容错
-        // 如果牌是坐着的，有效高度 = 基础 + 容错
         const validVisualHeight = isSelected 
             ? CARD_HEIGHT + POP_HEIGHT + TOLERANCE 
             : CARD_HEIGHT + TOLERANCE;
 
-        // 计算触摸点距离容器底部的距离
         const distanceFromBottom = rect.bottom - touch.clientY;
 
-        // 判定：如果点击位置比“该牌当前的视觉高度”还要高，说明点在空气上了
         if (distanceFromBottom > validVisualHeight) {
             isDragging.current = false;
             return;
         }
         
-        // 判定：如果点到容器外面太下面去了也不行
         if (distanceFromBottom < -10) {
             isDragging.current = false;
             return;
@@ -1379,18 +1622,16 @@ const dragStartMode = useRef(true); // true = select, false = deselect
 
         isDragging.current = true;
         
-        // 决定起始模式
-        dragStartMode.current = !selectedCards.includes(cardVal);
+        dragStartMode.current = !currSelection.includes(cardVal);
         lastTouchedIndex.current = index;
         
-        // 执行选中/取消
         if (isSelected !== dragStartMode.current) {
-                handleMouseDown(cardVal); // 触发 toggle
-                if (navigator.vibrate) navigator.vibrate(5);
+            currToggle(cardVal); 
+            if (navigator.vibrate) navigator.vibrate(5);
         }
     };
 
-    const handleTouchMove = (e) => {
+    const onTouchMoveLogic = (e) => {
         if (e.cancelable) e.preventDefault(); // 防止滚动
         if (!isDragging.current) return;
 
@@ -1399,29 +1640,50 @@ const dragStartMode = useRef(true); // true = select, false = deselect
         if (!container) return;
 
         const rect = container.getBoundingClientRect();
-        // 增加一点 Y 轴容错，防止手指稍微滑出就断触
-        // [调整] 这里的范围可以稍微宽一点，允许滑动时手指稍微跑偏
         if (touch.clientY < rect.top - 50 || touch.clientY > rect.bottom + 50) return;
 
-        const index = getCardIndexFromTouch(touch.clientX, rect.left, cardSpacing, myHand.length);
+        const { myHand: currHand, selectedCards: currSelection, cardSpacing: currSpacing, handleMouseDown: currToggle } = stateRef.current;
+        const index = getCardIndexFromTouch(touch.clientX, rect.left, currSpacing, currHand.length);
         
         if (lastTouchedIndex.current !== index) {
             lastTouchedIndex.current = index;
-            const cardVal = myHand[index];
+            const cardVal = currHand[index];
             if (cardVal !== undefined) {
-                const isSelected = selectedCards.includes(cardVal);
+                const isSelected = currSelection.includes(cardVal);
                 if (isSelected !== dragStartMode.current) {
-                    handleMouseDown(cardVal); 
+                    currToggle(cardVal); 
                     if (navigator.vibrate) navigator.vibrate(5);
                 }
             }
         }
     };
 
-    const handleTouchEnd = () => {
+    const onTouchEndLogic = () => {
         isDragging.current = false;
         lastTouchedIndex.current = null;
     };
+
+    // [核心修复] 手动绑定事件监听器，指定 passive: false
+    useEffect(() => {
+        const container = handContainerRef.current;
+        if (!container || amIAutoPlay) return;
+
+        const ts = (e) => onTouchStartLogic(e);
+        const tm = (e) => onTouchMoveLogic(e);
+        const te = (e) => onTouchEndLogic(e);
+
+        // React 的 onTouchStart 默认是 passive 的，无法 preventDefault
+        // 必须原生绑定并指定 { passive: false }
+        container.addEventListener('touchstart', ts, { passive: false });
+        container.addEventListener('touchmove', tm, { passive: false });
+        container.addEventListener('touchend', te);
+
+        return () => {
+            container.removeEventListener('touchstart', ts);
+            container.removeEventListener('touchmove', tm);
+            container.removeEventListener('touchend', te);
+        };
+    }, [amIAutoPlay]); // 仅在托管状态改变时重新绑定
 
     const toggleFullScreen = () => {
         const doc = window.document;
@@ -1518,7 +1780,6 @@ const dragStartMode = useRef(true); // true = select, false = deselect
             const rankIndex = finishedRank ? finishedRank.indexOf(p.id) : -1;
             const finishedRankVal = rankIndex !== -1 ? rankIndex + 1 : null;
             
-            // [关键] 提取 Team
             const team = info.team;
 
             return (
@@ -1535,7 +1796,7 @@ const dragStartMode = useRef(true); // true = select, false = deselect
                         hideTimer={hideTimer} 
                         cardCount={handCounts[p.id] || 0}
                         showCardCountMode={roomConfig.showCardCountMode}
-                        team={team} // [新增] 传递队伍信息
+                        team={team} 
                     />
                     <div style={{position: 'absolute', top: -10, right: -10, display: 'flex', gap: 5}}>
                         {isBot && <div style={styles.statusBadgeBot}><Bot size={12}/> AI</div>}
@@ -1546,7 +1807,6 @@ const dragStartMode = useRef(true); // true = select, false = deselect
         });
     };
 
-    // [新增] 渲染结算面板的队伍分数栏
     const renderTeamScoreBoard = () => {
         const { hasTeams, redScore, blueScore } = getTeamScores();
         if (!hasTeams) return null;
@@ -1637,7 +1897,6 @@ const dragStartMode = useRef(true); // true = select, false = deselect
                                     <Crown size={80} color="#e74c3c" style={{marginBottom: 20}} />
                                     <h2 style={{fontSize: 32, marginBottom: 10, color:'#2c3e50'}}>最终冠军: {grandResult.grandWinner}</h2>
                                     
-                                    {/* [新增] 队伍总分展示 */}
                                     {renderTeamScoreBoard()}
 
                                     <button style={{...styles.primaryButton, fontSize: 18}} onClick={handleStartGame}>重新开始</button>
@@ -1649,7 +1908,6 @@ const dragStartMode = useRef(true); // true = select, false = deselect
                                     <div style={{fontSize: 20}}>胜者: <span style={{color:'#27ae60'}}>{roundResult.roundWinner}</span></div>
                                     <div style={{fontSize: 32, fontWeight:'bold', color:'#f1c40f', margin:'10px 0'}}>+{roundResult.pointsEarned} 分</div>
                                     
-                                    {/* [新增] 队伍总分展示 */}
                                     {renderTeamScoreBoard()}
 
                                     <div style={{
@@ -1689,9 +1947,7 @@ const dragStartMode = useRef(true); // true = select, false = deselect
                         filter: amIAutoPlay ? 'grayscale(0.6)' : 'none',
                         pointerEvents: amIAutoPlay ? 'none' : 'auto' 
                     }}
-                    onTouchStart={!amIAutoPlay ? handleTouchStart : undefined}
-                    onTouchMove={!amIAutoPlay ? handleTouchMove : undefined}
-                    onTouchEnd={!amIAutoPlay ? handleTouchEnd : undefined}
+                    // [修改] 移除了 onTouchXxx 属性绑定，改用 useEffect 绑定
                 >
                     {amIAutoPlay && (
                         <div style={{
@@ -1931,7 +2187,7 @@ export const LobbyScreen = ({ roomId, roomConfig, players, mySocketId, handleSta
 ================================================================================
 FILE PATH: client\src\screens\LoginScreen.jsx
 ================================================================================
-// 登录页 - 适配移动端，包含自动全屏逻辑 + 手动全屏按钮 + 剩余牌数配置 + [新增]组队开关
+// 登录页 - 适配移动端，包含自动全屏逻辑 + 手动全屏按钮 + 剩余牌数配置 + 组队开关 (移除抽卡开关，改为默认)
 import React, { useState } from 'react'; 
 import { User, Monitor, RefreshCw, Plus, LogIn, Clock, Layers, Users, Target, Wifi, WifiOff, Award, Maximize, Minimize, Eye, Shield } from 'lucide-react'; 
 import { styles } from '../styles.js';
@@ -2082,7 +2338,7 @@ export const LoginScreen = ({
                                     {renderConfigSlider(<Layers size={14}/>, "牌库数量", roomConfig.deckCount, 1, 8, 1, v=>setRoomConfig({...roomConfig, deckCount:v}), '副')}
                                     {renderConfigSlider(<Target size={14}/>, "获胜目标", roomConfig.targetScore, 500, 5000, 500, v=>setRoomConfig({...roomConfig, targetScore:v}), '分')}
                                     
-                                    {/* [新增] 组队对抗开关 */}
+                                    {/* 组队对抗开关 */}
                                     <div style={{...styles.configItem, marginTop: 10, padding: '10px', background: roomConfig.maxPlayers % 2 !== 0 ? '#f0f0f0' : '#e8f8f5', borderRadius: 8, opacity: roomConfig.maxPlayers % 2 !== 0 ? 0.6 : 1, gridColumn: '1 / -1'}}>
                                         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                                             <div style={{display:'flex', alignItems:'center', gap:6, fontWeight:'600', color: roomConfig.maxPlayers % 2 !== 0 ? '#999' : '#27ae60'}}>
@@ -2113,6 +2369,8 @@ export const LoginScreen = ({
                                             {roomConfig.maxPlayers % 2 !== 0 ? "⚠️ 需要偶数人数 (4, 6...) 才能开启" : "开启后，间隔入座为队友 (1和3队友，2和4队友)"}
                                         </div>
                                     </div>
+                                    
+                                    {/* [注] 抽卡开关已移除，现在是强制默认流程 */}
 
                                     {/* 倒计时选择 */}
                                     <div style={styles.configItem}>
@@ -2255,7 +2513,7 @@ FILE PATH: client\src\styles.js
 ================================================================================
 // 统一样式文件 - 移动端适配版
 // [完整版] 包含所有原有布局、拇指热区、以及新增的滑动选牌支持和剩余牌数徽章
-// [本次修复] 修复了弹窗无法点击的问题，以及横屏下弹窗显示不全的问题
+// [本次修复] 调整手牌区域位置，防止被左下角头像遮挡
 
 export const styles = {
   // ============================
@@ -2479,12 +2737,7 @@ export const styles = {
       top: 50, 
       left: 10, 
       width: 200, 
-      // 高度在 JSX 中动态控制，这里设默认值
-      // height: 140, 
-      
-      // [关键修改] 背景默认改为更透明 (0.35)，组件内动态控制
       background: 'rgba(0, 0, 0, 0.35)', 
-      
       borderRadius: 10, 
       padding: '8px 12px', 
       border: '1px solid rgba(255,255,255,0.1)',
@@ -2608,10 +2861,12 @@ export const styles = {
   // HandArea
   handArea: { 
       position: 'absolute', 
-      // [关键修改] 抬高底部距离，从 5px 改为 max(25px, env...) 
-      // 避免 iOS 底部小黑条遮挡，解决“点击底部无反应”的问题
-      bottom: 'max(25px, env(safe-area-inset-bottom))',              
-      left: 65,
+      // [关键修改] 抬高底部距离
+      bottom: 'max(25px, env(safe-area-inset-bottom))',
+      
+      // [关键修改] 加大左侧间距 (65 -> 110)，防止被左下角头像遮挡
+      left: 70,
+      
       right: 10, 
       height: 160,            
       display: 'flex', 
@@ -2642,7 +2897,7 @@ export const styles = {
   passButton: { pointerEvents: 'auto', padding: '8px 25px', background: '#7f8c8d', border: 'none', borderRadius: 40, fontWeight: 'bold', cursor: 'pointer', fontSize: 14, color: 'white', boxShadow: '0 5px 15px rgba(0,0,0,0.3)' },
   waitingBadge: { color: 'rgba(255,255,255,0.7)', fontSize: 16, display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(0,0,0,0.3)', padding: '10px 20px', borderRadius: 30 },
   
-  // [修复 1] 弹窗遮罩：增加 pointerEvents: 'auto' 以解决按钮点击无反应的问题
+  // 弹窗遮罩
   modalOverlay: { 
       position: 'fixed', 
       top:0, left:0, right:0, bottom:0, 
@@ -2652,24 +2907,21 @@ export const styles = {
       alignItems:'center', 
       zIndex: 99, 
       backdropFilter: 'blur(8px)',
-      pointerEvents: 'auto' // 核心修复：允许接收点击事件
+      pointerEvents: 'auto' 
   },
 
-  // [修复 2] 弹窗内容：增加 maxHeight 和 overflowY 以解决横屏显示不全的问题
+  // 弹窗内容
   modalContent: { 
       background: 'white', 
-      padding: 30, // 减小 Padding (原 60) 以适配小屏
-      borderRadius: 24, // 稍微减小圆角 (原 30)
+      padding: 30, 
+      borderRadius: 24, 
       textAlign: 'center', 
       boxShadow: '0 30px 80px rgba(0,0,0,0.6)', 
       animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-      
-      // 新增响应式属性
-      width: '90%',        // 默认宽度 90%
-      maxWidth: 500,       // 最大宽度
-      maxHeight: '85vh',   // 核心修复：限制高度不超过屏幕 85%
-      overflowY: 'auto',   // 核心修复：内容过多时出现滚动条
-      
+      width: '90%',        
+      maxWidth: 500,       
+      maxHeight: '85vh',   
+      overflowY: 'auto',   
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center'
@@ -2981,6 +3233,25 @@ const CardRules = {
         if (base === 0) return 14; // A
         if (base === 1) return 15; // 2
         return base + 1; // 3 => 3
+    },
+
+    // [新增] 缺失的排序权重函数 (修复崩溃核心)
+    getSortValue: (cardVal) => {
+        const normalized = cardVal % 54;
+        if (normalized === 52) return 16;
+        if (normalized === 53) return 17;
+        const base = normalized % 13;
+        if (base === 0) return 14; 
+        if (base === 1) return 15; 
+        return base + 1;
+    },
+
+    // [新增] 缺失的花色排序函数 (修复崩溃核心)
+    getSuitSortValue: (cardVal) => {
+        if (cardVal >= 52) return cardVal * 100;
+        const suit = Math.floor(cardVal / 13) % 4; 
+        const val = cardVal % 13;
+        return suit * 100 + val; 
     },
     
     // [新增] 辅助：点数转显示文本
@@ -3601,15 +3872,56 @@ class GameManager {
         const passesNeeded = winnerIsActive ? (activeCount - 1) : activeCount;
 
         let turnCleared = false;
+        let infoMessage = `${currPlayer.name}: 不要`;
+
         if (this.gameState.consecutivePasses >= passesNeeded) {
             const wId = this.gameState.roundWinnerId;
             if (wId) {
                 this.gameState.roundPoints[wId] = (this.gameState.roundPoints[wId] || 0) + this.gameState.pendingTablePoints;
                 this.gameState.pendingTablePoints = 0;
                 
+                // 如果赢家还有牌，赢家继续出
                 if (this.gameState.hands[wId].length > 0) {
                      const wIdx = this.players.findIndex(p => p.id === wId);
                      this.gameState.currentTurnIndex = wIdx;
+                } else {
+                    // [核心修改] 赢家已出完牌 (逃出)
+                    // 检查是否需要触发“队友接风”逻辑
+                    const winnerPlayer = this.players.find(p => p.id === wId);
+                    const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
+                    
+                    let teammateTookOver = false;
+
+                    // 只有在组队模式下，才尝试寻找队友接风
+                    if (isTeamMode && winnerPlayer && winnerPlayer.team !== undefined && winnerPlayer.team !== null) {
+                        const wIdx = this.players.findIndex(p => p.id === wId);
+                        const pCount = this.players.length;
+                        
+                        // 按照出牌顺序（逆时针/索引递减）寻找最近的一位【还有手牌】的队友
+                        for (let i = 1; i < pCount; i++) {
+                            // 注意：_advanceTurn 使用的是减法逻辑，所以这里也往回找
+                            const tIdx = (wIdx - i + pCount) % pCount; 
+                            const potentialTeammate = this.players[tIdx];
+                            
+                            // 是队友 且 还是活跃状态
+                            if (potentialTeammate.team === winnerPlayer.team && 
+                                this.gameState.hands[potentialTeammate.id] && 
+                                this.gameState.hands[potentialTeammate.id].length > 0) {
+                                
+                                this.gameState.currentTurnIndex = tIdx;
+                                teammateTookOver = true;
+                                infoMessage = `${currPlayer.name}: 不要 (队友接风)`;
+                                this._broadcastUpdate(`${winnerPlayer.name} 已逃出，队友 ${potentialTeammate.name} 接风`);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (!teammateTookOver) {
+                        // 如果不是组队模式，或队友也都跑了 -> 保持默认行为（下家接风）
+                        // 此时 currentTurnIndex 已经由上方的 _advanceTurn() 指向了下家
+                        // infoMessage = `${currPlayer.name}: 不要 (下家接风)`; 
+                    }
                 }
             }
             
@@ -3624,7 +3936,7 @@ class GameManager {
         return { 
             success: true, 
             turnCleared,
-            logText: `${currPlayer.name}: 不要`
+            logText: infoMessage
         };
     }
 
@@ -3892,6 +4204,118 @@ class GameManager {
 module.exports = GameManager;
 
 ================================================================================
+FILE PATH: server\game\SeatManager.js
+================================================================================
+const CardRules = require('./CardRules');
+const Deck = require('./Deck');
+
+class SeatManager {
+    // 构造函数接收 isTeamMode 参数
+    constructor(io, roomId, players, isTeamMode) {
+        this.io = io;
+        this.roomId = roomId;
+        this.players = players; 
+        this.isTeamMode = isTeamMode; 
+
+        // 生成一副牌，洗牌
+        const deck = new Deck(1);
+        deck.shuffle();
+        
+        // 取出等于玩家数量的牌作为“签”
+        this.availableCards = deck.deck.slice(0, players.length);
+        
+        // 记录谁抽了什么 { playerId: cardVal }
+        this.drawResults = {};
+        
+        // 记录当前还剩哪些位置的牌没被翻开
+        this.pendingIndices = this.availableCards.map((_, i) => i);
+    }
+
+    // [新增] 专门处理玩家重连后的 ID 变更
+    reconnectPlayer(oldId, newId) {
+        if (this.drawResults[oldId] !== undefined) {
+            this.drawResults[newId] = this.drawResults[oldId];
+            delete this.drawResults[oldId];
+            console.log(`[SeatManager] Player reconnected: ${oldId} -> ${newId}, restored draw result.`);
+        }
+    }
+
+    // 玩家请求抽一张牌
+    playerDraw(playerId, cardIndex) {
+        if (this.drawResults[playerId] !== undefined) return { success: false, msg: '你已经抽过牌了' };
+
+        const idxInPending = this.pendingIndices.indexOf(cardIndex);
+        if (idxInPending === -1) return { success: false, msg: '这张牌已经被被人抽走了' };
+
+        this.pendingIndices.splice(idxInPending, 1);
+
+        const cardVal = this.availableCards[cardIndex];
+        this.drawResults[playerId] = cardVal;
+
+        const isFinished = Object.keys(this.drawResults).length === this.players.length;
+
+        return { 
+            success: true, 
+            cardVal, 
+            cardIndex, 
+            isFinished 
+        };
+    }
+
+    // 核心：计算最终座次和分组
+    finalizeSeats() {
+        // 1. 基础组装与排序
+        const results = this.players.map(p => {
+            const card = this.drawResults[p.id];
+            
+            // [安全保护] 如果玩家数据异常，防止服务器再次崩溃
+            if (card === undefined) {
+                console.error(`[SeatManager] Critical Error: Player ${p.name} (${p.id}) missing draw card!`);
+                return { ...p, drawCard: 0, sortVal: 0 };
+            }
+
+            return {
+                ...p,
+                drawCard: card,
+                // 这里调用 CardRules.getSortValue，如果 CardRules 里没有这个函数，服务器就会崩溃
+                sortVal: CardRules.getSortValue(card) 
+            };
+        });
+
+        // 从大到小排
+        results.sort((a, b) => {
+            if (b.sortVal !== a.sortVal) return b.sortVal - a.sortVal;
+            // 花色比较
+            return CardRules.getSuitSortValue(b.drawCard) - CardRules.getSuitSortValue(a.drawCard);
+        });
+
+        // 2. 根据模式决定座位顺序
+        let newOrder = [];
+
+        if (this.isTeamMode) {
+            const mid = Math.ceil(results.length / 2);
+            const bigTeam = results.slice(0, mid); 
+            const smallTeam = results.slice(mid);  
+
+            const maxLen = Math.max(bigTeam.length, smallTeam.length);
+            for (let i = 0; i < maxLen; i++) {
+                if (bigTeam[i]) newOrder.push(bigTeam[i]); 
+                if (smallTeam[i]) newOrder.push(smallTeam[i]); 
+            }
+        } else {
+            newOrder = results;
+        }
+
+        return {
+            newPlayers: newOrder,
+            drawDetails: this.drawResults 
+        };
+    }
+}
+
+module.exports = SeatManager;
+
+================================================================================
 FILE PATH: server\index.js
 ================================================================================
 // 程序入口，只负责启动服务和 Socket 监听
@@ -3903,6 +4327,7 @@ const path = require('path');
 
 // 引入模块
 const GameManager = require('./game/GameManager');
+const SeatManager = require('./game/SeatManager'); 
 
 const app = express();
 app.use(cors());
@@ -3921,7 +4346,6 @@ const rooms = {};
 function broadcastGameState(io, roomId, room, infoText = null) {
     if (!room.gameManager) return;
     
-    // 从 GameManager 获取纯净的 UI 展示数据
     const publicState = room.gameManager.getPublicState();
     if (!publicState) return;
 
@@ -3941,12 +4365,18 @@ io.on('connection', (socket) => {
         const cleanName = String(username || '').trim();
         if (!cleanName) return socket.emit('error_msg', '用户名不能为空');
 
-        const roomConfig = { deckCount: 1, maxPlayers: 3, targetScore: 500, ...config };
+        const roomConfig = { 
+            deckCount: 1, 
+            maxPlayers: 3, 
+            targetScore: 500, 
+            ...config 
+        };
         
         rooms[roomId] = {
             config: roomConfig,
             players: [],
             gameManager: null,
+            seatManager: null, 
             destroyTimer: null 
         };
         
@@ -3996,6 +4426,12 @@ io.on('connection', (socket) => {
             if (room.gameManager) {
                 room.gameManager.reconnectPlayer(oldSocketId, socket.id);
             }
+
+            // [核心修复] 如果正在抽签，也要通知 SeatManager 更新 ID
+            if (room.seatManager) {
+                room.seatManager.reconnectPlayer(oldSocketId, socket.id);
+            }
+
         } else {
             if (room.players.length >= room.config.maxPlayers) {
                 return socket.emit('error_msg', '房间已满');
@@ -4035,6 +4471,27 @@ io.on('connection', (socket) => {
             }
             broadcastGameState(io, roomId, room);
         }
+        
+        // [新增] 如果重连时正好在抽卡阶段，要把当前的抽卡状态发给重连者
+        if (room.seatManager && room.seatManager.drawResults) {
+             socket.emit('enter_draw_phase', { totalCards: room.players.length });
+             // 补发历史记录
+             Object.entries(room.seatManager.drawResults).forEach(([pid, val]) => {
+                 const pName = room.players.find(p=>p.id===pid)?.name || '未知';
+                 // 反查 index
+                 let cardIndex = -1;
+                 room.seatManager.availableCards.forEach((c, idx) => {
+                     if (c === val) cardIndex = idx;
+                 });
+                 
+                 socket.emit('seat_draw_update', {
+                    index: cardIndex,
+                    val: val,
+                    playerId: pid,
+                    name: pName
+                });
+             });
+        }
     });
     
     // 添加机器人
@@ -4071,33 +4528,28 @@ io.on('connection', (socket) => {
         broadcastGameState(io, roomId, room);
     });
 
-    // [新增] 座位调整
+    // 座位调整
     socket.on('switch_seat', ({ roomId, index1, index2 }) => {
         const room = rooms[roomId];
         if (!room) return;
 
-        // 1. 权限检查：必须是房主
         const requestPlayer = room.players.find(p => p.id === socket.id);
         if (!requestPlayer || !requestPlayer.isHost) {
             return socket.emit('error_msg', '只有房主可以调整座位');
         }
 
-        // 2. 边界检查
         if (index1 < 0 || index1 >= room.players.length || index2 < 0 || index2 >= room.players.length) {
             return;
         }
 
-        // 3. 游戏进行中禁止调整
         if (room.gameManager && room.gameManager.gameState) {
              return socket.emit('error_msg', '游戏中无法调整座位');
         }
 
-        // 4. 交换位置
         const temp = room.players[index1];
         room.players[index1] = room.players[index2];
         room.players[index2] = temp;
 
-        // 5. 广播更新
         const currentGrandScores = room.gameManager ? room.gameManager.grandScores : {};
         if (Object.keys(currentGrandScores).length === 0) {
             room.players.forEach(p => currentGrandScores[p.id] = 0);
@@ -4112,7 +4564,45 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('room_info', data);
     });
 
-    // --- 游戏流程 ---
+    // 抽卡交互逻辑
+    socket.on('draw_seat_card', ({ roomId, cardIndex }) => {
+        const room = rooms[roomId];
+        if (!room || !room.seatManager) return;
+
+        const result = room.seatManager.playerDraw(socket.id, cardIndex);
+        if (!result.success) {
+            return socket.emit('error_msg', result.msg);
+        }
+
+        const player = room.players.find(p => p.id === socket.id);
+        io.to(roomId).emit('seat_draw_update', {
+            index: cardIndex,
+            val: result.cardVal,
+            playerId: socket.id,
+            name: player ? player.name : '未知'
+        });
+
+        if (result.isFinished) {
+            setTimeout(() => {
+                const { newPlayers, drawDetails } = room.seatManager.finalizeSeats();
+                
+                room.players = newPlayers;
+                room.seatManager = null; 
+
+                io.to(roomId).emit('seat_draw_finished', {
+                    players: newPlayers,
+                    details: drawDetails
+                });
+
+                setTimeout(() => {
+                    handleGameStart(roomId, false);
+                }, 3000);
+
+            }, 1000); 
+        }
+    });
+
+    // 游戏流程
     const handleGameStart = (roomId, isNextRound) => {
         const room = rooms[roomId];
         if (!room) return;
@@ -4129,7 +4619,6 @@ io.on('connection', (socket) => {
                 io.to(p.id).emit('game_started', { 
                     hand: hand, 
                     grandScores: room.gameManager.grandScores,
-                    // [注意] 这里要带上牌数
                     handCounts: room.gameManager.getPublicState().handCounts
                 });
             }
@@ -4143,10 +4632,50 @@ io.on('connection', (socket) => {
         broadcastGameState(io, roomId, room, msg);
     };
 
-    socket.on('start_game', ({ roomId }) => handleGameStart(roomId, false));
+    socket.on('start_game', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+        
+        const isTeamMode = room.config.isTeamMode && (room.players.length % 2 === 0);
+        
+        room.seatManager = new SeatManager(io, roomId, room.players, isTeamMode);
+        
+        io.to(roomId).emit('enter_draw_phase', {
+            totalCards: room.players.length
+        });
+        
+        const bots = room.players.filter(p => p.isBot);
+        bots.forEach((bot, i) => {
+            setTimeout(() => {
+                if(room.seatManager) {
+                    const availableIdx = room.seatManager.pendingIndices[0];
+                    if (availableIdx !== undefined) {
+                        const res = room.seatManager.playerDraw(bot.id, availableIdx);
+                        if(res.success) {
+                            io.to(roomId).emit('seat_draw_update', {
+                                index: res.cardIndex,
+                                val: res.cardVal,
+                                playerId: bot.id,
+                                name: bot.name
+                            });
+                            if (res.isFinished) {
+                                setTimeout(() => {
+                                    const { newPlayers } = room.seatManager.finalizeSeats();
+                                    room.players = newPlayers;
+                                    room.seatManager = null;
+                                    io.to(roomId).emit('seat_draw_finished', { players: newPlayers });
+                                    setTimeout(() => handleGameStart(roomId, false), 3000);
+                                }, 1000);
+                            }
+                        }
+                    }
+                }
+            }, 1000 + i * 1500); 
+        });
+    });
+
     socket.on('next_round', ({ roomId }) => handleGameStart(roomId, true));
 
-// --- 出牌 ---
     socket.on('play_cards', ({ roomId, cards }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -4177,12 +4706,10 @@ io.on('connection', (socket) => {
                 });
             }
         } else {
-            // 广播状态时，附带出牌的日志文本
             broadcastGameState(io, roomId, room, result.logText);
         }
     });
 
-    // --- 过牌 ---
     socket.on('pass_turn', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -4194,7 +4721,6 @@ io.on('connection', (socket) => {
         broadcastGameState(io, roomId, room, result.logText || "PASS");
     });
 
-    // --- 断开连接 ---
     socket.on('disconnect', () => {
         Object.keys(rooms).forEach(rId => {
             const r = rooms[rId];
@@ -4203,9 +4729,7 @@ io.on('connection', (socket) => {
             if (idx === -1) return; 
 
             const player = r.players[idx];
-            const isGameRunning = r.gameManager && r.gameManager.gameState;
-
-            if (!isGameRunning) {
+            if (!r.gameManager && !r.seatManager) {
                 r.players.splice(idx, 1);
                 console.log(`[Disconnect] Lobby user ${player.name} removed from ${rId}`);
                 
@@ -4228,14 +4752,11 @@ io.on('connection', (socket) => {
                 const allHumansOffline = r.players.filter(p => !p.isBot).every(p => !p.online);
                 
                 if (allHumansOffline) {
-                    console.log(`[Room] Room ${rId} is empty. Scheduling destruction in 60s...`);
-                    
                     if (r.destroyTimer) clearTimeout(r.destroyTimer);
-                    
                     r.destroyTimer = setTimeout(() => {
                         if (rooms[rId] && rooms[rId].players.filter(p => !p.isBot).every(p => !p.online)) {
                             delete rooms[rId];
-                            console.log(`[Room] Room ${rId} destroyed due to inactivity (game running).`);
+                            console.log(`[Room] Room ${rId} destroyed due to inactivity.`);
                         }
                     }, 60000); 
                 }
@@ -4243,8 +4764,6 @@ io.on('connection', (socket) => {
         });
     });
 });
-
-
 
 // 这一段的意思是：如果是在线上环境，就把 React 打包好的文件(build)发给浏览器
 if (process.env.NODE_ENV === 'production') {

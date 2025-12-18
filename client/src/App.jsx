@@ -1,22 +1,40 @@
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
-import { Smartphone } from 'lucide-react'; 
+import { Smartphone, RefreshCw, AlertCircle } from 'lucide-react'; 
 
 import { sortHand } from './utils/cardLogic.js';
 import SoundManager from './utils/SoundManager.js';
 import { LoginScreen } from './screens/LoginScreen.jsx';
 import { LobbyScreen } from './screens/LobbyScreen.jsx';
 import { GameScreen } from './screens/GameScreen.jsx';
+import { DrawSeatScreen } from './screens/DrawSeatScreen.jsx';
 
+// [核心修复] 重写连接地址判断逻辑
 const getSocketUrl = () => {
-    const { hostname, protocol } = window.location;
-    const isLocal = hostname === 'localhost' || 
-                    hostname === '127.0.0.1' || 
-                    hostname.startsWith('192.168.') || 
-                    hostname.startsWith('10.');
-    if (isLocal) {
-        return `${protocol}//${hostname}:3001`;
+    const { hostname, protocol, port } = window.location;
+    
+    // 如果是 HTTPS，通常是线上环境，直接用相对路径
+    if (protocol === 'https:') {
+        return '/';
     }
+
+    // 1. 本地 localhost/127.0.0.1 环境
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        // 如果当前浏览器端口不是后端端口 (3001)，说明在用 Vite (5173/5174等)，强制指向 3001
+        if (port !== '3001') {
+            return `${protocol}//${hostname}:3001`;
+        }
+    }
+    
+    // 2. 局域网 IP 访问 (192.168.x.x 等)
+    if (hostname.startsWith('192.168.') || hostname.startsWith('10.')) {
+        // 同理，如果不是 3001 端口，强制指向 3001
+        if (port !== '3001') {
+            return `${protocol}//${hostname}:3001`;
+        }
+    }
+    
+    // 3. 其他情况 (生产环境，或者就是运行在 3001 上)
     return '/';
 };
 
@@ -34,8 +52,9 @@ export default function App() {
       turnTimeout: 60000,
       enableRankPenalty: false,    
       rankPenaltyScores: [30, 15],
-      showCardCountMode: 1, // 默认：少于3张显示
-      isTeamMode: false     // 组队模式
+      showCardCountMode: 1, 
+      isTeamMode: false,
+      enableDrawSeat: false 
   });
   
   const [isCreatorMode, setIsCreatorMode] = useState(false); 
@@ -63,9 +82,9 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
 
   const [turnRemaining, setTurnRemaining] = useState(60); 
-
-  // 用于存储每个玩家的剩余牌数
   const [handCounts, setHandCounts] = useState({});
+
+  const [drawState, setDrawState] = useState(null); 
 
   const socketRef = useRef(null);
   const isDragging = useRef(false); 
@@ -74,33 +93,45 @@ export default function App() {
   const usernameRef = useRef(username); 
   const mySocketIdRef = useRef(null);   
   
-  // [新增] 用于乐观更新失败时的回滚备份
+  const roomIdRef = useRef(roomId);
+  
   const backupHandRef = useRef([]);
 
   useEffect(() => { usernameRef.current = username; }, [username]);
   useEffect(() => { mySocketIdRef.current = mySocketId; }, [mySocketId]);
+  useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
 
-  useEffect(() => {
+  // [修改] 整合后的连接逻辑
+  const connectSocket = () => {
+    if (socketRef.current) {
+        socketRef.current.disconnect();
+    }
+
     console.log(`正在连接服务器: ${SOCKET_URL}`);
     
+    // [修复] 移除 transports: ['websocket'] 强制配置
+    // 允许 Socket.io 自动协商 (Polling -> WebSocket)，解决 "WebSocket closed before connection established" 报错
     const socket = io(SOCKET_URL, { 
-        reconnectionAttempts: 10,   
-        reconnectionDelay: 1000,    
-        timeout: 20000,             
-        transports: ['websocket', 'polling'] 
+        reconnectionAttempts: 20,   
+        reconnectionDelay: 2000,    
+        timeout: 20000,
+        // transports: ['websocket'], // <--- 已注释掉
+        autoConnect: true
     });
     
     socketRef.current = socket;
 
-    const initAudio = () => {
-        SoundManager.init();
-        window.removeEventListener('click', initAudio);
-    };
-    window.addEventListener('click', initAudio);
-
     socket.on('connect', () => {
         console.log("Socket 连接成功!");
         setIsConnected(true); 
+        
+        if (roomIdRef.current && usernameRef.current) {
+             console.log(`[Auto-Rejoin] 自动恢复身份: ${usernameRef.current} @ Room ${roomIdRef.current}`);
+             socket.emit('join_room', { 
+                 roomId: roomIdRef.current, 
+                 username: usernameRef.current 
+             });
+        }
     });
     
     socket.on('disconnect', () => {
@@ -109,21 +140,46 @@ export default function App() {
     });
     
     socket.on('connect_error', (err) => {
-        console.warn("连接错误:", err);
+        console.warn("连接错误 (详细):", err.message);
     });
 
     socket.on('your_id', (id) => {
         setMySocketId(id);
         mySocketIdRef.current = id;
     });
+    
     socket.on('error_msg', (msg) => { setIsLoading(false); alert(msg); });
 
     socket.on('room_info', (data) => {
         setRoomId(data.roomId);
         setRoomConfig(data.config);
         setPlayers(data.players);
-        setGameState('LOBBY'); 
+        
+        if (gameState !== 'GAME' && gameState !== 'DRAW_SEATS') {
+             setGameState('LOBBY'); 
+        }
         setIsLoading(false);
+    });
+
+    socket.on('enter_draw_phase', (data) => {
+        setDrawState({ 
+            totalCards: data.totalCards, 
+            history: [] 
+        });
+        setGameState('DRAW_SEATS');
+        SoundManager.play('deal');
+    });
+
+    socket.on('seat_draw_update', (data) => {
+        setDrawState(prev => ({
+            ...prev,
+            history: [...prev.history, data]
+        }));
+        SoundManager.play('deal'); 
+    });
+
+    socket.on('seat_draw_finished', (data) => {
+        setPlayers(data.players); 
     });
 
     socket.on('game_started', (data) => {
@@ -140,10 +196,9 @@ export default function App() {
         setGameState('GAME');
         setTurnRemaining(60);
         setPlayersInfo({});
-        // 初始牌数
         if (data.handCounts) setHandCounts(data.handCounts);
         SoundManager.play('deal');
-        backupHandRef.current = []; // 新局开始清空备份
+        backupHandRef.current = []; 
     });
 
     socket.on('game_state_update', (data) => {
@@ -153,8 +208,6 @@ export default function App() {
              setTurnRemaining(data.turnRemaining);
         }
 
-        // [修改] 只有当出牌人不是自己时，才播放出牌音效
-        // 因为如果是自己，点击按钮的瞬间已经在本地播放过了 (防止重音和延迟)
         if (data.lastPlayed && data.lastPlayed.length > 0) {
              if (data.lastPlayerName !== usernameRef.current) {
                 SoundManager.play('play'); 
@@ -170,12 +223,8 @@ export default function App() {
         }
         if (data.scores) setPlayerScores(data.scores);
         if (data.playersInfo) setPlayersInfo(data.playersInfo);
-        
-        // 更新手牌数
         if (data.handCounts) setHandCounts(data.handCounts);
-
         if (data.finishedRank) setFinishedRank(data.finishedRank);
-
         if (data.pendingPoints !== undefined) setPendingPoints(data.pendingPoints);
 
         if (data.currentTurnId === mySocketIdRef.current) {
@@ -186,7 +235,6 @@ export default function App() {
     socket.on('hand_update', (newHand) => {
         setMyHand(sortHand(newHand, sortModeRef.current)); 
         setSelectedCards([]);
-        // 服务器确认手牌更新了，说明操作成功，清空备份
         backupHandRef.current = [];
     });
 
@@ -195,7 +243,6 @@ export default function App() {
         setTimeout(()=>setInfoMessage(''), 2000); 
         SoundManager.play('lose'); 
         
-        // [新增] 发生错误（如牌型不对/网络错误），回滚本地手牌
         if (backupHandRef.current.length > 0) {
             setMyHand(backupHandRef.current);
             backupHandRef.current = [];
@@ -214,10 +261,24 @@ export default function App() {
         setGrandResult(data);
         SoundManager.play('win'); 
     });
+  };
+
+  useEffect(() => {
+    connectSocket();
+
+    const initAudio = () => {
+        SoundManager.init();
+        window.removeEventListener('click', initAudio);
+    };
+    window.addEventListener('click', initAudio);
 
     const handleGlobalMouseUp = () => { isDragging.current = false; };
     window.addEventListener('mouseup', handleGlobalMouseUp);
-    return () => { socket.disconnect(); window.removeEventListener('mouseup', handleGlobalMouseUp); };
+    
+    return () => { 
+        if (socketRef.current) socketRef.current.disconnect(); 
+        window.removeEventListener('mouseup', handleGlobalMouseUp); 
+    };
   }, []);
 
   useEffect(() => {
@@ -239,12 +300,15 @@ export default function App() {
   const handleStartGame = () => socketRef.current.emit('start_game', { roomId });
   const handleNextRound = () => socketRef.current.emit('next_round', { roomId });
   const handleAddBot = () => socketRef.current.emit('add_bot', { roomId });
-  
   const handleToggleAutoPlay = () => socketRef.current.emit('toggle_auto_play', { roomId });
 
   const handleSwitchSeat = (index1, index2) => {
       if (!isCreatorMode && !players.find(p=>p.id===mySocketId)?.isHost) return;
       socketRef.current.emit('switch_seat', { roomId, index1, index2 });
+  };
+  
+  const handleDrawCard = (index) => {
+      socketRef.current.emit('draw_seat_card', { roomId, cardIndex: index });
   };
 
   const updateSelection = (cardVal, forceSelect = null) => {
@@ -268,41 +332,24 @@ export default function App() {
     }
   };
 
-  // [修改] 乐观更新版出牌函数
   const handlePlayCards = () => {
     if (selectedCards.length === 0) return alert("请先选牌");
-    
-    // 1. 复制要出的牌
     const cardsToPlay = [...selectedCards];
-
-    // 2. 备份当前手牌，万一服务器报错，用于回滚
     backupHandRef.current = [...myHand];
-
-    // 3. 【乐观更新】立即从 UI 上移除手牌
     const nextHand = myHand.filter(c => !cardsToPlay.includes(c));
     setMyHand(nextHand);
-
-    // 4. 【乐观更新】立即在桌面上显示刚出的牌 (为了好看，本地也排个序)
     setLastPlayed(sortHand(cardsToPlay, sortModeRef.current));
-    setLastPlayerName(username); // 临时显示自己的名字
-    setSelectedCards([]); // 清空选中状态
-
-    // 5. 【无延迟】立即播放音效
+    setLastPlayerName(username); 
+    setSelectedCards([]); 
     SoundManager.play('play');
-
-    // 6. 最后再发送给服务器
     socketRef.current.emit('play_cards', { roomId, cards: cardsToPlay });
   };
   
   const handlePass = () => {
-    // 不要（Pass）通常不需要乐观更新，因为没有复杂的视觉变化
     socketRef.current.emit('pass_turn', { roomId });
     setSelectedCards([]);
   };
 
-  // --- Render Helpers ---
-
-  // 横屏引导层
   const renderLandscapeHint = () => (
       <div className="landscape-hint">
           <div className="phone-rotate-icon"></div>
@@ -320,8 +367,33 @@ export default function App() {
       </div>
   );
 
+  const renderDisconnectAlert = () => (
+      !isConnected && (
+          <div style={{
+              position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+              background: '#e74c3c', color: 'white', padding: '10px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
+          }}>
+              <AlertCircle size={20} />
+              <span style={{fontWeight: 'bold'}}>连接已断开，正在尝试重连...</span>
+              <button 
+                onClick={() => window.location.reload()} 
+                style={{
+                    background: 'white', color: '#e74c3c', border: 'none', 
+                    borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 'bold',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
+                }}
+              >
+                  <RefreshCw size={12} /> 刷新重连
+              </button>
+          </div>
+      )
+  );
+
   return (
     <>
+      {renderDisconnectAlert()}
       {renderLandscapeHint()}
       
       {gameState === 'LOGIN' && <LoginScreen {...{
@@ -339,6 +411,12 @@ export default function App() {
           handleStartGame, 
           handleAddBot,
           handleSwitchSeat 
+      }} />}
+      
+      {gameState === 'DRAW_SEATS' && <DrawSeatScreen {...{
+          roomId, players, mySocketId,
+          drawState, handleDrawCard,
+          roomConfig 
       }} />}
       
       {gameState === 'GAME' && <GameScreen {...{

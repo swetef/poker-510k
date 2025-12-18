@@ -7,6 +7,7 @@ const path = require('path');
 
 // 引入模块
 const GameManager = require('./game/GameManager');
+const SeatManager = require('./game/SeatManager'); 
 
 const app = express();
 app.use(cors());
@@ -25,7 +26,6 @@ const rooms = {};
 function broadcastGameState(io, roomId, room, infoText = null) {
     if (!room.gameManager) return;
     
-    // 从 GameManager 获取纯净的 UI 展示数据
     const publicState = room.gameManager.getPublicState();
     if (!publicState) return;
 
@@ -45,12 +45,18 @@ io.on('connection', (socket) => {
         const cleanName = String(username || '').trim();
         if (!cleanName) return socket.emit('error_msg', '用户名不能为空');
 
-        const roomConfig = { deckCount: 1, maxPlayers: 3, targetScore: 500, ...config };
+        const roomConfig = { 
+            deckCount: 1, 
+            maxPlayers: 3, 
+            targetScore: 500, 
+            ...config 
+        };
         
         rooms[roomId] = {
             config: roomConfig,
             players: [],
             gameManager: null,
+            seatManager: null, 
             destroyTimer: null 
         };
         
@@ -100,6 +106,12 @@ io.on('connection', (socket) => {
             if (room.gameManager) {
                 room.gameManager.reconnectPlayer(oldSocketId, socket.id);
             }
+
+            // [核心修复] 如果正在抽签，也要通知 SeatManager 更新 ID
+            if (room.seatManager) {
+                room.seatManager.reconnectPlayer(oldSocketId, socket.id);
+            }
+
         } else {
             if (room.players.length >= room.config.maxPlayers) {
                 return socket.emit('error_msg', '房间已满');
@@ -139,6 +151,27 @@ io.on('connection', (socket) => {
             }
             broadcastGameState(io, roomId, room);
         }
+        
+        // [新增] 如果重连时正好在抽卡阶段，要把当前的抽卡状态发给重连者
+        if (room.seatManager && room.seatManager.drawResults) {
+             socket.emit('enter_draw_phase', { totalCards: room.players.length });
+             // 补发历史记录
+             Object.entries(room.seatManager.drawResults).forEach(([pid, val]) => {
+                 const pName = room.players.find(p=>p.id===pid)?.name || '未知';
+                 // 反查 index
+                 let cardIndex = -1;
+                 room.seatManager.availableCards.forEach((c, idx) => {
+                     if (c === val) cardIndex = idx;
+                 });
+                 
+                 socket.emit('seat_draw_update', {
+                    index: cardIndex,
+                    val: val,
+                    playerId: pid,
+                    name: pName
+                });
+             });
+        }
     });
     
     // 添加机器人
@@ -175,33 +208,28 @@ io.on('connection', (socket) => {
         broadcastGameState(io, roomId, room);
     });
 
-    // [新增] 座位调整
+    // 座位调整
     socket.on('switch_seat', ({ roomId, index1, index2 }) => {
         const room = rooms[roomId];
         if (!room) return;
 
-        // 1. 权限检查：必须是房主
         const requestPlayer = room.players.find(p => p.id === socket.id);
         if (!requestPlayer || !requestPlayer.isHost) {
             return socket.emit('error_msg', '只有房主可以调整座位');
         }
 
-        // 2. 边界检查
         if (index1 < 0 || index1 >= room.players.length || index2 < 0 || index2 >= room.players.length) {
             return;
         }
 
-        // 3. 游戏进行中禁止调整
         if (room.gameManager && room.gameManager.gameState) {
              return socket.emit('error_msg', '游戏中无法调整座位');
         }
 
-        // 4. 交换位置
         const temp = room.players[index1];
         room.players[index1] = room.players[index2];
         room.players[index2] = temp;
 
-        // 5. 广播更新
         const currentGrandScores = room.gameManager ? room.gameManager.grandScores : {};
         if (Object.keys(currentGrandScores).length === 0) {
             room.players.forEach(p => currentGrandScores[p.id] = 0);
@@ -216,7 +244,45 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('room_info', data);
     });
 
-    // --- 游戏流程 ---
+    // 抽卡交互逻辑
+    socket.on('draw_seat_card', ({ roomId, cardIndex }) => {
+        const room = rooms[roomId];
+        if (!room || !room.seatManager) return;
+
+        const result = room.seatManager.playerDraw(socket.id, cardIndex);
+        if (!result.success) {
+            return socket.emit('error_msg', result.msg);
+        }
+
+        const player = room.players.find(p => p.id === socket.id);
+        io.to(roomId).emit('seat_draw_update', {
+            index: cardIndex,
+            val: result.cardVal,
+            playerId: socket.id,
+            name: player ? player.name : '未知'
+        });
+
+        if (result.isFinished) {
+            setTimeout(() => {
+                const { newPlayers, drawDetails } = room.seatManager.finalizeSeats();
+                
+                room.players = newPlayers;
+                room.seatManager = null; 
+
+                io.to(roomId).emit('seat_draw_finished', {
+                    players: newPlayers,
+                    details: drawDetails
+                });
+
+                setTimeout(() => {
+                    handleGameStart(roomId, false);
+                }, 3000);
+
+            }, 1000); 
+        }
+    });
+
+    // 游戏流程
     const handleGameStart = (roomId, isNextRound) => {
         const room = rooms[roomId];
         if (!room) return;
@@ -233,7 +299,6 @@ io.on('connection', (socket) => {
                 io.to(p.id).emit('game_started', { 
                     hand: hand, 
                     grandScores: room.gameManager.grandScores,
-                    // [注意] 这里要带上牌数
                     handCounts: room.gameManager.getPublicState().handCounts
                 });
             }
@@ -247,10 +312,50 @@ io.on('connection', (socket) => {
         broadcastGameState(io, roomId, room, msg);
     };
 
-    socket.on('start_game', ({ roomId }) => handleGameStart(roomId, false));
+    socket.on('start_game', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+        
+        const isTeamMode = room.config.isTeamMode && (room.players.length % 2 === 0);
+        
+        room.seatManager = new SeatManager(io, roomId, room.players, isTeamMode);
+        
+        io.to(roomId).emit('enter_draw_phase', {
+            totalCards: room.players.length
+        });
+        
+        const bots = room.players.filter(p => p.isBot);
+        bots.forEach((bot, i) => {
+            setTimeout(() => {
+                if(room.seatManager) {
+                    const availableIdx = room.seatManager.pendingIndices[0];
+                    if (availableIdx !== undefined) {
+                        const res = room.seatManager.playerDraw(bot.id, availableIdx);
+                        if(res.success) {
+                            io.to(roomId).emit('seat_draw_update', {
+                                index: res.cardIndex,
+                                val: res.cardVal,
+                                playerId: bot.id,
+                                name: bot.name
+                            });
+                            if (res.isFinished) {
+                                setTimeout(() => {
+                                    const { newPlayers } = room.seatManager.finalizeSeats();
+                                    room.players = newPlayers;
+                                    room.seatManager = null;
+                                    io.to(roomId).emit('seat_draw_finished', { players: newPlayers });
+                                    setTimeout(() => handleGameStart(roomId, false), 3000);
+                                }, 1000);
+                            }
+                        }
+                    }
+                }
+            }, 1000 + i * 1500); 
+        });
+    });
+
     socket.on('next_round', ({ roomId }) => handleGameStart(roomId, true));
 
-// --- 出牌 ---
     socket.on('play_cards', ({ roomId, cards }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -281,12 +386,10 @@ io.on('connection', (socket) => {
                 });
             }
         } else {
-            // 广播状态时，附带出牌的日志文本
             broadcastGameState(io, roomId, room, result.logText);
         }
     });
 
-    // --- 过牌 ---
     socket.on('pass_turn', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -298,7 +401,6 @@ io.on('connection', (socket) => {
         broadcastGameState(io, roomId, room, result.logText || "PASS");
     });
 
-    // --- 断开连接 ---
     socket.on('disconnect', () => {
         Object.keys(rooms).forEach(rId => {
             const r = rooms[rId];
@@ -307,9 +409,7 @@ io.on('connection', (socket) => {
             if (idx === -1) return; 
 
             const player = r.players[idx];
-            const isGameRunning = r.gameManager && r.gameManager.gameState;
-
-            if (!isGameRunning) {
+            if (!r.gameManager && !r.seatManager) {
                 r.players.splice(idx, 1);
                 console.log(`[Disconnect] Lobby user ${player.name} removed from ${rId}`);
                 
@@ -332,14 +432,11 @@ io.on('connection', (socket) => {
                 const allHumansOffline = r.players.filter(p => !p.isBot).every(p => !p.online);
                 
                 if (allHumansOffline) {
-                    console.log(`[Room] Room ${rId} is empty. Scheduling destruction in 60s...`);
-                    
                     if (r.destroyTimer) clearTimeout(r.destroyTimer);
-                    
                     r.destroyTimer = setTimeout(() => {
                         if (rooms[rId] && rooms[rId].players.filter(p => !p.isBot).every(p => !p.online)) {
                             delete rooms[rId];
-                            console.log(`[Room] Room ${rId} destroyed due to inactivity (game running).`);
+                            console.log(`[Room] Room ${rId} destroyed due to inactivity.`);
                         }
                     }, 60000); 
                 }
@@ -347,8 +444,6 @@ io.on('connection', (socket) => {
         });
     });
 });
-
-
 
 // 这一段的意思是：如果是在线上环境，就把 React 打包好的文件(build)发给浏览器
 if (process.env.NODE_ENV === 'production') {

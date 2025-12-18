@@ -352,10 +352,9 @@ class GameManager {
                         const wIdx = this.players.findIndex(p => p.id === wId);
                         const pCount = this.players.length;
                         
-                        // 按照出牌顺序（逆时针/索引递减）寻找最近的一位【还有手牌】的队友
+                        // [修正] 因为出牌顺序改为 index++ (递增)，所以接风搜索也要改为递增方向
                         for (let i = 1; i < pCount; i++) {
-                            // 注意：_advanceTurn 使用的是减法逻辑，所以这里也往回找
-                            const tIdx = (wIdx - i + pCount) % pCount; 
+                            const tIdx = (wIdx + i) % pCount; 
                             const potentialTeammate = this.players[tIdx];
                             
                             // 是队友 且 还是活跃状态
@@ -373,9 +372,7 @@ class GameManager {
                     }
                     
                     if (!teammateTookOver) {
-                        // 如果不是组队模式，或队友也都跑了 -> 保持默认行为（下家接风）
-                        // 此时 currentTurnIndex 已经由上方的 _advanceTurn() 指向了下家
-                        // infoMessage = `${currPlayer.name}: 不要 (下家接风)`; 
+                        // 正常下家接风
                     }
                 }
             }
@@ -459,13 +456,16 @@ class GameManager {
         return count;
     }
 
+    // [核心修复] 将轮转方向改为递增 (index + 1)
+    // 这与 SeatManager 的排序 (从大到小) 配合，实现了“抽大牌者先出，然后轮到第二大的”
+    // 同时也与客户端的“右侧是下家”的逆时针布局相匹配
     _advanceTurn() {
         const playerCount = this.players.length;
         let nextIndex = this.gameState.currentTurnIndex;
         let attempts = 0;
         
         do {
-            nextIndex = (nextIndex - 1 + playerCount) % playerCount;
+            nextIndex = (nextIndex + 1) % playerCount; // <--- 改为 +1
             attempts++;
         } while (
             this.gameState.hands[this.players[nextIndex].id].length === 0 && 
@@ -485,7 +485,6 @@ class GameManager {
 
         this.players.forEach(p => {
             currentScoresDisplay[p.id] = (this.grandScores[p.id] || 0) + (this.gameState.roundPoints[p.id] || 0);
-            // [关键修改] 将 team 信息暴露给前端
             playersInfo[p.id] = { 
                 isBot: p.isBot, 
                 isAutoPlay: p.isAutoPlay,
@@ -623,7 +622,6 @@ class GameManager {
                         const loser = this.players.find(p=>p.id===loserId);
                         
                         // [新增] 队友保护判断
-                        // 逻辑：如果两人都有 team 属性，且 team 相等，则免罚
                         if (winner.team !== null && winner.team !== undefined && winner.team === loser.team) {
                              logLines.push(`[🛡️队友保护] 第${winnerIndex+1}名(${winner.name}) 与 倒数第${index+1}名(${loser.name}) 是队友，${score}分 免罚！`);
                         } else {

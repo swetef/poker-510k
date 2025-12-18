@@ -1,4 +1,4 @@
-// 登录页 - 适配移动端，包含自动全屏逻辑 + 手动全屏按钮 + 剩余牌数配置 + [新增]组队开关
+// 登录页 - 适配移动端，包含自动全屏逻辑 + 手动全屏按钮 + 剩余牌数配置 + 组队开关 (移除抽卡开关，改为默认)
 import React, { useState } from 'react'; 
 import { User, Monitor, RefreshCw, Plus, LogIn, Clock, Layers, Users, Target, Wifi, WifiOff, Award, Maximize, Minimize, Eye, Shield } from 'lucide-react'; 
 import { styles } from '../styles.js';
@@ -149,7 +149,7 @@ export const LoginScreen = ({
                                     {renderConfigSlider(<Layers size={14}/>, "牌库数量", roomConfig.deckCount, 1, 8, 1, v=>setRoomConfig({...roomConfig, deckCount:v}), '副')}
                                     {renderConfigSlider(<Target size={14}/>, "获胜目标", roomConfig.targetScore, 500, 5000, 500, v=>setRoomConfig({...roomConfig, targetScore:v}), '分')}
                                     
-                                    {/* [新增] 组队对抗开关 */}
+                                    {/* 组队对抗开关 */}
                                     <div style={{...styles.configItem, marginTop: 10, padding: '10px', background: roomConfig.maxPlayers % 2 !== 0 ? '#f0f0f0' : '#e8f8f5', borderRadius: 8, opacity: roomConfig.maxPlayers % 2 !== 0 ? 0.6 : 1, gridColumn: '1 / -1'}}>
                                         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                                             <div style={{display:'flex', alignItems:'center', gap:6, fontWeight:'600', color: roomConfig.maxPlayers % 2 !== 0 ? '#999' : '#27ae60'}}>
@@ -180,6 +180,8 @@ export const LoginScreen = ({
                                             {roomConfig.maxPlayers % 2 !== 0 ? "⚠️ 需要偶数人数 (4, 6...) 才能开启" : "开启后，间隔入座为队友 (1和3队友，2和4队友)"}
                                         </div>
                                     </div>
+                                    
+                                    {/* [注] 抽卡开关已移除，现在是强制默认流程 */}
 
                                     {/* 倒计时选择 */}
                                     <div style={styles.configItem}>

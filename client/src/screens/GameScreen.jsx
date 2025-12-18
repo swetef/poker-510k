@@ -1,5 +1,6 @@
 // 游戏主界面 - 深度适配移动端布局，增加了全屏按钮
-// [完整无删减版] + 组队分数结算展示
+// [完整修复版] 修复移动端 Touch 事件 passive 报错，解决操作卡死/失效问题
+// [本次修改] 调整座位渲染顺序为逆时针 (Me -> Right -> Top -> Left)
 import React, { useState, useRef, useEffect } from 'react';
 import { Coins, Layers, Crown, Clock, Bot, Zap, Maximize, Minimize, Shield, Users } from 'lucide-react';
 import { styles } from '../styles.js'; 
@@ -10,7 +11,7 @@ import SoundManager from '../utils/SoundManager.js';
 
 export const GameScreen = ({ 
     roomId, players, myHand, selectedCards, lastPlayed, lastPlayerName, currentTurnId, 
-    infoMessage: serverInfoMessage, winner, playerScores, playersInfo, pendingPoints, gameLogs, sortMode,
+    infoMessage: serverInfoMessage, winner, playerScores, playersInfo = {}, pendingPoints, gameLogs, sortMode,
     mySocketId, roundResult, grandResult, roomConfig,
     turnRemaining, finishedRank = [], 
     handCounts = {}, 
@@ -56,6 +57,7 @@ export const GameScreen = ({
         players.forEach(p => {
             const pInfo = playersInfo[p.id];
             const score = playerScores[p.id] || 0;
+            // [安全修复] 增加 ?. 保护
             if (pInfo && pInfo.team !== undefined && pInfo.team !== null) {
                 hasTeams = true;
                 if (pInfo.team === 0) redScore += score;
@@ -66,14 +68,22 @@ export const GameScreen = ({
         return { hasTeams, redScore, blueScore };
     };
 
-    // --- 滑动选牌逻辑 ---
+    // --- 滑动选牌逻辑 (Ref 重构版) ---
     const handContainerRef = useRef(null);
     const lastTouchedIndex = useRef(null);
     const isDragging = useRef(false);
-const dragStartMode = useRef(true); // true = select, false = deselect
+    const dragStartMode = useRef(true); // true = select, false = deselect
 
-    const handleTouchStart = (e) => {
-        // [关键修改] 阻止默认事件，防止后续触发 click/mousedown 导致双重操作
+    // [核心修复] 使用 Ref 保存最新的状态和回调，防止 useEffect 闭包陷阱
+    // 这样我们在事件监听器里永远能拿到最新的 myHand 和 selectedCards
+    const stateRef = useRef({ myHand, selectedCards, cardSpacing, handleMouseDown });
+    useEffect(() => {
+        stateRef.current = { myHand, selectedCards, cardSpacing, handleMouseDown };
+    }, [myHand, selectedCards, cardSpacing, handleMouseDown]);
+
+    // 逻辑处理函数（不直接绑定到 DOM，而是通过 Effect 绑定）
+    const onTouchStartLogic = (e) => {
+        // [关键] 必须在这里阻止默认事件，且 passive 必须为 false
         if (e.cancelable) e.preventDefault();
         
         const touch = e.touches[0];
@@ -81,36 +91,31 @@ const dragStartMode = useRef(true); // true = select, false = deselect
         if (!container) return;
 
         const rect = container.getBoundingClientRect();
+        const { myHand: currHand, selectedCards: currSelection, cardSpacing: currSpacing, handleMouseDown: currToggle } = stateRef.current;
         
-        // 1. 先算出横坐标对应的牌是哪一张 (为了做精确的高度检测，必须先知道点的是谁)
-        const index = getCardIndexFromTouch(touch.clientX, rect.left, cardSpacing, myHand.length);
-        const cardVal = myHand[index];
+        // 1. 算出索引
+        const index = getCardIndexFromTouch(touch.clientX, rect.left, currSpacing, currHand.length);
+        const cardVal = currHand[index];
 
         if (cardVal === undefined) return;
 
-        // 2. [核心优化] 动态高度检测
-        // 解决问题：防止点击“坐着”的牌上方的空气时触发选中
-        const isSelected = selectedCards.includes(cardVal);
-        const CARD_HEIGHT = 70;    // 牌的基础高度 (styles.card.height)
-        const POP_HEIGHT = 35;     // 站起来的上浮高度 (transform translateY)
-        const TOLERANCE = 10;      // 容错空间 (手指可能比牌大一点)
+        // 2. 动态高度检测
+        const isSelected = currSelection.includes(cardVal);
+        const CARD_HEIGHT = 70;    
+        const POP_HEIGHT = 35;     
+        const TOLERANCE = 10;      
 
-        // 如果牌已经站起来了，有效高度 = 基础 + 上浮 + 容错
-        // 如果牌是坐着的，有效高度 = 基础 + 容错
         const validVisualHeight = isSelected 
             ? CARD_HEIGHT + POP_HEIGHT + TOLERANCE 
             : CARD_HEIGHT + TOLERANCE;
 
-        // 计算触摸点距离容器底部的距离
         const distanceFromBottom = rect.bottom - touch.clientY;
 
-        // 判定：如果点击位置比“该牌当前的视觉高度”还要高，说明点在空气上了
         if (distanceFromBottom > validVisualHeight) {
             isDragging.current = false;
             return;
         }
         
-        // 判定：如果点到容器外面太下面去了也不行
         if (distanceFromBottom < -10) {
             isDragging.current = false;
             return;
@@ -118,18 +123,16 @@ const dragStartMode = useRef(true); // true = select, false = deselect
 
         isDragging.current = true;
         
-        // 决定起始模式
-        dragStartMode.current = !selectedCards.includes(cardVal);
+        dragStartMode.current = !currSelection.includes(cardVal);
         lastTouchedIndex.current = index;
         
-        // 执行选中/取消
         if (isSelected !== dragStartMode.current) {
-                handleMouseDown(cardVal); // 触发 toggle
-                if (navigator.vibrate) navigator.vibrate(5);
+            currToggle(cardVal); 
+            if (navigator.vibrate) navigator.vibrate(5);
         }
     };
 
-    const handleTouchMove = (e) => {
+    const onTouchMoveLogic = (e) => {
         if (e.cancelable) e.preventDefault(); // 防止滚动
         if (!isDragging.current) return;
 
@@ -138,29 +141,50 @@ const dragStartMode = useRef(true); // true = select, false = deselect
         if (!container) return;
 
         const rect = container.getBoundingClientRect();
-        // 增加一点 Y 轴容错，防止手指稍微滑出就断触
-        // [调整] 这里的范围可以稍微宽一点，允许滑动时手指稍微跑偏
         if (touch.clientY < rect.top - 50 || touch.clientY > rect.bottom + 50) return;
 
-        const index = getCardIndexFromTouch(touch.clientX, rect.left, cardSpacing, myHand.length);
+        const { myHand: currHand, selectedCards: currSelection, cardSpacing: currSpacing, handleMouseDown: currToggle } = stateRef.current;
+        const index = getCardIndexFromTouch(touch.clientX, rect.left, currSpacing, currHand.length);
         
         if (lastTouchedIndex.current !== index) {
             lastTouchedIndex.current = index;
-            const cardVal = myHand[index];
+            const cardVal = currHand[index];
             if (cardVal !== undefined) {
-                const isSelected = selectedCards.includes(cardVal);
+                const isSelected = currSelection.includes(cardVal);
                 if (isSelected !== dragStartMode.current) {
-                    handleMouseDown(cardVal); 
+                    currToggle(cardVal); 
                     if (navigator.vibrate) navigator.vibrate(5);
                 }
             }
         }
     };
 
-    const handleTouchEnd = () => {
+    const onTouchEndLogic = () => {
         isDragging.current = false;
         lastTouchedIndex.current = null;
     };
+
+    // [核心修复] 手动绑定事件监听器，指定 passive: false
+    useEffect(() => {
+        const container = handContainerRef.current;
+        if (!container || amIAutoPlay) return;
+
+        const ts = (e) => onTouchStartLogic(e);
+        const tm = (e) => onTouchMoveLogic(e);
+        const te = (e) => onTouchEndLogic(e);
+
+        // React 的 onTouchStart 默认是 passive 的，无法 preventDefault
+        // 必须原生绑定并指定 { passive: false }
+        container.addEventListener('touchstart', ts, { passive: false });
+        container.addEventListener('touchmove', tm, { passive: false });
+        container.addEventListener('touchend', te);
+
+        return () => {
+            container.removeEventListener('touchstart', ts);
+            container.removeEventListener('touchmove', tm);
+            container.removeEventListener('touchend', te);
+        };
+    }, [amIAutoPlay]); // 仅在托管状态改变时重新绑定
 
     const toggleFullScreen = () => {
         const doc = window.document;
@@ -191,6 +215,8 @@ const dragStartMode = useRef(true); // true = select, false = deselect
     };
 
     // --- 玩家位置计算逻辑 ---
+    // [修改] 改为逆时针布局 (Counter-Clockwise)
+    // 顺序: Me -> Right -> Top -> Left
     const renderPlayers = () => {
         const myIndex = players.findIndex(p => p.id === mySocketId);
         const safeMyIndex = myIndex === -1 ? 0 : myIndex;
@@ -206,26 +232,33 @@ const dragStartMode = useRef(true); // true = select, false = deselect
 
         let countL = 0, countT = 0, countR = 0;
 
+        // 计算各方位人数
         if (total === 1) { countT = 1; }
-        else if (total === 2) { countL = 1; countR = 1; } 
-        else if (total === 3) { countL = 1; countT = 1; countR = 1; } 
-        else if (total === 4) { countL = 1; countT = 2; countR = 1; } 
-        else if (total === 5) { countL = 2; countT = 1; countR = 2; } 
+        else if (total === 2) { countR = 1; countL = 1; } 
+        else if (total === 3) { countR = 1; countT = 1; countL = 1; } 
+        else if (total === 4) { countR = 1; countT = 2; countL = 1; } 
+        else if (total === 5) { countR = 2; countT = 1; countL = 2; } 
         else {
-            countL = 2;
             countR = 2;
+            countL = 2;
             countT = total - 4;
         }
 
-        const leftGroup = otherPlayers.slice(0, countL);
-        const topGroup = otherPlayers.slice(countL, countL + countT);
-        const rightGroup = otherPlayers.slice(countL + countT);
+        // [核心修改] 分配逻辑调整：优先填右侧 (Right)，然后上方 (Top)，最后左侧 (Left)
+        // 注意：otherPlayers[0] 是下家，必须放在右边
+        const rightGroup = otherPlayers.slice(0, countR);
+        const topGroup = otherPlayers.slice(countR, countR + countT);
+        const leftGroup = otherPlayers.slice(countR + countT);
 
-        leftGroup.forEach((p, i) => {
-            const topPos = countL === 1 ? '40%' : (i === 0 ? '55%' : '35%'); 
-            layoutConfig.push({ p, pos: { top: topPos, left: 30, transform: 'translateY(-50%)' }, timerPos: 'right' });
+        // 1. 右侧 (Right) - 逆时针顺序：Me -> Right(下) -> Right(上)
+        // 所以 i=0 (Next Player) 应该是 55% (下), i=1 应该是 35% (上)
+        rightGroup.forEach((p, i) => {
+            const topPos = countR === 1 ? '40%' : (i === 0 ? '55%' : '35%');
+            layoutConfig.push({ p, pos: { top: topPos, right: 10, transform: 'translateY(-50%)' }, timerPos: 'left' });
         });
 
+        // 2. 上方 (Top) - 逆时针顺序：Right(上) -> Top(右) -> Top(左) -> Left(上)
+        // 所以 i=0 应该靠右 (80%), i=last 应该靠左 (20%)
         topGroup.forEach((p, i) => {
             let leftPos;
             if (countT === 1) {
@@ -233,15 +266,18 @@ const dragStartMode = useRef(true); // true = select, false = deselect
             } else {
                 const start = 20; 
                 const end = 80;
+                // 逆序排列：i=0 对应 80% (右), i=max 对应 20% (左)
                 const step = (end - start) / (countT - 1);
-                leftPos = `${start + i * step}%`;
+                leftPos = `${end - i * step}%`; 
             }
             layoutConfig.push({ p, pos: { top: 10, left: leftPos, transform: 'translateX(-50%)' }, timerPos: 'bottom' });
         });
 
-        rightGroup.forEach((p, i) => {
-            const topPos = countR === 1 ? '40%' : (i === 0 ? '35%' : '55%');
-            layoutConfig.push({ p, pos: { top: topPos, right: 10, transform: 'translateY(-50%)' }, timerPos: 'left' });
+        // 3. 左侧 (Left) - 逆时针顺序：Top(左) -> Left(上) -> Left(下) -> Me
+        // 所以 i=0 应该是 35% (上), i=1 应该是 55% (下)
+        leftGroup.forEach((p, i) => {
+            const topPos = countL === 1 ? '40%' : (i === 0 ? '35%' : '55%'); 
+            layoutConfig.push({ p, pos: { top: topPos, left: 30, transform: 'translateY(-50%)' }, timerPos: 'right' });
         });
 
         const me = players[safeMyIndex];
@@ -257,7 +293,6 @@ const dragStartMode = useRef(true); // true = select, false = deselect
             const rankIndex = finishedRank ? finishedRank.indexOf(p.id) : -1;
             const finishedRankVal = rankIndex !== -1 ? rankIndex + 1 : null;
             
-            // [关键] 提取 Team
             const team = info.team;
 
             return (
@@ -274,7 +309,7 @@ const dragStartMode = useRef(true); // true = select, false = deselect
                         hideTimer={hideTimer} 
                         cardCount={handCounts[p.id] || 0}
                         showCardCountMode={roomConfig.showCardCountMode}
-                        team={team} // [新增] 传递队伍信息
+                        team={team} 
                     />
                     <div style={{position: 'absolute', top: -10, right: -10, display: 'flex', gap: 5}}>
                         {isBot && <div style={styles.statusBadgeBot}><Bot size={12}/> AI</div>}
@@ -285,7 +320,6 @@ const dragStartMode = useRef(true); // true = select, false = deselect
         });
     };
 
-    // [新增] 渲染结算面板的队伍分数栏
     const renderTeamScoreBoard = () => {
         const { hasTeams, redScore, blueScore } = getTeamScores();
         if (!hasTeams) return null;
@@ -376,7 +410,6 @@ const dragStartMode = useRef(true); // true = select, false = deselect
                                     <Crown size={80} color="#e74c3c" style={{marginBottom: 20}} />
                                     <h2 style={{fontSize: 32, marginBottom: 10, color:'#2c3e50'}}>最终冠军: {grandResult.grandWinner}</h2>
                                     
-                                    {/* [新增] 队伍总分展示 */}
                                     {renderTeamScoreBoard()}
 
                                     <button style={{...styles.primaryButton, fontSize: 18}} onClick={handleStartGame}>重新开始</button>
@@ -388,7 +421,6 @@ const dragStartMode = useRef(true); // true = select, false = deselect
                                     <div style={{fontSize: 20}}>胜者: <span style={{color:'#27ae60'}}>{roundResult.roundWinner}</span></div>
                                     <div style={{fontSize: 32, fontWeight:'bold', color:'#f1c40f', margin:'10px 0'}}>+{roundResult.pointsEarned} 分</div>
                                     
-                                    {/* [新增] 队伍总分展示 */}
                                     {renderTeamScoreBoard()}
 
                                     <div style={{
@@ -428,9 +460,7 @@ const dragStartMode = useRef(true); // true = select, false = deselect
                         filter: amIAutoPlay ? 'grayscale(0.6)' : 'none',
                         pointerEvents: amIAutoPlay ? 'none' : 'auto' 
                     }}
-                    onTouchStart={!amIAutoPlay ? handleTouchStart : undefined}
-                    onTouchMove={!amIAutoPlay ? handleTouchMove : undefined}
-                    onTouchEnd={!amIAutoPlay ? handleTouchEnd : undefined}
+                    // [修改] 移除了 onTouchXxx 属性绑定，改用 useEffect 绑定
                 >
                     {amIAutoPlay && (
                         <div style={{
