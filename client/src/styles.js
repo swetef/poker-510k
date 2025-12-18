@@ -1,6 +1,7 @@
 // 统一样式文件 - 移动端适配版
 // [完整版] 包含所有原有布局、拇指热区、以及新增的滑动选牌支持和剩余牌数徽章
 // [本次修复] 修复大厅人多时撑破屏幕的问题：给 lobbyCard 加限高，给 playerGrid 加滚动
+// [本次新增] kickButton
 
 export const styles = {
   // ============================
@@ -459,6 +460,25 @@ export const styles = {
   avatarLarge: { width: 80, height: 80, borderRadius: '50%', background: '#34495e', color: 'white', fontSize: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
   hostBadge: { position: 'absolute', top: 10, right: 10, background: '#f1c40f', color: '#333', fontSize: 12, padding: '4px 8px', borderRadius: 4, fontWeight: 'bold' },
   
+  // [新增] 踢人按钮样式
+  kickButton: {
+      position: 'absolute',
+      top: -8,
+      right: -8,
+      width: 24,
+      height: 24,
+      borderRadius: '50%',
+      background: '#e74c3c',
+      border: '2px solid white',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      cursor: 'pointer',
+      padding: 0,
+      zIndex: 10,
+      boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+  },
+
   lobbyFooter: { 
       marginTop: 'auto', 
       borderTop: '1px solid #eee', 

@@ -283,6 +283,49 @@ io.on('connection', (socket) => {
         broadcastRoomInfo(io, roomId);
     });
 
+    // [新增] 踢人功能
+    socket.on('kick_player', ({ roomId, targetId }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+
+        // 1. 验证权限：只有房主能踢人
+        const sender = room.players.find(p => p.id === socket.id);
+        if (!sender || !sender.isHost) {
+            return socket.emit('error_msg', '只有房主可以踢人');
+        }
+
+        // 2. 游戏中严禁踢人，防止崩盘
+        if (room.gameManager || room.seatManager) {
+            return socket.emit('error_msg', '游戏进行中无法踢人');
+        }
+
+        const targetIndex = room.players.findIndex(p => p.id === targetId);
+        if (targetIndex === -1) return;
+
+        const targetPlayer = room.players[targetIndex];
+
+        // 3. 不能踢自己
+        if (targetPlayer.id === socket.id) return;
+
+        // 4. 移除玩家
+        room.players.splice(targetIndex, 1);
+
+        // 5. 如果是真人，通知他被踢了
+        if (!targetPlayer.isBot) {
+            io.to(targetPlayer.id).emit('kicked', '你已被房主移出房间');
+            // 让该 socket 离开房间 channel
+            const targetSocket = io.sockets.sockets.get(targetPlayer.id);
+            if (targetSocket) {
+                targetSocket.leave(roomId);
+            }
+        }
+
+        console.log(`[Room] ${sender.name} kicked ${targetPlayer.name} from ${roomId}`);
+        
+        // 6. 广播更新
+        broadcastRoomInfo(io, roomId);
+    });
+
     // 切换托管
     socket.on('toggle_auto_play', ({ roomId }) => {
         const room = rooms[roomId];

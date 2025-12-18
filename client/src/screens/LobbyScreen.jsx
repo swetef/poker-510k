@@ -8,7 +8,8 @@ export const LobbyScreen = ({
     handleStartGame, 
     handleAddBot,
     handleSwitchSeat,
-    handleUpdateConfig // [新增] 接收 App.jsx 传来的更新函数
+    handleUpdateConfig,
+    handleKickPlayer // [新增]
 }) => {
     
     // 判断自己是不是房主
@@ -296,6 +297,21 @@ export const LobbyScreen = ({
                             borderWidth: borderWidth,
                             position: 'relative'
                         }}>
+                            {/* [新增] 房主踢人按钮 */}
+                            {amIHost && !isMe && (
+                                <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        const confirmKick = window.confirm(`确定要踢出 ${p.name} 吗？`);
+                                        if (confirmKick) handleKickPlayer(p.id);
+                                    }}
+                                    style={styles.kickButton}
+                                    title="踢出玩家"
+                                >
+                                    <X size={14} color="white"/>
+                                </button>
+                            )}
+
                             {/* 组队角标 */}
                             {teamName && (
                                 <div style={{
