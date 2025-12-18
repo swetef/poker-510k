@@ -407,7 +407,16 @@ export const GameScreen = () => {
                 {/* 结算弹窗 - 使用新的 ScoreTable */}
                 {(winner || roundResult || grandResult) && (
                     <div style={styles.modalOverlay}>
-                        <div className="modal-content-wrapper" style={{...styles.modalContent, width: '95%', maxWidth: 600, padding: 0, background: 'white', overflow: 'hidden'}}>
+                        {/* [修复] 移除 overflow: 'hidden'，改回 auto，并允许横向隐藏，纵向滚动 */}
+                        <div className="modal-content-wrapper" style={{
+                            ...styles.modalContent, 
+                            width: '95%', 
+                            maxWidth: 600, 
+                            padding: 0, 
+                            background: 'white', 
+                            overflowY: 'auto', 
+                            overflowX: 'hidden'
+                        }}>
                             {grandResult ? (
                                 <div style={{padding: 20, width: '100%'}}>
                                     <Crown size={60} color="#e74c3c" style={{marginBottom: 10}} />

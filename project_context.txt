@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/18 17:35:10
+Project Context Generated at 2025/12/18 18:21:08
 
 
 ================================================================================
@@ -601,34 +601,37 @@ export const ScoreTable = ({
         });
     }
 
+    // [新增] 定义列的最小宽度，防止在手机上被挤压
+    const minColWidth = 50; 
+
     const renderHeader = () => (
-        <div style={{display: 'flex', background: '#2c3e50', color: 'white', padding: '10px', borderRadius: '8px 8px 0 0', fontWeight: 'bold', fontSize: 13}}>
-            <div style={{flex: 2, textAlign: 'left', paddingLeft: 10}}>玩家/队伍</div>
+        <div style={{display: 'flex', background: '#2c3e50', color: 'white', padding: '10px', borderRadius: '8px 8px 0 0', fontWeight: 'bold', fontSize: 13, minWidth: '100%'}}>
+            <div style={{flex: 2, textAlign: 'left', paddingLeft: 10, minWidth: 80, position: 'sticky', left: 0, background: '#2c3e50', zIndex: 1}}>玩家/队伍</div>
             {matchHistory.map((_, i) => (
-                <div key={i} style={{flex: 1, textAlign: 'center'}}>R{i + 1}</div>
+                <div key={i} style={{flex: 1, textAlign: 'center', minWidth: minColWidth}}>R{i + 1}</div>
             ))}
-            <div style={{flex: 1.2, textAlign: 'center', color: '#f1c40f'}}>总分</div>
-            <div style={{flex: 0.8, textAlign: 'center'}}>排名</div>
+            <div style={{flex: 1.2, textAlign: 'center', color: '#f1c40f', minWidth: 60}}>总分</div>
+            <div style={{flex: 0.8, textAlign: 'center', minWidth: 40}}>排名</div>
         </div>
     );
 
     const renderTeamRow = (teamIndex, totalScore, historyScores) => {
         const color = teamIndex === 0 ? '#e74c3c' : '#3498db';
         const bg = teamIndex === 0 ? 'rgba(231, 76, 60, 0.1)' : 'rgba(52, 152, 219, 0.1)';
-        const name = teamIndex === 0 ? '红队 (RED)' : '蓝队 (BLUE)';
+        const name = teamIndex === 0 ? '红队' : '蓝队';
         
         return (
-            <div style={{display: 'flex', background: bg, padding: '8px 10px', borderBottom: '1px solid rgba(0,0,0,0.05)', alignItems:'center', fontSize: 13}}>
-                <div style={{flex: 2, textAlign: 'left', color: color, fontWeight: 'bold', display:'flex', alignItems:'center', gap:5}}>
+            <div style={{display: 'flex', background: bg, padding: '8px 10px', borderBottom: '1px solid rgba(0,0,0,0.05)', alignItems:'center', fontSize: 13, minWidth: '100%'}}>
+                <div style={{flex: 2, textAlign: 'left', color: color, fontWeight: 'bold', display:'flex', alignItems:'center', gap:5, minWidth: 80, position: 'sticky', left: 0, background: teamIndex === 0 ? '#fceceb' : '#ebf5fb', zIndex: 1}}>
                     <Shield size={14} fill={color} /> {name}
                 </div>
                 {matchHistory.map((_, i) => (
-                    <div key={i} style={{flex: 1, textAlign: 'center', color: historyScores[i] > 0 ? color : '#999', fontWeight:'bold'}}>
+                    <div key={i} style={{flex: 1, textAlign: 'center', color: historyScores[i] > 0 ? color : '#999', fontWeight:'bold', minWidth: minColWidth}}>
                         {historyScores[i] > 0 ? `+${historyScores[i]}` : historyScores[i]}
                     </div>
                 ))}
-                <div style={{flex: 1.2, textAlign: 'center', color: color, fontWeight: '900', fontSize: 14}}>{totalScore}</div>
-                <div style={{flex: 0.8}}></div>
+                <div style={{flex: 1.2, textAlign: 'center', color: color, fontWeight: '900', fontSize: 14, minWidth: 60}}>{totalScore}</div>
+                <div style={{flex: 0.8, minWidth: 40}}></div>
             </div>
         );
     };
@@ -649,13 +652,16 @@ export const ScoreTable = ({
                 background: 'white', 
                 borderBottom: '1px solid #eee',
                 alignItems: 'center',
-                fontSize: 13
+                fontSize: 13,
+                minWidth: '100%'
             }}>
-                <div style={{flex: 2, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, overflow:'hidden'}}>
+                {/* 玩家名字固定在左侧，方便横向滚动查看分数 */}
+                <div style={{flex: 2, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, overflow:'hidden', minWidth: 80, position: 'sticky', left: 0, background: 'white', zIndex: 1, borderRight: '1px solid #f0f0f0'}}>
                     <div style={{
                         width: 24, height: 24, borderRadius: '50%', background: '#ecf0f1', 
                         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 'bold',
-                        border: player.team !== null ? `2px solid ${player.team===0?'#e74c3c':'#3498db'}` : 'none'
+                        border: player.team !== undefined && player.team !== null ? `2px solid ${player.team===0?'#e74c3c':'#3498db'}` : 'none',
+                        flexShrink: 0
                     }}>
                         {player.name[0]}
                     </div>
@@ -667,17 +673,17 @@ export const ScoreTable = ({
                 {matchHistory.map((match, i) => {
                     const s = match.scores[player.id] || 0;
                     return (
-                        <div key={i} style={{flex: 1, textAlign: 'center', color: s > 0 ? '#e67e22' : (s < 0 ? '#7f8c8d' : '#bdc3c7'), fontWeight: s!==0?'bold':'normal'}}>
+                        <div key={i} style={{flex: 1, textAlign: 'center', color: s > 0 ? '#e67e22' : (s < 0 ? '#7f8c8d' : '#bdc3c7'), fontWeight: s!==0?'bold':'normal', minWidth: minColWidth}}>
                             {s > 0 ? `+${s}` : s}
                         </div>
                     );
                 })}
 
-                <div style={{flex: 1.2, textAlign: 'center', fontWeight: 'bold', color: score >= 0 ? '#27ae60' : '#c0392b', fontSize: 14}}>
+                <div style={{flex: 1.2, textAlign: 'center', fontWeight: 'bold', color: score >= 0 ? '#27ae60' : '#c0392b', fontSize: 14, minWidth: 60}}>
                     {score}
                 </div>
 
-                <div style={{flex: 0.8, textAlign: 'center', display:'flex', justifyContent:'center'}}>
+                <div style={{flex: 0.8, textAlign: 'center', display:'flex', justifyContent:'center', minWidth: 40}}>
                     {rankIcon}
                 </div>
             </div>
@@ -686,20 +692,25 @@ export const ScoreTable = ({
 
     return (
         <div style={{width: '100%', display: 'flex', flexDirection: 'column', gap: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid #ddd'}}>
-            {renderHeader()}
-            
-            {isTeamMode && renderTeamRow(0, redTotal, redTeamHistory)}
-            {isTeamMode && renderTeamRow(1, blueTotal, blueTeamHistory)}
-            
-            <div style={{maxHeight: 300, overflowY: 'auto'}}>
-                {sortedPlayers.map((p, i) => renderPlayerRow(p, i + 1))}
+            {/* [关键修改] 外层增加 overflowX: auto，实现横向滚动 */}
+            <div style={{overflowX: 'auto', width: '100%'}}>
+                {renderHeader()}
+                
+                {isTeamMode && renderTeamRow(0, redTotal, redTeamHistory)}
+                {isTeamMode && renderTeamRow(1, blueTotal, blueTeamHistory)}
+                
+                {/* [关键修改] maxHeight 使用 min(300px, 40vh) 适配小屏幕 */}
+                <div style={{maxHeight: 'min(300px, 40vh)', overflowY: 'auto'}}>
+                    {sortedPlayers.map((p, i) => renderPlayerRow(p, i + 1))}
+                </div>
             </div>
 
             <div style={{background: '#f8f9fa', padding: 10, borderTop: '1px solid #ddd'}}>
                 <div style={{display:'flex', alignItems:'center', gap:5, fontSize: 12, color: '#7f8c8d', marginBottom: 5, fontWeight:'bold'}}>
                     <ScrollText size={12}/> 赏罚日志详情
                 </div>
-                <div style={{fontSize: 11, color: '#666', lineHeight: '1.6', maxHeight: 100, overflowY: 'auto', textAlign:'left'}}>
+                {/* [关键修改] maxHeight 使用 min(100px, 15vh) */}
+                <div style={{fontSize: 11, color: '#666', lineHeight: '1.6', maxHeight: 'min(100px, 15vh)', overflowY: 'auto', textAlign:'left'}}>
                     {matchHistory.length > 0 ? (
                         matchHistory.slice().reverse().map((match, i) => (
                             <div key={i} style={{marginBottom: 4}}>
@@ -2235,7 +2246,16 @@ export const GameScreen = () => {
                 {/* 结算弹窗 - 使用新的 ScoreTable */}
                 {(winner || roundResult || grandResult) && (
                     <div style={styles.modalOverlay}>
-                        <div className="modal-content-wrapper" style={{...styles.modalContent, width: '95%', maxWidth: 600, padding: 0, background: 'white', overflow: 'hidden'}}>
+                        {/* [修复] 移除 overflow: 'hidden'，改回 auto，并允许横向隐藏，纵向滚动 */}
+                        <div className="modal-content-wrapper" style={{
+                            ...styles.modalContent, 
+                            width: '95%', 
+                            maxWidth: 600, 
+                            padding: 0, 
+                            background: 'white', 
+                            overflowY: 'auto', 
+                            overflowX: 'hidden'
+                        }}>
                             {grandResult ? (
                                 <div style={{padding: 20, width: '100%'}}>
                                     <Crown size={60} color="#e74c3c" style={{marginBottom: 10}} />
@@ -2380,7 +2400,8 @@ FILE PATH: client\src\screens\LobbyScreen.jsx
 ================================================================================
 // 大厅页 - 支持房主换座 + 组队模式 + 房主修改规则
 import React, { useState } from 'react';
-import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Eye, Award, Check } from 'lucide-react';
+// [修改] 引入 Sparkles 图标
+import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Eye, Award, Check, Sparkles } from 'lucide-react';
 import { styles } from '../styles.js';
 // [新增] 引入 useGame
 import { useGame } from '../context/GameContext.jsx';
@@ -2451,6 +2472,37 @@ export const LobbyScreen = () => {
                         {renderConfigSlider(<UsersIcon/>, "玩家人数", roomConfig.maxPlayers, 2, 12, 1, v=>updateConfig('maxPlayers', v), '人')}
                         {renderConfigSlider(<Layers size={14}/>, "牌库数量", roomConfig.deckCount, 1, 8, 1, v=>updateConfig('deckCount', v), '副')}
                         {renderConfigSlider(<Target size={14}/>, "获胜目标", roomConfig.targetScore, 500, 5000, 500, v=>updateConfig('targetScore', v), '分')}
+                        
+                        {/* [新增] 不洗牌模式开关 */}
+                        <div style={{...styles.configItem, marginTop: 10, padding: '10px', background: 'linear-gradient(to right, #f6d365 0%, #fda085 100%)', borderRadius: 8, gridColumn: '1 / -1', border: '1px solid rgba(255,255,255,0.5)'}}>
+                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                <div style={{display:'flex', alignItems:'center', gap:6, fontWeight:'600', color: 'white', textShadow: '0 1px 2px rgba(0,0,0,0.2)'}}>
+                                    <Sparkles size={18} /> 🎲 不洗牌模式 (爽局)
+                                </div>
+                                <label style={{position:'relative', display:'inline-block', width:40, height:20}}>
+                                    <input 
+                                        type="checkbox" 
+                                        style={{opacity:0, width:0, height:0}}
+                                        checked={roomConfig.isNoShuffleMode}
+                                        onChange={(e) => updateConfig('isNoShuffleMode', e.target.checked)}
+                                    />
+                                    <span style={{
+                                        position:'absolute', cursor:'pointer', top:0, left:0, right:0, bottom:0, 
+                                        backgroundColor: roomConfig.isNoShuffleMode ? '#2ecc71' : 'rgba(0,0,0,0.2)', 
+                                        transition:'.4s', borderRadius: 20
+                                    }}>
+                                        <span style={{
+                                            position:'absolute', content:"", height:16, width:16, left:2, bottom:2, 
+                                            backgroundColor:'white', transition:'.4s', borderRadius:'50%',
+                                            transform: roomConfig.isNoShuffleMode ? 'translateX(20px)' : 'translateX(0)'
+                                        }}></span>
+                                    </span>
+                                </label>
+                            </div>
+                            <div style={{fontSize: 11, color: 'white', marginTop: 4, opacity: 0.9}}>
+                                {roomConfig.isNoShuffleMode ? "🔥 已开启！炸弹满天飞，均贫富算法保证公平" : "普通模式，完全随机洗牌"}
+                            </div>
+                        </div>
                         
                         {/* 组队对抗开关 */}
                         <div style={{...styles.configItem, marginTop: 10, padding: '10px', background: roomConfig.maxPlayers % 2 !== 0 ? '#f0f0f0' : '#e8f8f5', borderRadius: 8, opacity: roomConfig.maxPlayers % 2 !== 0 ? 0.6 : 1, gridColumn: '1 / -1'}}>
@@ -2609,8 +2661,21 @@ export const LobbyScreen = () => {
             
             {/* 头部信息 */}
             <div style={styles.lobbyHeader}>
-                <div style={{display:'flex', alignItems:'center', gap: 10}}>
+                <div style={{display:'flex', alignItems:'center', gap: 10, flexWrap: 'wrap'}}>
                     <h2 style={{margin:0, fontSize: 24}}>房间: <span style={{fontFamily:'monospace', color:'#27ae60'}}>{roomId}</span></h2>
+                    
+                    {/* [新增] 不洗牌模式标签 */}
+                    {roomConfig.isNoShuffleMode && (
+                        <span style={{
+                            background: 'linear-gradient(to right, #f6d365 0%, #fda085 100%)', 
+                            color:'white', fontSize:12, padding:'2px 8px', borderRadius:10, 
+                            display:'flex', alignItems:'center', gap:4, fontWeight: 'bold',
+                            boxShadow: '0 2px 5px rgba(253, 160, 133, 0.4)'
+                        }}>
+                            <Sparkles size={12} fill="white"/> 不洗牌(爽局)
+                        </span>
+                    )}
+
                     {/* 组队模式标签 */}
                     {isTeamMode && (
                         <span style={{background:'#27ae60', color:'white', fontSize:12, padding:'2px 8px', borderRadius:10, display:'flex', alignItems:'center', gap:4}}>
@@ -2649,6 +2714,7 @@ export const LobbyScreen = () => {
                  <span style={styles.tag}><Target size={12}/> {roomConfig.targetScore}</span>
                  <span style={styles.tag}><Layers size={12}/> {roomConfig.deckCount}副</span>
                  <span style={styles.tag}><User size={12}/> {roomConfig.maxPlayers}人</span>
+                 {roomConfig.isNoShuffleMode && <span style={{...styles.tag, background:'#fdf2e9', color:'#e67e22', border:'1px solid #e67e22'}}><Sparkles size={12}/> 不洗牌</span>}
                  {roomConfig.enableRankPenalty && <span style={{...styles.tag, color:'#e67e22', background:'#fdf2e9'}}><Award size={12}/> 赏罚</span>}
             </div>
             <style>{`@media (min-width: 769px) { .mobile-only-tags { display: none !important; } }`}</style>
@@ -2795,7 +2861,7 @@ FILE PATH: client\src\screens\LoginScreen.jsx
 ================================================================================
 // 登录页 - 适配移动端，包含自动全屏逻辑 + 手动全屏按钮 + 剩余牌数配置 + 组队开关 (移除抽卡开关，改为默认)
 import React, { useState } from 'react'; 
-import { User, Monitor, RefreshCw, Plus, LogIn, Clock, Layers, Users, Target, Wifi, WifiOff, Award, Maximize, Minimize, Eye, Shield } from 'lucide-react'; 
+import { User, Monitor, RefreshCw, Plus, LogIn, Clock, Layers, Users, Target, Wifi, WifiOff, Award, Maximize, Minimize, Eye, Shield, Sparkles } from 'lucide-react'; 
 import { styles } from '../styles.js';
 // [新增] 引入 useGame
 import { useGame } from '../context/GameContext.jsx';
@@ -2950,6 +3016,37 @@ export const LoginScreen = () => {
                                     {renderConfigSlider(<Layers size={14}/>, "牌库数量", roomConfig.deckCount, 1, 8, 1, v=>setRoomConfig({...roomConfig, deckCount:v}), '副')}
                                     {renderConfigSlider(<Target size={14}/>, "获胜目标", roomConfig.targetScore, 500, 5000, 500, v=>setRoomConfig({...roomConfig, targetScore:v}), '分')}
                                     
+                                    {/* [新增] 不洗牌模式开关 */}
+                                    <div style={{...styles.configItem, marginTop: 10, padding: '10px', background: 'linear-gradient(to right, #f6d365 0%, #fda085 100%)', borderRadius: 8, gridColumn: '1 / -1', border: '1px solid rgba(255,255,255,0.5)'}}>
+                                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                            <div style={{display:'flex', alignItems:'center', gap:6, fontWeight:'600', color: 'white', textShadow: '0 1px 2px rgba(0,0,0,0.2)'}}>
+                                                <Sparkles size={18} /> 🎲 不洗牌模式 (爽局)
+                                            </div>
+                                            <label style={{position:'relative', display:'inline-block', width:40, height:20}}>
+                                                <input 
+                                                    type="checkbox" 
+                                                    style={{opacity:0, width:0, height:0}}
+                                                    checked={roomConfig.isNoShuffleMode}
+                                                    onChange={(e) => setRoomConfig({...roomConfig, isNoShuffleMode: e.target.checked})}
+                                                />
+                                                <span style={{
+                                                    position:'absolute', cursor:'pointer', top:0, left:0, right:0, bottom:0, 
+                                                    backgroundColor: roomConfig.isNoShuffleMode ? '#2ecc71' : 'rgba(0,0,0,0.2)', 
+                                                    transition:'.4s', borderRadius: 20
+                                                }}>
+                                                    <span style={{
+                                                        position:'absolute', content:"", height:16, width:16, left:2, bottom:2, 
+                                                        backgroundColor:'white', transition:'.4s', borderRadius:'50%',
+                                                        transform: roomConfig.isNoShuffleMode ? 'translateX(20px)' : 'translateX(0)'
+                                                    }}></span>
+                                                </span>
+                                            </label>
+                                        </div>
+                                        <div style={{fontSize: 11, color: 'white', marginTop: 4, opacity: 0.9}}>
+                                            {roomConfig.isNoShuffleMode ? "🔥 已开启！炸弹满天飞，均贫富算法保证公平" : "普通模式，完全随机洗牌"}
+                                        </div>
+                                    </div>
+
                                     {/* 组队对抗开关 */}
                                     <div style={{...styles.configItem, marginTop: 10, padding: '10px', background: roomConfig.maxPlayers % 2 !== 0 ? '#f0f0f0' : '#e8f8f5', borderRadius: 8, opacity: roomConfig.maxPlayers % 2 !== 0 ? 0.6 : 1, gridColumn: '1 / -1'}}>
                                         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
@@ -4332,14 +4429,15 @@ module.exports = CardRules;
 ================================================================================
 FILE PATH: server\game\Deck.js
 ================================================================================
-// 牌库生成与洗牌
+// 牌库生成与洗牌 - [增强版] 支持公平不洗牌模式
 
+const CardRules = require('./CardRules');
 
 class Deck {
     constructor(deckCount = 1) {
         this.deck = [];
+        this.deckCount = deckCount;
         // 生成多副牌。每副牌是 0-53。
-        // 我们使用 i + d * 54 来保证每张牌有唯一ID，方便前端渲染 Key 值
         for (let d = 0; d < deckCount; d++) {
              for (let i = 0; i < 54; i++) {
                 this.deck.push(i + d * 54); 
@@ -4347,23 +4445,111 @@ class Deck {
         }
     }
 
+    // 普通洗牌 (Fisher-Yates)
     shuffle() {
-        // Fisher-Yates 洗牌算法
         for (let i = this.deck.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [this.deck[i], this.deck[j]] = [this.deck[j], this.deck[i]];
         }
     }
 
-    deal(playerCount) {
-        this.shuffle();
+    // [新增] 公平的“不洗牌”策略
+    // 逻辑：提取炸弹 -> 轮流分发给玩家 -> 填充散牌 -> 拼回牌库
+    shuffleFairNoShuffle(playerCount) {
+        // 1. 先按点数归类所有牌
+        const groupMap = {}; // { 3: [card1, card2...], 4: [...], ... 17: [...] }
+        const looseCards = []; // 散牌池
+
+        this.deck.forEach(card => {
+            const point = CardRules.getPoint(card);
+            if (!groupMap[point]) groupMap[point] = [];
+            groupMap[point].push(card);
+        });
+
+        // 2. 提取炸弹块
+        const bombChunks = []; // [ [3,3,3,3], [K,K,K,K,K] ... ]
+        
+        Object.values(groupMap).forEach(cards => {
+            // 如果只有1-3张，直接扔进散牌
+            if (cards.length < 4) {
+                looseCards.push(...cards);
+                return;
+            }
+
+            // 如果牌很多（比如8副牌），可能有20张3。我们需要把它切成几个炸弹，而不是一个巨型炸弹
+            // 策略：每 4~6 张切成一个炸弹块，剩下的扔散牌
+            let remaining = [...cards];
+            while (remaining.length >= 4) {
+                // 随机切 4 到 6 张作为一个炸弹
+                const chunkSize = Math.min(remaining.length, 4 + Math.floor(Math.random() * 3));
+                const chunk = remaining.splice(0, chunkSize);
+                bombChunks.push(chunk);
+            }
+            // 剩下的渣渣扔进散牌
+            if (remaining.length > 0) looseCards.push(...remaining);
+        });
+
+        // 打乱炸弹块的顺序，防止某人总是拿到大牌
+        for (let i = bombChunks.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [bombChunks[i], bombChunks[j]] = [bombChunks[j], bombChunks[i]];
+        }
+
+        // 3. 均分炸弹 (核心公平逻辑)
+        const playerBuckets = Array.from({ length: playerCount }, () => []);
+        
+        // 轮流发炸弹 (Snake Draft 风格: 0,1,2,3 -> 3,2,1,0 也许更好，但随机顺序已经足够)
+        bombChunks.forEach((chunk, index) => {
+            const playerIndex = index % playerCount;
+            playerBuckets[playerIndex].push(...chunk);
+        });
+
+        // 4. 均分散牌
+        // 先打乱散牌
+        for (let i = looseCards.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [looseCards[i], looseCards[j]] = [looseCards[j], looseCards[i]];
+        }
+        // 轮流发散牌
+        looseCards.forEach((card, index) => {
+            const playerIndex = index % playerCount;
+            playerBuckets[playerIndex].push(card);
+        });
+
+        // 5. 内部微调 (Internal Shuffle) & 重组
+        // 虽然每个玩家拿到了一堆好牌，但不能让他们看出规律（比如炸弹连在一起），所以每人手里的牌要简单洗一下
+        this.deck = []; // 清空主牌库，准备回填
+        
+        playerBuckets.forEach(bucket => {
+            // 简单洗一下这堆牌
+            for (let i = bucket.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [bucket[i], bucket[j]] = [bucket[j], bucket[i]];
+            }
+            // [关键] 按顺序拼回去！
+            // 因为 deal 函数是按顺序 slice 的： Player0 拿 0~N, Player1 拿 N~2N
+            // 所以我们这里直接 push 进去即可
+            this.deck.push(...bucket);
+        });
+
+        // 注意：这里不需要再调 this.shuffle() 了，因为已经构造好了顺序
+    }
+
+    // [修改] 发牌入口
+    deal(playerCount, isNoShuffleMode = false) {
+        if (isNoShuffleMode) {
+            this.shuffleFairNoShuffle(playerCount);
+        } else {
+            this.shuffle(); // 经典全随机模式
+        }
+
         const hands = {};
         const totalCards = this.deck.length;
         const cardsPerPlayer = Math.floor(totalCards / playerCount); 
         
         for (let i = 0; i < playerCount; i++) {
             hands[i] = this.deck.slice(i * cardsPerPlayer, (i + 1) * cardsPerPlayer);
-            // 将多余的牌发给最后一个人（简化处理）
+            // 修正最后一个人可能少拿的问题（虽然上面的分配算法已经尽量平均了）
             if (i === playerCount - 1) {
                  hands[i] = this.deck.slice(i * cardsPerPlayer);
             }
@@ -4451,7 +4637,10 @@ class GameManager {
         }
 
         const deck = new Deck(this.config.deckCount);
-        const hands = deck.deal(this.players.length);
+        
+        // [修改] 传入 isNoShuffleMode 参数
+        const hands = deck.deal(this.players.length, this.config.isNoShuffleMode);
+        console.log(`[Game] Round started. Mode: ${this.config.isNoShuffleMode ? 'No Shuffle (Fair)' : 'Classic'}`);
 
         let startIndex = 0;
         if (this.lastWinnerId) {
@@ -5261,7 +5450,7 @@ const io = new Server(server, {
 // 内存数据库
 const rooms = {}; 
 
-// --- [新增] 常驻房间配置定义 ---
+// --- [修改] 常驻房间配置定义 ---
 const PERMANENT_ROOMS = {
     '888': { 
         deckCount: 2, 
@@ -5271,7 +5460,8 @@ const PERMANENT_ROOMS = {
         showCardCountMode: 1,
         isTeamMode: false,
         enableRankPenalty: false,
-        rankPenaltyScores: [50, 20]
+        rankPenaltyScores: [50, 20],
+        isNoShuffleMode: false // [新增] 888 房间默认标准模式
     },
     '666': { 
         deckCount: 3, 
@@ -5279,9 +5469,10 @@ const PERMANENT_ROOMS = {
         targetScore: 1000,
         turnTimeout: 60000,
         showCardCountMode: 1,
-        isTeamMode: true, // 默认开启组队
+        isTeamMode: true, 
         enableRankPenalty: false,
-        rankPenaltyScores: [50, 20]
+        rankPenaltyScores: [50, 20],
+        isNoShuffleMode: true // [新增] 666 房间默认开启爽局模式
     }
 };
 
@@ -5374,6 +5565,7 @@ io.on('connection', (socket) => {
             deckCount: 1, 
             maxPlayers: 3, 
             targetScore: 500, 
+            isNoShuffleMode: false, // [新增] 默认关闭
             ...config 
         };
         
@@ -5480,7 +5672,7 @@ io.on('connection', (socket) => {
         }
     });
     
-    // --- [新增] 更新房间配置 ---
+    // --- [修改] 更新房间配置 ---
     socket.on('update_room_config', ({ roomId, config }) => {
         const room = rooms[roomId];
         if (!room) return;
@@ -5494,6 +5686,11 @@ io.on('connection', (socket) => {
         // 验证游戏状态：游戏中不能改
         if (room.gameManager || room.seatManager) {
             return socket.emit('error_msg', '游戏进行中无法修改规则');
+        }
+
+        // 确保布尔值正确传递
+        if (config.isNoShuffleMode !== undefined) {
+            room.config.isNoShuffleMode = !!config.isNoShuffleMode;
         }
 
         // 更新配置
