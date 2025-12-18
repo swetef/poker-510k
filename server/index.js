@@ -497,7 +497,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('pass_turn', ({ roomId }) => {
+       socket.on('pass_turn', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
 
@@ -506,6 +506,18 @@ io.on('connection', (socket) => {
 
         broadcastGameState(io, roomId, room, result.logText || "PASS");
     });
+
+    // [新增] 提示请求监听
+    socket.on('request_hint', ({ roomId }) => {
+    const room = rooms[roomId];
+    if (room && room.gameManager) {
+        // 调用 GameManager 的 getHint 方法
+        const cards = room.gameManager.getHint(socket.id);
+        // 发送回给客户端
+        socket.emit('hint_response', cards);
+    }
+});
+
 
     socket.on('disconnect', () => {
         Object.keys(rooms).forEach(rId => {

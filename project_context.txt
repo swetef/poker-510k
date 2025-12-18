@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/18 16:01:42
+Project Context Generated at 2025/12/18 16:41:47
 
 
 ================================================================================
@@ -176,7 +176,7 @@ export default function App() {
       toggleSort, handleRoomAction, handleStartGame, handleNextRound,
       handleAddBot, handleToggleAutoPlay, handleSwitchSeat, handleDrawCard,
       handleUpdateConfig, handleClearSelection, handleMouseDown,
-      handleMouseEnter, handlePlayCards, handlePass
+      handleMouseEnter, handlePlayCards, handlePass, handleKickPlayer
   } = useGameSocket();
 
   const renderLandscapeHint = () => (
@@ -240,7 +240,8 @@ export default function App() {
           handleStartGame, 
           handleAddBot,
           handleSwitchSeat,
-          handleUpdateConfig 
+          handleUpdateConfig,
+          handleKickPlayer // [新增]
       }} />}
       
       {gameState === 'DRAW_SEATS' && <DrawSeatScreen {...{
@@ -1011,6 +1012,18 @@ export const useGameSocket = () => {
             setGrandResult(data);
             SoundManager.play('win'); 
         });
+
+        // [新增] 监听提示返回
+        socket.on('hint_response', (cards) => {
+            if (cards && cards.length > 0) {
+                setSelectedCards(cards);
+                setInfoMessage('已自动选牌');
+                setTimeout(()=>setInfoMessage(''), 1000);
+            } else {
+                setInfoMessage('没有打得过的牌');
+                setTimeout(()=>setInfoMessage(''), 1000);
+            }
+        });
     };
 
     // --- 初始化 Effect ---
@@ -1105,6 +1118,11 @@ export const useGameSocket = () => {
         setSelectedCards([]);
     };
 
+    // [新增] 请求提示
+    const handleRequestHint = () => {
+        socketRef.current.emit('request_hint', { roomId });
+    };
+
     return {
         // State
         gameState, username, roomId, roomConfig, isCreatorMode,
@@ -1122,7 +1140,7 @@ export const useGameSocket = () => {
         toggleSort, handleRoomAction, handleStartGame, handleNextRound,
         handleAddBot, handleToggleAutoPlay, handleSwitchSeat, handleDrawCard,
         handleUpdateConfig, handleClearSelection, handleMouseDown,
-        handleMouseEnter, handlePlayCards, handlePass
+        handleMouseEnter, handlePlayCards, handlePass, handleRequestHint
     };
 };
 
@@ -1695,7 +1713,8 @@ export const DrawSeatScreen = ({
 FILE PATH: client\src\screens\GameScreen.jsx
 ================================================================================
 import React, { useState, useRef, useEffect } from 'react';
-import { Coins, Layers, Crown, Clock, Bot, Zap, Maximize, Minimize, Shield, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
+// [修改] 引入 Lightbulb
+import { Coins, Layers, Crown, Clock, Bot, Zap, Maximize, Minimize, Shield, RotateCcw, ChevronDown, ChevronUp, Lightbulb } from 'lucide-react';
 import { styles } from '../styles.js'; 
 import { Card, MiniCard, PlayerAvatar, GameLogPanel } from '../components/BaseUI.jsx';
 import { ScoreTable } from '../components/ScoreTable.jsx'; 
@@ -1713,7 +1732,7 @@ export const GameScreen = ({
     turnRemaining, finishedRank = [], 
     handCounts = {}, 
     toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
-    handleToggleAutoPlay, handleClearSelection 
+    handleToggleAutoPlay, handleClearSelection, handleRequestHint // [修改] 接收 handleRequestHint
 }) => {
     // 身份同步保护
     const myPlayerExists = players.some(p => p.id === mySocketId);
@@ -2208,6 +2227,15 @@ export const GameScreen = ({
                                     {isMyTurn ? (
                                         <>
                                             <button style={styles.passButton} onClick={handlePass}>不要</button>
+                                            
+                                            {/* [新增] 提示按钮 */}
+                                            <button 
+                                                style={{...styles.passButton, background: '#8e44ad', marginRight: 0, padding:'8px 15px', display:'flex', alignItems:'center', gap:5}} 
+                                                onClick={handleRequestHint}
+                                            >
+                                                <Lightbulb size={16} /> 提示
+                                            </button>
+
                                             <TimerComponent initialSeconds={turnRemaining} totalSeconds={60} position="inline" />
                                             <button style={styles.playButton} onClick={handlePlayCards}>出牌</button>
                                         </>
@@ -2238,7 +2266,8 @@ export const LobbyScreen = ({
     handleStartGame, 
     handleAddBot,
     handleSwitchSeat,
-    handleUpdateConfig // [新增] 接收 App.jsx 传来的更新函数
+    handleUpdateConfig,
+    handleKickPlayer // [新增]
 }) => {
     
     // 判断自己是不是房主
@@ -2526,6 +2555,21 @@ export const LobbyScreen = ({
                             borderWidth: borderWidth,
                             position: 'relative'
                         }}>
+                            {/* [新增] 房主踢人按钮 */}
+                            {amIHost && !isMe && (
+                                <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        const confirmKick = window.confirm(`确定要踢出 ${p.name} 吗？`);
+                                        if (confirmKick) handleKickPlayer(p.id);
+                                    }}
+                                    style={styles.kickButton}
+                                    title="踢出玩家"
+                                >
+                                    <X size={14} color="white"/>
+                                </button>
+                            )}
+
                             {/* 组队角标 */}
                             {teamName && (
                                 <div style={{
@@ -2948,6 +2992,7 @@ FILE PATH: client\src\styles.js
 // 统一样式文件 - 移动端适配版
 // [完整版] 包含所有原有布局、拇指热区、以及新增的滑动选牌支持和剩余牌数徽章
 // [本次修复] 修复大厅人多时撑破屏幕的问题：给 lobbyCard 加限高，给 playerGrid 加滚动
+// [本次新增] kickButton
 
 export const styles = {
   // ============================
@@ -3406,6 +3451,25 @@ export const styles = {
   avatarLarge: { width: 80, height: 80, borderRadius: '50%', background: '#34495e', color: 'white', fontSize: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
   hostBadge: { position: 'absolute', top: 10, right: 10, background: '#f1c40f', color: '#333', fontSize: 12, padding: '4px 8px', borderRadius: 4, fontWeight: 'bold' },
   
+  // [新增] 踢人按钮样式
+  kickButton: {
+      position: 'absolute',
+      top: -8,
+      right: -8,
+      width: 24,
+      height: 24,
+      borderRadius: '50%',
+      background: '#e74c3c',
+      border: '2px solid white',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      cursor: 'pointer',
+      padding: 0,
+      zIndex: 10,
+      boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+  },
+
   lobbyFooter: { 
       marginTop: 'auto', 
       borderTop: '1px solid #eee', 
@@ -3720,67 +3784,94 @@ FILE PATH: server\game\BotLogic.js
 const CardRules = require('./CardRules');
 
 const BotLogic = {
-    // 简单的决策函数
+    // 决策函数：返回建议打出的手牌数组
     decideMove: (hand, lastPlayedCards, deckCount) => {
         try {
-            // 1. 如果当前没有被压牌（自己领出），出最小的一张牌
+            // 1. 自由出牌：出最小单张
             if (!lastPlayedCards || lastPlayedCards.length === 0) {
                 if (hand.length === 0) return null;
-                // 简单策略：总是出手中最小的一张牌
                 return [hand[0]]; 
             }
 
-            // 2. 如果有人出牌了，尝试管上
+            // 2. 分析上家牌型
             const lastHandState = CardRules.analyze(lastPlayedCards, deckCount);
             if (lastHandState.type === 'INVALID') return null; 
 
-            // 整理手牌：按点数分组
+            // 整理手牌
             const grouped = {};
             hand.forEach(c => {
                 const p = CardRules.getPoint(c);
                 if (!grouped[p]) grouped[p] = [];
                 grouped[p].push(c);
             });
-            
             const uniquePoints = Object.keys(grouped).map(Number).sort((a,b) => a-b);
 
-            // 策略 A：尝试用同类型的牌管（不含炸弹）
+            // --- 策略 A：同牌型管牌 (单/对/三) ---
             if (['SINGLE', 'PAIR', 'TRIPLE'].includes(lastHandState.type)) {
                 const countNeeded = lastHandState.type === 'SINGLE' ? 1 : 
                                     lastHandState.type === 'PAIR' ? 2 : 3;
                 
                 for (let p of uniquePoints) {
                     if (p > lastHandState.val && grouped[p].length >= countNeeded) {
+                        // 尽量不拆炸弹 (如果该点数有 >=4 张，跳过，除非只剩炸弹)
+                        if (grouped[p].length >= 4 && uniquePoints.length > 1) continue;
                         return grouped[p].slice(0, countNeeded);
                     }
                 }
             }
             
-            // 简单的连对/飞机管牌尝试 (只管长度一致的)
-            if (lastHandState.type === 'LIANDUI' || lastHandState.type === 'AIRPLANE') {
-                 // 这是一个复杂的搜索，这里简化：Bot暂不处理复杂牌型的跟牌，直接尝试用炸弹炸
-            }
-
-            // 策略 B：尝试用炸弹炸
+            // --- 策略 B：炸弹压制 ---
             const currentLevel = lastHandState.level || 0;
             
-            // 找普通炸弹 (4张及以上)
-            for (let p of uniquePoints) {
-                if (grouped[p].length >= 4) {
-                    const bombCards = grouped[p];
-                    const bombState = CardRules.analyze(bombCards, deckCount);
-                    
-                    // 级别高，或同级别点数大
-                    if (bombState.level > currentLevel) return bombCards;
-                    if (bombState.level === currentLevel && bombState.val > lastHandState.val) return bombCards;
+            // 1. 寻找 510K (Level 1 & 2)
+            // 只有当当前牌型等级 < 2 (杂色或普通牌) 时才考虑用 510K
+            if (currentLevel < 2) { 
+                const fives = grouped[5] || [];
+                const tens = grouped[10] || [];
+                const kings = grouped[13] || []; // K
+
+                if (fives.length > 0 && tens.length > 0 && kings.length > 0) {
+                    // 优先找纯色 (Level 2)
+                    for (let f of fives) {
+                        for (let t of tens) {
+                            for (let k of kings) {
+                                const s1 = CardRules.getSuit(f);
+                                const s2 = CardRules.getSuit(t);
+                                const s3 = CardRules.getSuit(k);
+                                if (s1 === s2 && s2 === s3) {
+                                    const bomb = [f, t, k];
+                                    if (CardRules.canPlay(bomb, lastPlayedCards, deckCount)) return bomb;
+                                }
+                            }
+                        }
+                    }
+
+                    // 其次找杂色 (Level 1)
+                    if (currentLevel < 1) {
+                        const mixedBomb = [fives[0], tens[0], kings[0]];
+                        if (CardRules.canPlay(mixedBomb, lastPlayedCards, deckCount)) return mixedBomb;
+                    }
                 }
             }
 
-            // 3. 实在管不上，过
-            return null;
+            // 2. 寻找普通炸弹 (Level 3)
+            for (let p of uniquePoints) {
+                if (grouped[p].length >= 4) {
+                    const bombCards = grouped[p];
+                    if (CardRules.canPlay(bombCards, lastPlayedCards, deckCount)) return bombCards;
+                }
+            }
+
+            // 3. 寻找天王炸 (Level 4)
+            const jokers = hand.filter(c => CardRules.getPoint(c) >= 16);
+            if (jokers.length === deckCount * 2) {
+                 if (CardRules.canPlay(jokers, lastPlayedCards, deckCount)) return jokers;
+            }
+
+            return null; // 管不上
         } catch (e) {
             console.error("BotLogic error:", e);
-            return null; // 报错时默认过牌
+            return null;
         }
     }
 };
@@ -3805,7 +3896,6 @@ const CardRules = {
         return base + 1; // 3 => 3
     },
 
-    // [新增] 缺失的排序权重函数 (修复崩溃核心)
     getSortValue: (cardVal) => {
         const normalized = cardVal % 54;
         if (normalized === 52) return 16;
@@ -3816,7 +3906,6 @@ const CardRules = {
         return base + 1;
     },
 
-    // [新增] 缺失的花色排序函数 (修复崩溃核心)
     getSuitSortValue: (cardVal) => {
         if (cardVal >= 52) return cardVal * 100;
         const suit = Math.floor(cardVal / 13) % 4; 
@@ -3824,7 +3913,6 @@ const CardRules = {
         return suit * 100 + val; 
     },
     
-    // [新增] 辅助：点数转显示文本
     getPointText: (point) => {
         if (point <= 10) return point.toString();
         if (point === 11) return 'J';
@@ -3837,7 +3925,6 @@ const CardRules = {
         return '?';
     },
     
-    // [新增] 辅助：将分析结果转为人类可读文本
     getAnalysisText: (analysisResult) => {
         if (!analysisResult || analysisResult.type === 'INVALID') return '未知牌型';
         
@@ -3849,10 +3936,9 @@ const CardRules = {
             case 'TRIPLE': return `三张 ${pt}`;
             case 'LIANDUI': return `${analysisResult.len/2}连对 (${pt}起)`;
             case 'AIRPLANE': return `飞机 (${pt}起)`;
-            // case '510K_MIXED': return '杂 510K'; // 杂色已废弃
+            case '510K_MIXED': return '杂色 510K'; // [新增]
             case '510K_PURE': 
                 const suitNames = ['黑桃', '红桃', '梅花', '方片'];
-                // val 映射回索引：4->0, 3->1, 2->2, 1->3
                 const suitIndex = 4 - analysisResult.val; 
                 const sName = suitNames[suitIndex] || '纯';
                 return `${sName} 510K`;
@@ -3863,7 +3949,6 @@ const CardRules = {
         }
     },
 
-    // 获取牌的分数 (5=5, 10=10, K=10)
     getCardScore: (cardVal) => {
         const p = CardRules.getPoint(cardVal);
         if (p === 5) return 5;
@@ -3872,16 +3957,13 @@ const CardRules = {
         return 0;
     },
 
-    // 计算一组牌的总分
     calculateTotalScore: (cards) => {
         return cards.reduce((sum, c) => sum + CardRules.getCardScore(c), 0);
     },
 
-    // 获取牌的花色 (0-3)
-    // 0:黑桃, 1:红桃, 2:梅花, 3:方片
     getSuit: (cardVal) => {
         const normalized = cardVal % 54;
-        if (normalized >= 52) return -1; // 王没有花色
+        if (normalized >= 52) return -1; 
         return Math.floor(normalized / 13);
     },
 
@@ -3893,29 +3975,25 @@ const CardRules = {
         // 排序：点数从小到大
         const points = cards.map(CardRules.getPoint).sort((a, b) => a - b);
         
-        // 统计点数频率 { point: count }
+        // 统计点数频率
         const counts = {};
         points.forEach(p => { counts[p] = (counts[p] || 0) + 1; });
         const uniquePoints = Object.keys(counts).map(Number).sort((a,b)=>a-b);
         
         // --- 非炸弹牌型 ---
 
-        // 单张
         if (len === 1) return { type: 'SINGLE', val: points[0], level: 0 };
 
-        // 对子
         if (len === 2 && points[0] === points[1]) {
             return { type: 'PAIR', val: points[0], level: 0 };
         }
 
-        // 三张 (不带)
         if (len === 3 && uniquePoints.length === 1) {
             return { type: 'TRIPLE', val: points[0], level: 0 };
         }
 
-        // 连对 (Liandui)
+        // 连对
         if (len >= 4 && len % 2 === 0) {
-            // 简单校验：不含2和王
             if (!points.some(p => p >= 15)) {
                 let isLiandui = true;
                 if (uniquePoints.length === len / 2) {
@@ -3930,7 +4008,7 @@ const CardRules = {
             }
         }
 
-        // 飞机 (Airplane) - 连续的三不带
+        // 飞机
         if (len >= 6 && len % 3 === 0) {
             if (!points.some(p => p >= 15)) {
                 let isAirplane = true;
@@ -3948,7 +4026,7 @@ const CardRules = {
 
         // --- 炸弹牌型 (Level 1-5) ---
 
-        // Level 1: 510K (纯色) - 杂色已废弃
+        // 510K 检测
         if (len === 3) {
             const has5 = points.includes(5);
             const has10 = points.includes(10);
@@ -3959,49 +4037,34 @@ const CardRules = {
                 const isPure = (suits[0] === suits[1] && suits[1] === suits[2]);
                 
                 if (isPure) {
-                    // 纯510K (Level 2，注：虽然现在只有纯色，但依然算作 Level 2 以区别于杂色历史逻辑，或者统称为510K炸弹)
-                    // 规则：黑(0)>红(1)>梅(2)>方(3)
-                    // 为了方便比较大小，我们将 val 设为花色的反向权重：
-                    // 黑桃(0) -> 4
-                    // 红桃(1) -> 3
-                    // 梅花(2) -> 2
-                    // 方片(3) -> 1
+                    // 纯510K (Level 2)
                     const suit = suits[0];
                     let suitVal = 0;
-                    if (suit === 0) suitVal = 4;
-                    else if (suit === 1) suitVal = 3;
-                    else if (suit === 2) suitVal = 2;
-                    else if (suit === 3) suitVal = 1;
-
+                    if (suit === 0) suitVal = 4; // 黑
+                    else if (suit === 1) suitVal = 3; // 红
+                    else if (suit === 2) suitVal = 2; // 梅
+                    else if (suit === 3) suitVal = 1; // 方
                     return { type: '510K_PURE', val: suitVal, level: 2 }; 
-                } 
-                // 杂色 510K 不再返回 INVALID，而是作为普通散牌处理（也就是无法一次性打出，除非当单张/对子打）
-                // 由于代码逻辑走到这里已经不是单/对/三/连/飞机，所以最终会返回 INVALID，符合“杂色不行”的要求。
+                } else {
+                    // [修复] 恢复杂色 510K (Level 1)
+                    return { type: '510K_MIXED', val: 1, level: 1 };
+                }
             }
         }
 
-        // Level 3: 普通炸弹 (>=4张)
+        // Level 3: 普通炸弹
         if (uniquePoints.length === 1 && len >= 4) {
-            // Level 5: 至尊满炸 (Rank数量 == DECK_COUNT * 4)
             if (len === deckCount * 4) {
                  return { type: 'BOMB_MAX', val: points[0], level: 5 };
             }
-            // 普通炸弹 (包括 4个小王 这种)
             return { type: 'BOMB_STD', val: points[0], len: len, level: 3 };
         }
 
-        // Level 4: 天王炸 (所有王)
+        // Level 4: 天王炸
         const isAllJokers = points.every(p => p >= 16);
-        // 规则：必须集齐所有王
         if (isAllJokers && len === deckCount * 2) {
             return { type: 'BOMB_KING', val: 999, level: 4 };
         }
-        // 如果是 3个王、2个王，因为 uniquePoints 长度不为 1 (16和17不同)，
-        // 且 len 不满足 deckCount*2，所以会作为 INVALID 处理（无法作为炸弹一次打出）。
-        // 但如果是 2个小王 (len=2, points=[16,16])，上面已经匹配了 PAIR。
-        // 如果是 3个小王 (len=3, points=[16,16,16])，上面已经匹配了 TRIPLE。
-        // 如果是 4个小王 (len=4, points=[16,16,16,16])，上面匹配了 BOMB_STD。
-        // 完全符合“不齐的话，就是按照正常的大小王的大小算”的规则。
 
         return { type: 'INVALID' };
     },
@@ -4025,9 +4088,8 @@ const CardRules = {
             if (newHand.level > lastHand.level) return true;
             if (newHand.level < lastHand.level) return false;
 
-            // 同级别比较
+            // 同级别比较 (Level相等时)
             if (newHand.type === '510K_PURE') {
-                // 纯510K 比较花色权重 (黑4 > 红3 > 梅2 > 方1)
                 return newHand.val > lastHand.val;
             }
 
@@ -4037,25 +4099,25 @@ const CardRules = {
                 return newHand.val > lastHand.val;
             }
             
+            // [新增] 杂色510K 互管逻辑 (通常杂色不分大小，或者不能互管)
+            // 这里设定为：不能互管 (返回false)
+            if (newHand.type === '510K_MIXED') return false;
+
             if (newHand.type === 'BOMB_MAX') return newHand.val > lastHand.val;
+            
             return false;
         }
 
         // C. 非炸弹之间 (同牌型比较)
         if (newHand.type === lastHand.type) {
-            // 连对和飞机必须张数一致才能比较
             if ((newHand.type === 'LIANDUI' || newHand.type === 'AIRPLANE') && newHand.len !== lastHand.len) return false;
             
-            // 必须张数一致
             if (newCards.length !== lastCards.length) return false;
             
-            // [规则] 连对：严丝合缝 (必须大1点)
             if (newHand.type === 'LIANDUI') {
                 return newHand.val === lastHand.val + 1;
             }
-
-            // [规则] 飞机：只要点数大即可 (val > val)
-            // [规则] 普通牌型 (单/对/三)：只要点数大即可
+            
             return newHand.val > lastHand.val;
         }
 
@@ -4129,12 +4191,33 @@ class GameManager {
         this.lastWinnerId = null;
         this.gameState = null; 
         
-        // [新增] 比赛历史记录，用于结算页面展示表格
+        // 比赛历史记录，用于结算页面展示表格
         this.matchHistory = []; 
         
         this.timer = null;
         this.botTimer = null;
         this.turnStartTime = 0; 
+    }
+
+    // [新增] 获取提示 (供 Socket 调用)
+    getHint(playerId) {
+        try {
+            // console.log(`[GameManager] Player ${playerId} requested hint.`);
+            if (!this.gameState) return [];
+            const hand = this.gameState.hands[playerId];
+            if (!hand) return [];
+
+            const lastPlayed = this.gameState.lastPlayedCards;
+            
+            // 复用 Bot 逻辑计算最优解 (BotLogic 已更新支持杂色510K)
+            const result = BotLogic.decideMove(hand, lastPlayed, this.config.deckCount);
+            
+            // if (result) console.log(`[GameManager] Hint found: ${result.length} cards`);
+            return result || [];
+        } catch (error) {
+            console.error("[GameManager] getHint error:", error);
+            return [];
+        }
     }
 
     // 切换托管状态
@@ -4164,7 +4247,7 @@ class GameManager {
         if (!isNextRound) {
             this.players.forEach(p => this.grandScores[p.id] = 0);
             this.lastWinnerId = null;
-            this.matchHistory = []; // [新增] 新比赛清空历史
+            this.matchHistory = []; // 新比赛清空历史
         }
 
         const deck = new Deck(this.config.deckCount);
@@ -4176,7 +4259,7 @@ class GameManager {
             if (winnerIdx !== -1) startIndex = winnerIdx;
         }
 
-        // [新增] 组队分配逻辑：间隔入座 (0,2为一队; 1,3为一队)
+        // 组队分配逻辑：间隔入座 (0,2为一队; 1,3为一队)
         const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
         this.players.forEach((p, index) => {
             if (isTeamMode) {
@@ -4346,12 +4429,12 @@ class GameManager {
     _handleWin(result, winnerId) {
         const rInfo = result.roundResult;
 
-        // [新增] 构造包含所有信息的结算对象
+        // 构造包含所有信息的结算对象
         const settlementData = {
             roundWinner: rInfo.roundWinnerName,
             pointsEarned: rInfo.pointsEarned,
             detail: rInfo.detail,       // 文字版日志
-            matchHistory: this.matchHistory, // [关键] 完整的历史记录
+            matchHistory: this.matchHistory, // 完整的历史记录
             grandScores: rInfo.grandScores,
             roundIndex: this.matchHistory.length
         };
@@ -4465,7 +4548,7 @@ class GameManager {
                      const wIdx = this.players.findIndex(p => p.id === wId);
                      this.gameState.currentTurnIndex = wIdx;
                 } else {
-                    // [核心修改] 赢家已出完牌 (逃出)
+                    // 赢家已出完牌 (逃出)
                     // 检查是否需要触发“队友接风”逻辑
                     const winnerPlayer = this.players.find(p => p.id === wId);
                     const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
@@ -4477,7 +4560,7 @@ class GameManager {
                         const wIdx = this.players.findIndex(p => p.id === wId);
                         const pCount = this.players.length;
                         
-                        // [修正] 因为出牌顺序改为 index++ (递增)，所以接风搜索也要改为递增方向
+                        // 接风搜索递增方向
                         for (let i = 1; i < pCount; i++) {
                             const tIdx = (wIdx + i) % pCount; 
                             const potentialTeammate = this.players[tIdx];
@@ -4494,10 +4577,6 @@ class GameManager {
                                 break;
                             }
                         }
-                    }
-                    
-                    if (!teammateTookOver) {
-                        // 正常下家接风
                     }
                 }
             }
@@ -4581,14 +4660,13 @@ class GameManager {
         return count;
     }
 
-    // [核心修复] 将轮转方向改为递增 (index + 1)
     _advanceTurn() {
         const playerCount = this.players.length;
         let nextIndex = this.gameState.currentTurnIndex;
         let attempts = 0;
         
         do {
-            nextIndex = (nextIndex + 1) % playerCount; // <--- 改为 +1
+            nextIndex = (nextIndex + 1) % playerCount; // 轮转改为递增
             attempts++;
         } while (
             this.gameState.hands[this.players[nextIndex].id].length === 0 && 
@@ -4602,7 +4680,7 @@ class GameManager {
         if (!this.gameState) return null;
         
         const currentScoresDisplay = {};
-        const roundPointsDisplay = {}; // [新增] 每一小局的独立分数
+        const roundPointsDisplay = {}; // 每一小局的独立分数
         const playersInfo = {};
         const handCounts = {};
 
@@ -4610,7 +4688,7 @@ class GameManager {
             const grand = this.grandScores[p.id] || 0;
             const round = this.gameState.roundPoints[p.id] || 0;
             currentScoresDisplay[p.id] = grand + round;
-            roundPointsDisplay[p.id] = round; // [新增]
+            roundPointsDisplay[p.id] = round; 
             
             playersInfo[p.id] = { 
                 isBot: p.isBot, 
@@ -4636,7 +4714,7 @@ class GameManager {
             lastPlayed: this.gameState.lastPlayedCards,
             lastPlayerName: winnerObj ? winnerObj.name : '',
             scores: currentScoresDisplay,
-            roundPoints: roundPointsDisplay, // [新增] 传输小局分
+            roundPoints: roundPointsDisplay, 
             pendingPoints: this.gameState.pendingTablePoints,
             finishedRank: this.gameState.finishedRank,
             playersInfo: playersInfo,
@@ -4644,11 +4722,11 @@ class GameManager {
         };
     }
 
-    // [核心修复] 完整的重连数据搬运
+    // 完整的重连数据搬运
     reconnectPlayer(oldId, newId) {
         console.log(`[GameManager] Moving data from ${oldId} to ${newId}`);
 
-        // 1. 搬运全局总分 (Key: socketId)
+        // 1. 搬运全局总分
         if (this.grandScores[oldId] !== undefined) {
             this.grandScores[newId] = this.grandScores[oldId];
             delete this.grandScores[oldId];
@@ -4685,7 +4763,7 @@ class GameManager {
             }
         }
 
-        // [新增] 修复重连时历史记录 ID 映射
+        // 修复重连时历史记录 ID 映射
         this.matchHistory.forEach(match => {
             if (match.scores[oldId] !== undefined) {
                 match.scores[newId] = match.scores[oldId];
@@ -4759,7 +4837,7 @@ class GameManager {
             penaltyDetails.push(`第一名 ${winnerName} 获得剩余手牌分 ${totalCardPenalty}`);
         }
 
-        // 排名赏罚 + [新增] 队友保护逻辑
+        // 排名赏罚 + 队友保护逻辑
         if (this.config.enableRankPenalty && this.config.rankPenaltyScores && this.config.rankPenaltyScores.length > 0) {
             const penaltyConfig = this.config.rankPenaltyScores;
             const playerCount = fullRankIds.length;
@@ -4776,7 +4854,7 @@ class GameManager {
                         const winner = this.players.find(p=>p.id===winnerId);
                         const loser = this.players.find(p=>p.id===loserId);
                         
-                        // [新增] 队友保护判断
+                        // 队友保护判断
                         if (winner.team !== null && winner.team !== undefined && winner.team === loser.team) {
                              logLines.push(`[🛡️队友保护] 第${winnerIndex+1}名(${winner.name}) 与 倒数第${index+1}名(${loser.name}) 是队友，${score}分 免罚！`);
                              penaltyDetails.push(`[队友保护] ${winner.name} 免收 ${loser.name} ${score} 分`);
@@ -4797,7 +4875,7 @@ class GameManager {
             this.grandScores[p.id] += currentRoundScores[p.id];
         });
 
-        // [新增] 存入 matchHistory
+        // 存入 matchHistory
         this.matchHistory.push({
             roundIndex: this.matchHistory.length + 1,
             scores: {...currentRoundScores}, 
@@ -5245,6 +5323,49 @@ io.on('connection', (socket) => {
         broadcastRoomInfo(io, roomId);
     });
 
+    // [新增] 踢人功能
+    socket.on('kick_player', ({ roomId, targetId }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+
+        // 1. 验证权限：只有房主能踢人
+        const sender = room.players.find(p => p.id === socket.id);
+        if (!sender || !sender.isHost) {
+            return socket.emit('error_msg', '只有房主可以踢人');
+        }
+
+        // 2. 游戏中严禁踢人，防止崩盘
+        if (room.gameManager || room.seatManager) {
+            return socket.emit('error_msg', '游戏进行中无法踢人');
+        }
+
+        const targetIndex = room.players.findIndex(p => p.id === targetId);
+        if (targetIndex === -1) return;
+
+        const targetPlayer = room.players[targetIndex];
+
+        // 3. 不能踢自己
+        if (targetPlayer.id === socket.id) return;
+
+        // 4. 移除玩家
+        room.players.splice(targetIndex, 1);
+
+        // 5. 如果是真人，通知他被踢了
+        if (!targetPlayer.isBot) {
+            io.to(targetPlayer.id).emit('kicked', '你已被房主移出房间');
+            // 让该 socket 离开房间 channel
+            const targetSocket = io.sockets.sockets.get(targetPlayer.id);
+            if (targetSocket) {
+                targetSocket.leave(roomId);
+            }
+        }
+
+        console.log(`[Room] ${sender.name} kicked ${targetPlayer.name} from ${roomId}`);
+        
+        // 6. 广播更新
+        broadcastRoomInfo(io, roomId);
+    });
+
     // 切换托管
     socket.on('toggle_auto_play', ({ roomId }) => {
         const room = rooms[roomId];
@@ -5416,7 +5537,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('pass_turn', ({ roomId }) => {
+       socket.on('pass_turn', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
 
@@ -5425,6 +5546,18 @@ io.on('connection', (socket) => {
 
         broadcastGameState(io, roomId, room, result.logText || "PASS");
     });
+
+    // [新增] 提示请求监听
+    socket.on('request_hint', ({ roomId }) => {
+    const room = rooms[roomId];
+    if (room && room.gameManager) {
+        // 调用 GameManager 的 getHint 方法
+        const cards = room.gameManager.getHint(socket.id);
+        // 发送回给客户端
+        socket.emit('hint_response', cards);
+    }
+});
+
 
     socket.on('disconnect', () => {
         Object.keys(rooms).forEach(rId => {

@@ -26,7 +26,8 @@ export default function App() {
       toggleSort, handleRoomAction, handleStartGame, handleNextRound,
       handleAddBot, handleToggleAutoPlay, handleSwitchSeat, handleDrawCard,
       handleUpdateConfig, handleClearSelection, handleMouseDown,
-      handleMouseEnter, handlePlayCards, handlePass, handleKickPlayer
+      handleMouseEnter, handlePlayCards, handlePass, handleKickPlayer,
+      handleRequestHint // [修复] 确保这里已经从 Hook 中解构出来
   } = useGameSocket();
 
   const renderLandscapeHint = () => (
@@ -91,7 +92,7 @@ export default function App() {
           handleAddBot,
           handleSwitchSeat,
           handleUpdateConfig,
-          handleKickPlayer // [新增]
+          handleKickPlayer
       }} />}
       
       {gameState === 'DRAW_SEATS' && <DrawSeatScreen {...{
@@ -108,7 +109,8 @@ export default function App() {
           mySocketId, roundResult, grandResult, roomConfig,
           turnRemaining, finishedRank, handCounts, 
           toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
-          handleToggleAutoPlay, handleClearSelection 
+          handleToggleAutoPlay, handleClearSelection,
+          handleRequestHint // [关键修复] 将方法传递给 GameScreen
       }} />}
     </>
   );

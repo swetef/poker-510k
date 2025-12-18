@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Coins, Layers, Crown, Clock, Bot, Zap, Maximize, Minimize, Shield, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
+// [修改] 引入 Lightbulb
+import { Coins, Layers, Crown, Clock, Bot, Zap, Maximize, Minimize, Shield, RotateCcw, ChevronDown, ChevronUp, Lightbulb } from 'lucide-react';
 import { styles } from '../styles.js'; 
 import { Card, MiniCard, PlayerAvatar, GameLogPanel } from '../components/BaseUI.jsx';
 import { ScoreTable } from '../components/ScoreTable.jsx'; 
@@ -17,7 +18,7 @@ export const GameScreen = ({
     turnRemaining, finishedRank = [], 
     handCounts = {}, 
     toggleSort, handleMouseDown, handleMouseEnter, handlePlayCards, handlePass, handleNextRound, handleStartGame,
-    handleToggleAutoPlay, handleClearSelection 
+    handleToggleAutoPlay, handleClearSelection, handleRequestHint // [修改] 接收 handleRequestHint
 }) => {
     // 身份同步保护
     const myPlayerExists = players.some(p => p.id === mySocketId);
@@ -512,6 +513,15 @@ export const GameScreen = ({
                                     {isMyTurn ? (
                                         <>
                                             <button style={styles.passButton} onClick={handlePass}>不要</button>
+                                            
+                                            {/* [新增] 提示按钮 */}
+                                            <button 
+                                                style={{...styles.passButton, background: '#8e44ad', marginRight: 0, padding:'8px 15px', display:'flex', alignItems:'center', gap:5}} 
+                                                onClick={handleRequestHint}
+                                            >
+                                                <Lightbulb size={16} /> 提示
+                                            </button>
+
                                             <TimerComponent initialSeconds={turnRemaining} totalSeconds={60} position="inline" />
                                             <button style={styles.playButton} onClick={handlePlayCards}>出牌</button>
                                         </>

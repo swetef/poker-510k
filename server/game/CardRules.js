@@ -13,7 +13,6 @@ const CardRules = {
         return base + 1; // 3 => 3
     },
 
-    // [新增] 缺失的排序权重函数 (修复崩溃核心)
     getSortValue: (cardVal) => {
         const normalized = cardVal % 54;
         if (normalized === 52) return 16;
@@ -24,7 +23,6 @@ const CardRules = {
         return base + 1;
     },
 
-    // [新增] 缺失的花色排序函数 (修复崩溃核心)
     getSuitSortValue: (cardVal) => {
         if (cardVal >= 52) return cardVal * 100;
         const suit = Math.floor(cardVal / 13) % 4; 
@@ -32,7 +30,6 @@ const CardRules = {
         return suit * 100 + val; 
     },
     
-    // [新增] 辅助：点数转显示文本
     getPointText: (point) => {
         if (point <= 10) return point.toString();
         if (point === 11) return 'J';
@@ -45,7 +42,6 @@ const CardRules = {
         return '?';
     },
     
-    // [新增] 辅助：将分析结果转为人类可读文本
     getAnalysisText: (analysisResult) => {
         if (!analysisResult || analysisResult.type === 'INVALID') return '未知牌型';
         
@@ -57,10 +53,9 @@ const CardRules = {
             case 'TRIPLE': return `三张 ${pt}`;
             case 'LIANDUI': return `${analysisResult.len/2}连对 (${pt}起)`;
             case 'AIRPLANE': return `飞机 (${pt}起)`;
-            // case '510K_MIXED': return '杂 510K'; // 杂色已废弃
+            case '510K_MIXED': return '杂色 510K'; // [新增]
             case '510K_PURE': 
                 const suitNames = ['黑桃', '红桃', '梅花', '方片'];
-                // val 映射回索引：4->0, 3->1, 2->2, 1->3
                 const suitIndex = 4 - analysisResult.val; 
                 const sName = suitNames[suitIndex] || '纯';
                 return `${sName} 510K`;
@@ -71,7 +66,6 @@ const CardRules = {
         }
     },
 
-    // 获取牌的分数 (5=5, 10=10, K=10)
     getCardScore: (cardVal) => {
         const p = CardRules.getPoint(cardVal);
         if (p === 5) return 5;
@@ -80,16 +74,13 @@ const CardRules = {
         return 0;
     },
 
-    // 计算一组牌的总分
     calculateTotalScore: (cards) => {
         return cards.reduce((sum, c) => sum + CardRules.getCardScore(c), 0);
     },
 
-    // 获取牌的花色 (0-3)
-    // 0:黑桃, 1:红桃, 2:梅花, 3:方片
     getSuit: (cardVal) => {
         const normalized = cardVal % 54;
-        if (normalized >= 52) return -1; // 王没有花色
+        if (normalized >= 52) return -1; 
         return Math.floor(normalized / 13);
     },
 
@@ -101,29 +92,25 @@ const CardRules = {
         // 排序：点数从小到大
         const points = cards.map(CardRules.getPoint).sort((a, b) => a - b);
         
-        // 统计点数频率 { point: count }
+        // 统计点数频率
         const counts = {};
         points.forEach(p => { counts[p] = (counts[p] || 0) + 1; });
         const uniquePoints = Object.keys(counts).map(Number).sort((a,b)=>a-b);
         
         // --- 非炸弹牌型 ---
 
-        // 单张
         if (len === 1) return { type: 'SINGLE', val: points[0], level: 0 };
 
-        // 对子
         if (len === 2 && points[0] === points[1]) {
             return { type: 'PAIR', val: points[0], level: 0 };
         }
 
-        // 三张 (不带)
         if (len === 3 && uniquePoints.length === 1) {
             return { type: 'TRIPLE', val: points[0], level: 0 };
         }
 
-        // 连对 (Liandui)
+        // 连对
         if (len >= 4 && len % 2 === 0) {
-            // 简单校验：不含2和王
             if (!points.some(p => p >= 15)) {
                 let isLiandui = true;
                 if (uniquePoints.length === len / 2) {
@@ -138,7 +125,7 @@ const CardRules = {
             }
         }
 
-        // 飞机 (Airplane) - 连续的三不带
+        // 飞机
         if (len >= 6 && len % 3 === 0) {
             if (!points.some(p => p >= 15)) {
                 let isAirplane = true;
@@ -156,7 +143,7 @@ const CardRules = {
 
         // --- 炸弹牌型 (Level 1-5) ---
 
-        // Level 1: 510K (纯色) - 杂色已废弃
+        // 510K 检测
         if (len === 3) {
             const has5 = points.includes(5);
             const has10 = points.includes(10);
@@ -167,49 +154,34 @@ const CardRules = {
                 const isPure = (suits[0] === suits[1] && suits[1] === suits[2]);
                 
                 if (isPure) {
-                    // 纯510K (Level 2，注：虽然现在只有纯色，但依然算作 Level 2 以区别于杂色历史逻辑，或者统称为510K炸弹)
-                    // 规则：黑(0)>红(1)>梅(2)>方(3)
-                    // 为了方便比较大小，我们将 val 设为花色的反向权重：
-                    // 黑桃(0) -> 4
-                    // 红桃(1) -> 3
-                    // 梅花(2) -> 2
-                    // 方片(3) -> 1
+                    // 纯510K (Level 2)
                     const suit = suits[0];
                     let suitVal = 0;
-                    if (suit === 0) suitVal = 4;
-                    else if (suit === 1) suitVal = 3;
-                    else if (suit === 2) suitVal = 2;
-                    else if (suit === 3) suitVal = 1;
-
+                    if (suit === 0) suitVal = 4; // 黑
+                    else if (suit === 1) suitVal = 3; // 红
+                    else if (suit === 2) suitVal = 2; // 梅
+                    else if (suit === 3) suitVal = 1; // 方
                     return { type: '510K_PURE', val: suitVal, level: 2 }; 
-                } 
-                // 杂色 510K 不再返回 INVALID，而是作为普通散牌处理（也就是无法一次性打出，除非当单张/对子打）
-                // 由于代码逻辑走到这里已经不是单/对/三/连/飞机，所以最终会返回 INVALID，符合“杂色不行”的要求。
+                } else {
+                    // [修复] 恢复杂色 510K (Level 1)
+                    return { type: '510K_MIXED', val: 1, level: 1 };
+                }
             }
         }
 
-        // Level 3: 普通炸弹 (>=4张)
+        // Level 3: 普通炸弹
         if (uniquePoints.length === 1 && len >= 4) {
-            // Level 5: 至尊满炸 (Rank数量 == DECK_COUNT * 4)
             if (len === deckCount * 4) {
                  return { type: 'BOMB_MAX', val: points[0], level: 5 };
             }
-            // 普通炸弹 (包括 4个小王 这种)
             return { type: 'BOMB_STD', val: points[0], len: len, level: 3 };
         }
 
-        // Level 4: 天王炸 (所有王)
+        // Level 4: 天王炸
         const isAllJokers = points.every(p => p >= 16);
-        // 规则：必须集齐所有王
         if (isAllJokers && len === deckCount * 2) {
             return { type: 'BOMB_KING', val: 999, level: 4 };
         }
-        // 如果是 3个王、2个王，因为 uniquePoints 长度不为 1 (16和17不同)，
-        // 且 len 不满足 deckCount*2，所以会作为 INVALID 处理（无法作为炸弹一次打出）。
-        // 但如果是 2个小王 (len=2, points=[16,16])，上面已经匹配了 PAIR。
-        // 如果是 3个小王 (len=3, points=[16,16,16])，上面已经匹配了 TRIPLE。
-        // 如果是 4个小王 (len=4, points=[16,16,16,16])，上面匹配了 BOMB_STD。
-        // 完全符合“不齐的话，就是按照正常的大小王的大小算”的规则。
 
         return { type: 'INVALID' };
     },
@@ -233,9 +205,8 @@ const CardRules = {
             if (newHand.level > lastHand.level) return true;
             if (newHand.level < lastHand.level) return false;
 
-            // 同级别比较
+            // 同级别比较 (Level相等时)
             if (newHand.type === '510K_PURE') {
-                // 纯510K 比较花色权重 (黑4 > 红3 > 梅2 > 方1)
                 return newHand.val > lastHand.val;
             }
 
@@ -245,25 +216,25 @@ const CardRules = {
                 return newHand.val > lastHand.val;
             }
             
+            // [新增] 杂色510K 互管逻辑 (通常杂色不分大小，或者不能互管)
+            // 这里设定为：不能互管 (返回false)
+            if (newHand.type === '510K_MIXED') return false;
+
             if (newHand.type === 'BOMB_MAX') return newHand.val > lastHand.val;
+            
             return false;
         }
 
         // C. 非炸弹之间 (同牌型比较)
         if (newHand.type === lastHand.type) {
-            // 连对和飞机必须张数一致才能比较
             if ((newHand.type === 'LIANDUI' || newHand.type === 'AIRPLANE') && newHand.len !== lastHand.len) return false;
             
-            // 必须张数一致
             if (newCards.length !== lastCards.length) return false;
             
-            // [规则] 连对：严丝合缝 (必须大1点)
             if (newHand.type === 'LIANDUI') {
                 return newHand.val === lastHand.val + 1;
             }
-
-            // [规则] 飞机：只要点数大即可 (val > val)
-            // [规则] 普通牌型 (单/对/三)：只要点数大即可
+            
             return newHand.val > lastHand.val;
         }
 

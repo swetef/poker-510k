@@ -14,12 +14,31 @@ class GameManager {
         this.lastWinnerId = null;
         this.gameState = null; 
         
-        // [新增] 比赛历史记录，用于结算页面展示表格
+        // 比赛历史记录，用于结算页面展示表格
         this.matchHistory = []; 
         
         this.timer = null;
         this.botTimer = null;
         this.turnStartTime = 0; 
+    }
+
+    // [修改] 获取提示 - 返回所有可行解
+    getHint(playerId) {
+        try {
+            if (!this.gameState) return [];
+            const hand = this.gameState.hands[playerId];
+            if (!hand) return [];
+
+            const lastPlayed = this.gameState.lastPlayedCards;
+            
+            // 使用新方法 findAllSolutions 获取所有可行牌型
+            const results = BotLogic.findAllSolutions(hand, lastPlayed, this.config.deckCount);
+            
+            return results || [];
+        } catch (error) {
+            console.error("[GameManager] getHint error:", error);
+            return [];
+        }
     }
 
     // 切换托管状态
@@ -49,7 +68,7 @@ class GameManager {
         if (!isNextRound) {
             this.players.forEach(p => this.grandScores[p.id] = 0);
             this.lastWinnerId = null;
-            this.matchHistory = []; // [新增] 新比赛清空历史
+            this.matchHistory = []; // 新比赛清空历史
         }
 
         const deck = new Deck(this.config.deckCount);
@@ -61,7 +80,7 @@ class GameManager {
             if (winnerIdx !== -1) startIndex = winnerIdx;
         }
 
-        // [新增] 组队分配逻辑：间隔入座 (0,2为一队; 1,3为一队)
+        // 组队分配逻辑：间隔入座 (0,2为一队; 1,3为一队)
         const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
         this.players.forEach((p, index) => {
             if (isTeamMode) {
@@ -140,6 +159,7 @@ class GameManager {
             // 尝试获取出牌策略
             let cardsToPlay = null;
             try {
+                // [修改] Bot 使用 decideMove (内部会调用 findAllSolutions 取第一个)
                 cardsToPlay = BotLogic.decideMove(sortedHand, cardsToBeat, this.config.deckCount);
             } catch (err) {
                 console.error("[Bot Error] Logic crashed:", err);
@@ -231,12 +251,12 @@ class GameManager {
     _handleWin(result, winnerId) {
         const rInfo = result.roundResult;
 
-        // [新增] 构造包含所有信息的结算对象
+        // 构造包含所有信息的结算对象
         const settlementData = {
             roundWinner: rInfo.roundWinnerName,
             pointsEarned: rInfo.pointsEarned,
             detail: rInfo.detail,       // 文字版日志
-            matchHistory: this.matchHistory, // [关键] 完整的历史记录
+            matchHistory: this.matchHistory, // 完整的历史记录
             grandScores: rInfo.grandScores,
             roundIndex: this.matchHistory.length
         };
@@ -350,7 +370,7 @@ class GameManager {
                      const wIdx = this.players.findIndex(p => p.id === wId);
                      this.gameState.currentTurnIndex = wIdx;
                 } else {
-                    // [核心修改] 赢家已出完牌 (逃出)
+                    // 赢家已出完牌 (逃出)
                     // 检查是否需要触发“队友接风”逻辑
                     const winnerPlayer = this.players.find(p => p.id === wId);
                     const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
@@ -362,7 +382,7 @@ class GameManager {
                         const wIdx = this.players.findIndex(p => p.id === wId);
                         const pCount = this.players.length;
                         
-                        // [修正] 因为出牌顺序改为 index++ (递增)，所以接风搜索也要改为递增方向
+                        // 接风搜索递增方向
                         for (let i = 1; i < pCount; i++) {
                             const tIdx = (wIdx + i) % pCount; 
                             const potentialTeammate = this.players[tIdx];
@@ -379,10 +399,6 @@ class GameManager {
                                 break;
                             }
                         }
-                    }
-                    
-                    if (!teammateTookOver) {
-                        // 正常下家接风
                     }
                 }
             }
@@ -466,14 +482,13 @@ class GameManager {
         return count;
     }
 
-    // [核心修复] 将轮转方向改为递增 (index + 1)
     _advanceTurn() {
         const playerCount = this.players.length;
         let nextIndex = this.gameState.currentTurnIndex;
         let attempts = 0;
         
         do {
-            nextIndex = (nextIndex + 1) % playerCount; // <--- 改为 +1
+            nextIndex = (nextIndex + 1) % playerCount; // 轮转改为递增
             attempts++;
         } while (
             this.gameState.hands[this.players[nextIndex].id].length === 0 && 
@@ -487,7 +502,7 @@ class GameManager {
         if (!this.gameState) return null;
         
         const currentScoresDisplay = {};
-        const roundPointsDisplay = {}; // [新增] 每一小局的独立分数
+        const roundPointsDisplay = {}; // 每一小局的独立分数
         const playersInfo = {};
         const handCounts = {};
 
@@ -495,7 +510,7 @@ class GameManager {
             const grand = this.grandScores[p.id] || 0;
             const round = this.gameState.roundPoints[p.id] || 0;
             currentScoresDisplay[p.id] = grand + round;
-            roundPointsDisplay[p.id] = round; // [新增]
+            roundPointsDisplay[p.id] = round; 
             
             playersInfo[p.id] = { 
                 isBot: p.isBot, 
@@ -521,7 +536,7 @@ class GameManager {
             lastPlayed: this.gameState.lastPlayedCards,
             lastPlayerName: winnerObj ? winnerObj.name : '',
             scores: currentScoresDisplay,
-            roundPoints: roundPointsDisplay, // [新增] 传输小局分
+            roundPoints: roundPointsDisplay, 
             pendingPoints: this.gameState.pendingTablePoints,
             finishedRank: this.gameState.finishedRank,
             playersInfo: playersInfo,
@@ -529,11 +544,11 @@ class GameManager {
         };
     }
 
-    // [核心修复] 完整的重连数据搬运
+    // 完整的重连数据搬运
     reconnectPlayer(oldId, newId) {
         console.log(`[GameManager] Moving data from ${oldId} to ${newId}`);
 
-        // 1. 搬运全局总分 (Key: socketId)
+        // 1. 搬运全局总分
         if (this.grandScores[oldId] !== undefined) {
             this.grandScores[newId] = this.grandScores[oldId];
             delete this.grandScores[oldId];
@@ -570,7 +585,7 @@ class GameManager {
             }
         }
 
-        // [新增] 修复重连时历史记录 ID 映射
+        // 修复重连时历史记录 ID 映射
         this.matchHistory.forEach(match => {
             if (match.scores[oldId] !== undefined) {
                 match.scores[newId] = match.scores[oldId];
@@ -644,7 +659,7 @@ class GameManager {
             penaltyDetails.push(`第一名 ${winnerName} 获得剩余手牌分 ${totalCardPenalty}`);
         }
 
-        // 排名赏罚 + [新增] 队友保护逻辑
+        // 排名赏罚 + 队友保护逻辑
         if (this.config.enableRankPenalty && this.config.rankPenaltyScores && this.config.rankPenaltyScores.length > 0) {
             const penaltyConfig = this.config.rankPenaltyScores;
             const playerCount = fullRankIds.length;
@@ -661,7 +676,7 @@ class GameManager {
                         const winner = this.players.find(p=>p.id===winnerId);
                         const loser = this.players.find(p=>p.id===loserId);
                         
-                        // [新增] 队友保护判断
+                        // 队友保护判断
                         if (winner.team !== null && winner.team !== undefined && winner.team === loser.team) {
                              logLines.push(`[🛡️队友保护] 第${winnerIndex+1}名(${winner.name}) 与 倒数第${index+1}名(${loser.name}) 是队友，${score}分 免罚！`);
                              penaltyDetails.push(`[队友保护] ${winner.name} 免收 ${loser.name} ${score} 分`);
@@ -682,7 +697,7 @@ class GameManager {
             this.grandScores[p.id] += currentRoundScores[p.id];
         });
 
-        // [新增] 存入 matchHistory
+        // 存入 matchHistory
         this.matchHistory.push({
             roundIndex: this.matchHistory.length + 1,
             scores: {...currentRoundScores}, 
