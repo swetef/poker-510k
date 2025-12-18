@@ -327,15 +327,56 @@ class GameManager {
         const passesNeeded = winnerIsActive ? (activeCount - 1) : activeCount;
 
         let turnCleared = false;
+        let infoMessage = `${currPlayer.name}: 不要`;
+
         if (this.gameState.consecutivePasses >= passesNeeded) {
             const wId = this.gameState.roundWinnerId;
             if (wId) {
                 this.gameState.roundPoints[wId] = (this.gameState.roundPoints[wId] || 0) + this.gameState.pendingTablePoints;
                 this.gameState.pendingTablePoints = 0;
                 
+                // 如果赢家还有牌，赢家继续出
                 if (this.gameState.hands[wId].length > 0) {
                      const wIdx = this.players.findIndex(p => p.id === wId);
                      this.gameState.currentTurnIndex = wIdx;
+                } else {
+                    // [核心修改] 赢家已出完牌 (逃出)
+                    // 检查是否需要触发“队友接风”逻辑
+                    const winnerPlayer = this.players.find(p => p.id === wId);
+                    const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
+                    
+                    let teammateTookOver = false;
+
+                    // 只有在组队模式下，才尝试寻找队友接风
+                    if (isTeamMode && winnerPlayer && winnerPlayer.team !== undefined && winnerPlayer.team !== null) {
+                        const wIdx = this.players.findIndex(p => p.id === wId);
+                        const pCount = this.players.length;
+                        
+                        // 按照出牌顺序（逆时针/索引递减）寻找最近的一位【还有手牌】的队友
+                        for (let i = 1; i < pCount; i++) {
+                            // 注意：_advanceTurn 使用的是减法逻辑，所以这里也往回找
+                            const tIdx = (wIdx - i + pCount) % pCount; 
+                            const potentialTeammate = this.players[tIdx];
+                            
+                            // 是队友 且 还是活跃状态
+                            if (potentialTeammate.team === winnerPlayer.team && 
+                                this.gameState.hands[potentialTeammate.id] && 
+                                this.gameState.hands[potentialTeammate.id].length > 0) {
+                                
+                                this.gameState.currentTurnIndex = tIdx;
+                                teammateTookOver = true;
+                                infoMessage = `${currPlayer.name}: 不要 (队友接风)`;
+                                this._broadcastUpdate(`${winnerPlayer.name} 已逃出，队友 ${potentialTeammate.name} 接风`);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (!teammateTookOver) {
+                        // 如果不是组队模式，或队友也都跑了 -> 保持默认行为（下家接风）
+                        // 此时 currentTurnIndex 已经由上方的 _advanceTurn() 指向了下家
+                        // infoMessage = `${currPlayer.name}: 不要 (下家接风)`; 
+                    }
                 }
             }
             
@@ -350,7 +391,7 @@ class GameManager {
         return { 
             success: true, 
             turnCleared,
-            logText: `${currPlayer.name}: 不要`
+            logText: infoMessage
         };
     }
 

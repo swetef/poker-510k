@@ -1,6 +1,6 @@
 // 统一样式文件 - 移动端适配版
 // [完整版] 包含所有原有布局、拇指热区、以及新增的滑动选牌支持和剩余牌数徽章
-// [本次修复] 修复了弹窗无法点击的问题，以及横屏下弹窗显示不全的问题
+// [本次修复] 调整手牌区域位置，防止被左下角头像遮挡
 
 export const styles = {
   // ============================
@@ -224,12 +224,7 @@ export const styles = {
       top: 50, 
       left: 10, 
       width: 200, 
-      // 高度在 JSX 中动态控制，这里设默认值
-      // height: 140, 
-      
-      // [关键修改] 背景默认改为更透明 (0.35)，组件内动态控制
       background: 'rgba(0, 0, 0, 0.35)', 
-      
       borderRadius: 10, 
       padding: '8px 12px', 
       border: '1px solid rgba(255,255,255,0.1)',
@@ -353,10 +348,12 @@ export const styles = {
   // HandArea
   handArea: { 
       position: 'absolute', 
-      // [关键修改] 抬高底部距离，从 5px 改为 max(25px, env...) 
-      // 避免 iOS 底部小黑条遮挡，解决“点击底部无反应”的问题
-      bottom: 'max(25px, env(safe-area-inset-bottom))',              
-      left: 65,
+      // [关键修改] 抬高底部距离
+      bottom: 'max(25px, env(safe-area-inset-bottom))',
+      
+      // [关键修改] 加大左侧间距 (65 -> 110)，防止被左下角头像遮挡
+      left: 70,
+      
       right: 10, 
       height: 160,            
       display: 'flex', 
@@ -387,7 +384,7 @@ export const styles = {
   passButton: { pointerEvents: 'auto', padding: '8px 25px', background: '#7f8c8d', border: 'none', borderRadius: 40, fontWeight: 'bold', cursor: 'pointer', fontSize: 14, color: 'white', boxShadow: '0 5px 15px rgba(0,0,0,0.3)' },
   waitingBadge: { color: 'rgba(255,255,255,0.7)', fontSize: 16, display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(0,0,0,0.3)', padding: '10px 20px', borderRadius: 30 },
   
-  // [修复 1] 弹窗遮罩：增加 pointerEvents: 'auto' 以解决按钮点击无反应的问题
+  // 弹窗遮罩
   modalOverlay: { 
       position: 'fixed', 
       top:0, left:0, right:0, bottom:0, 
@@ -397,24 +394,21 @@ export const styles = {
       alignItems:'center', 
       zIndex: 99, 
       backdropFilter: 'blur(8px)',
-      pointerEvents: 'auto' // 核心修复：允许接收点击事件
+      pointerEvents: 'auto' 
   },
 
-  // [修复 2] 弹窗内容：增加 maxHeight 和 overflowY 以解决横屏显示不全的问题
+  // 弹窗内容
   modalContent: { 
       background: 'white', 
-      padding: 30, // 减小 Padding (原 60) 以适配小屏
-      borderRadius: 24, // 稍微减小圆角 (原 30)
+      padding: 30, 
+      borderRadius: 24, 
       textAlign: 'center', 
       boxShadow: '0 30px 80px rgba(0,0,0,0.6)', 
       animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-      
-      // 新增响应式属性
-      width: '90%',        // 默认宽度 90%
-      maxWidth: 500,       // 最大宽度
-      maxHeight: '85vh',   // 核心修复：限制高度不超过屏幕 85%
-      overflowY: 'auto',   // 核心修复：内容过多时出现滚动条
-      
+      width: '90%',        
+      maxWidth: 500,       
+      maxHeight: '85vh',   
+      overflowY: 'auto',   
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center'
