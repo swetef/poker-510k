@@ -17,10 +17,12 @@ const getSocketUrl = () => {
 const SOCKET_URL = getSocketUrl();
 
 export const useSocketConnection = () => {
-    // [关键修复] 改用 useState，确保 Socket 创建后能触发组件重渲染
     const [socket, setSocket] = useState(null);
     const [isConnected, setIsConnected] = useState(false);
     const [mySocketId, setMySocketId] = useState(null);
+    
+    // [新增] 延迟状态
+    const [ping, setPing] = useState(0);
 
     useEffect(() => {
         console.log(`正在连接服务器: ${SOCKET_URL}`);
@@ -32,17 +34,28 @@ export const useSocketConnection = () => {
             autoConnect: true
         });
         
-        // 保存实例，触发更新
         setSocket(newSocket);
+
+        let pingInterval;
 
         const onConnect = () => {
             console.log("Socket 连接成功!");
             setIsConnected(true);
+            
+            // [新增] 启动 Ping 循环
+            pingInterval = setInterval(() => {
+                const start = Date.now();
+                newSocket.emit('ping', () => {
+                    const latency = Date.now() - start;
+                    setPing(latency);
+                });
+            }, 2000); // 每2秒检测一次
         };
 
         const onDisconnect = () => {
             console.log("Socket 断开连接");
             setIsConnected(false);
+            if (pingInterval) clearInterval(pingInterval);
         };
 
         const onConnectError = (err) => {
@@ -60,17 +73,19 @@ export const useSocketConnection = () => {
         newSocket.on('your_id', onYourId);
 
         return () => {
+            if (pingInterval) clearInterval(pingInterval);
             newSocket.off('connect', onConnect);
             newSocket.off('disconnect', onDisconnect);
             newSocket.off('connect_error', onConnectError);
             newSocket.off('your_id', onYourId);
-            // newSocket.disconnect(); // 保持长连接，组件卸载时不强制断开，除非彻底退出
+            // newSocket.disconnect(); // 保持长连接
         };
     }, []);
 
     return { 
         socket, 
         isConnected, 
-        mySocketId 
+        mySocketId,
+        ping // [新增] 导出 ping
     };
 };

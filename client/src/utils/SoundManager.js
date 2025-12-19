@@ -38,6 +38,13 @@ const SoundManager = {
                     SoundManager.beep(880, 0.1, 'square');
                     setTimeout(() => SoundManager.beep(880, 0.1, 'square'), 150);
                     break;
+                case 'tick': // 倒计时滴答声
+                    SoundManager.beep(600, 0.05, 'sine');
+                    break;
+                // [新增] "不要"音效 (短促低沉)
+                case 'pass': 
+                    SoundManager.beep(200, 0.15, 'triangle');
+                    break;
                 default:
                     break;
             }

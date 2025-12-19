@@ -25,7 +25,7 @@ const PERMANENT_ROOMS = {
     '888': { 
         deckCount: 2, 
         maxPlayers: 4, 
-        targetScore: 1000,
+        targetScore: 1000, 
         turnTimeout: 60000,
         showCardCountMode: 1,
         isTeamMode: false,
@@ -36,7 +36,7 @@ const PERMANENT_ROOMS = {
     '666': { 
         deckCount: 3, 
         maxPlayers: 6, 
-        targetScore: 1000,
+        targetScore: 1000, 
         turnTimeout: 60000,
         showCardCountMode: 1,
         isTeamMode: true, 
@@ -97,13 +97,16 @@ io.on('connection', (socket) => {
     console.log(`[Connect] ${socket.id}`);
     socket.emit('your_id', socket.id);
 
-    // [核心修改] 注册拆分后的 Handler
-    // 传入 io, socket 和全局 rooms 对象
+    // [新增] 响应客户端的 Ping 请求，用于计算延迟
+    socket.on('ping', (callback) => {
+        if (typeof callback === 'function') callback();
+    });
+
+    // 注册拆分后的 Handler
     registerRoomHandlers(io, socket, rooms);
     registerGameHandlers(io, socket, rooms);
 
-    // 断开连接处理 (Disconnect logic)
-    // 这里的逻辑比较复杂且涉及全局清理，保留在 index.js 比较安全，也便于全局管理
+    // 断开连接处理
     socket.on('disconnect', () => {
         Object.keys(rooms).forEach(rId => {
             const r = rooms[rId];
@@ -118,7 +121,6 @@ io.on('connection', (socket) => {
                 r.players.splice(idx, 1);
                 console.log(`[Disconnect] Lobby user ${player.name} removed from ${rId}`);
                 
-                // 处理房主移交逻辑
                 if (player.isHost && r.players.length > 0) {
                     const nextHost = r.players.find(p => !p.isBot) || r.players[0];
                     if (nextHost) nextHost.isHost = true;
@@ -126,7 +128,7 @@ io.on('connection', (socket) => {
                 
                 if (r.players.length === 0) {
                     if (r.isPermanent) {
-                        initPermanentRoom(rId); // 重置
+                        initPermanentRoom(rId); 
                     } else {
                         if (r.destroyTimer) clearTimeout(r.destroyTimer);
                         delete rooms[rId];
@@ -148,9 +150,9 @@ io.on('connection', (socket) => {
                         const currentRoom = rooms[rId];
                         if (currentRoom && currentRoom.players.filter(p => !p.isBot).every(p => !p.online)) {
                             if (currentRoom.isPermanent) {
-                                initPermanentRoom(rId); // 重置
+                                initPermanentRoom(rId); 
                             } else {
-                                delete rooms[rId]; // 销毁
+                                delete rooms[rId]; 
                                 console.log(`[Room] Room ${rId} destroyed due to inactivity.`);
                             }
                         }
@@ -159,6 +161,16 @@ io.on('connection', (socket) => {
             }
         });
     });
+});
+
+// [核心修复] 全局异常捕获，防止单次错误导致整个服务器重启
+process.on('uncaughtException', (err) => {
+    console.error('[FATAL ERROR] Uncaught Exception:', err);
+    // 这里可以选择不退出进程，保持服务器运行
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[FATAL ERROR] Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
 if (process.env.NODE_ENV === 'production') {

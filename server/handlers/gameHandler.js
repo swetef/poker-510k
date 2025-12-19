@@ -67,6 +67,9 @@ module.exports = (io, socket, rooms) => {
         const bots = room.players.filter(p => p.isBot);
         bots.forEach((bot, i) => {
             setTimeout(() => {
+                // [关键修复] 在定时器回调中重新检查房间是否依然存在
+                if (!rooms[roomId]) return; 
+
                 if(room.seatManager) {
                     const availableIdx = room.seatManager.pendingIndices[0];
                     if (availableIdx !== undefined) {
@@ -80,6 +83,7 @@ module.exports = (io, socket, rooms) => {
                             });
                             if (res.isFinished) {
                                 setTimeout(() => {
+                                    if (!rooms[roomId]) return; // 双重检查
                                     const { newPlayers } = room.seatManager.finalizeSeats();
                                     room.players = newPlayers;
                                     room.seatManager = null;
@@ -112,6 +116,8 @@ module.exports = (io, socket, rooms) => {
 
         if (result.isFinished) {
             setTimeout(() => {
+                if (!rooms[roomId]) return; // 安全检查
+
                 const { newPlayers, drawDetails } = room.seatManager.finalizeSeats();
                 room.players = newPlayers;
                 room.seatManager = null; 
@@ -142,24 +148,36 @@ module.exports = (io, socket, rooms) => {
         io.to(socket.id).emit('hand_update', currentHand);
 
         if (result.isRoundOver) { 
+            // [修复] 增加 3秒 延迟后再发送结算信息
             const rInfo = result.roundResult;
-            if (rInfo.isGrandOver) {
-                io.to(roomId).emit('grand_game_over', { 
-                    grandWinner: rInfo.roundWinnerName, 
-                    grandScores: rInfo.grandScores,
-                    matchHistory: rInfo.matchHistory,
-                    detail: rInfo.detail
-                });
-                room.gameManager = null; 
-            } else {
-                io.to(roomId).emit('round_over', {
-                    roundWinner: rInfo.roundWinnerName,
-                    pointsEarned: rInfo.pointsEarned,
-                    detail: rInfo.detail,
-                    grandScores: rInfo.grandScores,
-                    matchHistory: rInfo.matchHistory
-                });
+            
+            // 先广播最后一步出牌 (如果 Game Over 前有出牌动作)
+            if (result.cardsPlayed && result.cardsPlayed.length > 0) {
+                 broadcastGameState(roomId, room, result.logText);
             }
+
+            setTimeout(() => {
+                // 双重检查防止房间被销毁
+                if (!rooms[roomId]) return;
+                
+                if (rInfo.isGrandOver) {
+                    io.to(roomId).emit('grand_game_over', { 
+                        grandWinner: rInfo.roundWinnerName, 
+                        grandScores: rInfo.grandScores,
+                        matchHistory: rInfo.matchHistory,
+                        detail: rInfo.detail
+                    });
+                    room.gameManager = null; 
+                } else {
+                    io.to(roomId).emit('round_over', {
+                        roundWinner: rInfo.roundWinnerName,
+                        pointsEarned: rInfo.pointsEarned,
+                        detail: rInfo.detail,
+                        grandScores: rInfo.grandScores,
+                        matchHistory: rInfo.matchHistory
+                    });
+                }
+            }, 3000); // 3000ms 延迟
         } else {
             broadcastGameState(roomId, room, result.logText);
         }
@@ -173,7 +191,24 @@ module.exports = (io, socket, rooms) => {
         const result = room.gameManager.passTurn(socket.id);
         if (!result.success) return socket.emit('play_error', result.error);
 
-        broadcastGameState(roomId, room, result.logText || "PASS");
+        // 如果过牌导致游戏结束 (如最后一手都没人要)
+        if (result.isRoundOver) {
+            const rInfo = result.roundResult;
+            broadcastGameState(roomId, room, result.logText);
+            
+            setTimeout(() => {
+                if (!rooms[roomId]) return;
+                io.to(roomId).emit('round_over', {
+                    roundWinner: rInfo.roundWinnerName,
+                    pointsEarned: rInfo.pointsEarned,
+                    detail: rInfo.detail,
+                    grandScores: rInfo.grandScores,
+                    matchHistory: rInfo.matchHistory
+                });
+            }, 3000);
+        } else {
+            broadcastGameState(roomId, room, result.logText || "PASS");
+        }
     });
 
     // --- 切换托管 ---

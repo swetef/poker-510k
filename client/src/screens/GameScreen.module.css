@@ -1,0 +1,98 @@
+/* 游戏主容器 */
+.gameTable {
+    height: 100dvh; /* 适配移动端动态地址栏 */
+    width: 100vw;
+    background-color: #1e3c29;
+    background-image: radial-gradient(circle at center, #2d7a54 0%, #173b25 100%);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    user-select: none;
+    box-sizing: border-box;
+
+    /* 适配刘海屏安全区域 */
+    padding-top: env(safe-area-inset-top);
+    padding-left: max(15px, env(safe-area-inset-left));
+    padding-right: max(15px, env(safe-area-inset-right));
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* 安全区域包装层 (用于定位 UI 元素) */
+.gameSafeArea {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+
+    /* 同样需要适配安全区域 */
+    padding-top: env(safe-area-inset-top);
+    padding-left: max(15px, env(safe-area-inset-left));
+    padding-right: max(15px, env(safe-area-inset-right));
+    padding-bottom: env(safe-area-inset-bottom);
+
+    display: flex;
+    flex-direction: column;
+    pointer-events: none; /* 让点击穿透到底层，子元素需开启 pointer-events: auto */
+}
+
+/* --- 全局样式 (Global Overrides) --- */
+/* 原本通过 JS 注入的样式，现在移到这里统一管理 */
+
+/* 机器人徽章 */
+:global(.statusBadgeBot) {
+    background: #34495e;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* 托管徽章 (带呼吸动画) */
+:global(.statusBadgeAuto) {
+    background: #e67e22;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+/* 旋转动画 (用于 Timer) */
+:global(.spin) {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* [新增] 倒计时紧急闪烁动画 */
+:global(.critical-pulse) {
+    animation: criticalPulse 0.5s infinite;
+}
+
+@keyframes criticalPulse {
+    0% { transform: scale(1); opacity: 1; filter: drop-shadow(0 0 0px #e74c3c); }
+    50% { transform: scale(1.1); opacity: 0.9; filter: drop-shadow(0 0 10px #e74c3c); }
+    100% { transform: scale(1); opacity: 1; filter: drop-shadow(0 0 0px #e74c3c); }
+}
