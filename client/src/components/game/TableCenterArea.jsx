@@ -1,6 +1,6 @@
 import React from 'react';
 import { Coins } from 'lucide-react';
-import { styles } from '../../styles.js';
+import css from './TableCenterArea.module.css'; // 新 CSS
 import { MiniCard } from '../BaseUI.jsx';
 import { useGame } from '../../context/GameContext.jsx';
 
@@ -14,26 +14,33 @@ export const TableCenterArea = () => {
         infoMessage: serverInfoMessage 
     } = useGame();
 
-    // 可以在这里处理本地消息逻辑，目前暂且直接展示
     const displayMessage = serverInfoMessage;
 
     return (
         <>
-            <div style={styles.scoreBoard}>
-                <div style={{fontSize: 10, opacity: 0.8, textTransform:'uppercase'}}>POINTS</div>
-                <div style={{fontSize: 24, fontWeight: 'bold', color: '#f1c40f', display:'flex', alignItems:'center', justifyContent:'center', gap:5}}>
+            <div className={css.scoreBoard}>
+                <div className={css.scoreLabel}>POINTS</div>
+                <div className={css.scoreValue}>
                     <Coins size={20} /> {pendingPoints}
                 </div>
             </div>
 
-            <div style={styles.infoMessage}>{displayMessage}</div>
+            {displayMessage && (
+                <div className={css.infoMessage} key={Date.now()}>
+                    {displayMessage}
+                </div>
+            )}
 
-            <div style={styles.tableCenter}>
+            <div className={css.tableCenter}>
                 {lastPlayed.length > 0 && (
-                    <div style={{animation: 'popIn 0.3s'}}>
-                        <div style={styles.playerNameTag}>{lastPlayerName}</div>
-                        <div style={styles.playedRow}> 
-                            {lastPlayed.map((c, i) => <MiniCard key={i} cardVal={c} index={i} />)}
+                    <div className={css.playedContainer}>
+                        <div className={css.playerNameTag}>{lastPlayerName}</div>
+                        <div className={css.playedRow}> 
+                            {lastPlayed.map((c, i) => (
+                                <div key={i} className={css.miniCardWrapper}>
+                                    <MiniCard cardVal={c} index={i} />
+                                </div>
+                            ))}
                         </div>
                     </div>
                 )}

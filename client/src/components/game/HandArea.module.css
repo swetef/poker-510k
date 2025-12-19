@@ -1,0 +1,47 @@
+.handArea {
+    position: absolute;
+    /* 适配 iPhone 底部黑条 */
+    bottom: max(25px, env(safe-area-inset-bottom));
+    /* 左侧避开头像区域 */
+    left: 90px;
+    right: 10px;
+    height: 160px;
+    display: flex;
+    justify-content: flex-start;
+    align-items: flex-end;
+    z-index: 20;
+    touch-action: none;
+    pointer-events: auto;
+    padding-bottom: 10px;
+    transition: all 0.3s;
+}
+
+/* 托管模式下的遮罩效果 */
+.autoPlayMode {
+    opacity: 0.6;
+    filter: grayscale(0.6);
+    pointer-events: none;
+}
+
+.autoPlayBadge {
+    position: absolute;
+    top: -40px;
+    left: 20px;
+    background: rgba(230, 126, 34, 0.9);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    z-index: 50;
+    animation: floatBadge 2s infinite ease-in-out;
+}
+
+@keyframes floatBadge {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}

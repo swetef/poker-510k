@@ -1,0 +1,87 @@
+/* 基础卡牌容器 */
+.card {
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #999;
+    position: absolute;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    padding: 4px;
+    transition: transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1);
+    width: 55px;
+    height: 70px;
+    box-sizing: border-box;
+    /* 禁止触摸时的默认动作，交由 JS 处理 */
+    touch-action: none; 
+    box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+}
+
+/* 选中状态 (JS 动态添加类名或保留部分 inline transform 也可以，这里推荐用类名辅助) */
+.cardSelected {
+    transform: translateY(-35px);
+    border-color: #3498db !important;
+    box-shadow: 0 0 15px rgba(52, 152, 219, 0.6) !important;
+}
+
+/* 分牌高亮 */
+.cardScore {
+    border-color: #f1c40f;
+    box-shadow: 0 0 8px rgba(241, 196, 15, 0.4);
+}
+
+/* 普通牌 */
+.cardNormal {
+    border-color: #bdc3c7;
+}
+
+/* 卡面内容布局 */
+.cardContent {
+    position: absolute;
+    top: 0;
+    left: 1px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 0.9;
+}
+
+.cardText {
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: -1px;
+}
+
+.cardSuit {
+    font-size: 14px;
+    margin-top: -1px;
+}
+
+/* 右下角星星 */
+.starBadge {
+    position: absolute;
+    bottom: 1px;
+    right: 2px;
+    font-size: 10px;
+    color: #f1c40f;
+}
+
+/* --- 小卡牌 (用于历史记录/桌面展示) --- */
+.miniCard {
+    background: white;
+    padding: 10px 15px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 24px;
+    min-width: 40px;
+    text-align: center;
+    border: 1px solid #ccc;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    position: relative;
+}
+
+.miniCardScore {
+    border: 2px solid #f1c40f;
+    transform: scale(1.1) translateY(-10px);
+    z-index: 10;
+}

@@ -1,0 +1,89 @@
+.actionBar {
+    position: absolute;
+    bottom: 100px;
+    width: 100%;
+    height: 60px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none; /* 容器穿透 */
+    z-index: 30;
+}
+
+.buttonGroup {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    pointer-events: auto; /* 按钮可点 */
+}
+
+/* 基础按钮样式 */
+.btn {
+    border: none;
+    border-radius: 40px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    transition: all 0.2s;
+    color: white;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn:active {
+    transform: scale(0.95);
+}
+
+/* 灰色功能按钮 (重选、不要、提示) */
+.btnSecondary {
+    composes: btn;
+    padding: 8px 15px;
+    background: #7f8c8d;
+    font-size: 14px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.btnHint {
+    composes: btnSecondary;
+    background: #8e44ad;
+}
+
+.btnReset {
+    composes: btnSecondary;
+    background: #95a5a6;
+}
+
+/* 出牌按钮 (高亮) */
+.btnPlay {
+    composes: btn;
+    padding: 8px 30px;
+    background: linear-gradient(to bottom, #f1c40f, #f39c12);
+    font-size: 16px;
+    box-shadow: 0 8px 20px rgba(243, 156, 18, 0.4);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.btnCancelAuto {
+    composes: btnPlay;
+    background: #e74c3c;
+    width: 180px;
+    box-shadow: 0 8px 20px rgba(231, 76, 60, 0.4);
+}
+
+/* 等待提示 */
+.waitingBadge {
+    color: rgba(255,255,255,0.7);
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0,0,0,0.3);
+    padding: 10px 20px;
+    border-radius: 30px;
+}

@@ -1,0 +1,90 @@
+.modalOverlay {
+    position: fixed; 
+    top:0; left:0; right:0; bottom:0; 
+    background: rgba(0,0,0,0.85); 
+    display:flex; 
+    justify-content:center; 
+    align-items:center; 
+    z-index: 99; 
+    backdrop-filter: blur(8px);
+    pointer-events: auto;
+}
+
+.modalContent {
+    background: white; 
+    padding: 0; /* 内部 Padding 由子元素控制 */
+    border-radius: 24px; 
+    text-align: center; 
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6); 
+    animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    width: 95%;        
+    max-width: 600px;       
+    max-height: 85vh;   
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+@keyframes popIn {
+    0% { transform: scale(0.8); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.resultContainer {
+    padding: 20px;
+    width: 100%;
+}
+
+.winnerTitle {
+    font-size: 28px;
+    margin-bottom: 5px;
+    color: #2c3e50;
+    font-weight: bold;
+}
+
+.roundTitle {
+    font-size: 24px;
+    margin: 0;
+    font-weight: bold;
+}
+
+.titleRow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.tableWrapper {
+    margin: 15px 0;
+    width: 100%;
+}
+
+.waitingText {
+    color: #999;
+    margin-top: 10px;
+    font-size: 14px;
+}
+
+/* 按钮样式复用，但独立定义 */
+.primaryButton {
+    width: 100%;
+    height: 50px;
+    background: #2c3e50;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s;
+    box-shadow: 0 5px 15px rgba(44, 62, 80, 0.2);
+    margin-top: 10px;
+}
+
+.primaryButton:hover {
+    background: #34495e;
+}

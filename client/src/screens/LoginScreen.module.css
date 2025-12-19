@@ -1,0 +1,258 @@
+/* =========================================
+   登录页专属样式 (LoginScreen)
+   替代原 styles.js 中的 loginCard 相关样式
+   ========================================= */
+
+/* 页面主容器 (继承原 styles.container) */
+.container {
+    height: 100dvh; /* 适配移动端动态地址栏 */
+    width: 100vw;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #1e272e;
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-image: radial-gradient(circle at top right, #34495e 0%, #000000 100%);
+    overflow: hidden;
+}
+
+/* 卡片主体 */
+.loginCard {
+    background: white;
+    border-radius: 24px;
+    width: 95%;
+    max-width: 1100px;
+    min-height: 600px;
+    max-height: 90vh;
+    display: flex;
+    box-shadow: 0 50px 100px -20px rgba(0, 0, 0, 0.7);
+    overflow: hidden;
+    animation: popIn 0.5s ease-out;
+}
+
+/* --- 左侧品牌区 --- */
+.loginLeft {
+    flex: 0.8;
+    background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+    padding: 60px 50px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.logoCircle {
+    width: 90px;
+    height: 90px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 25px;
+    backdrop-filter: blur(10px);
+}
+
+.logoText {
+    font-size: 28px;
+    font-weight: 900;
+    color: white;
+}
+
+.brandTitle {
+    font-size: 48px;
+    font-weight: 800;
+    margin: 0 0 15px 0;
+    letter-spacing: -1.5px;
+}
+
+.brandSubtitle {
+    font-size: 18px;
+    opacity: 0.9;
+    margin-bottom: 50px;
+    font-weight: 500;
+}
+
+.featureList {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.featureItem {
+    font-size: 15px;
+    opacity: 0.95;
+    display: flex;
+    align-items: center;
+    font-weight: 500;
+}
+
+/* --- 右侧表单区 --- */
+.loginRight {
+    flex: 1.2;
+    padding: 50px 60px;
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    overflow-y: auto;
+}
+
+/* 顶部工具栏 */
+.topBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.fullScreenBtn {
+    background: #f8f9fa;
+    border: 1px solid #e1e4e8;
+    border-radius: 20px;
+    padding: 6px 12px;
+    cursor: pointer;
+    color: #7f8c8d;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: bold;
+    transition: all 0.2s;
+}
+
+.pingBadge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: bold;
+    border: 1px solid transparent;
+}
+
+/* Tab 切换 */
+.tabs {
+    display: flex;
+    gap: 35px;
+    margin-bottom: 35px;
+    border-bottom: 2px solid #f1f2f6;
+}
+
+.tabBtn {
+    padding: 12px 0;
+    font-size: 18px;
+    font-weight: bold;
+    color: #95a5a6;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -3px;
+}
+
+.tabBtnActive {
+    composes: tabBtn;
+    color: #2c3e50;
+    border-bottom: 3px solid #27ae60;
+}
+
+/* 表单内容 */
+.formContent {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.inputGroup {
+    display: flex;
+    align-items: center;
+    background: #f8f9fa;
+    border-radius: 14px;
+    padding: 0 20px;
+    margin-bottom: 20px;
+    border: 1px solid #e1e4e8;
+    height: 60px;
+    transition: all 0.2s;
+}
+
+.input {
+    padding: 10px;
+    border: none;
+    background: transparent;
+    flex: 1;
+    outline: none;
+    font-size: 17px;
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+/* 高级设置面板容器 */
+.advancedConfigPanel {
+    margin-top: 15px;
+    background: #fff;
+    border-radius: 12px;
+    animation: fadeIn 0.4s ease;
+}
+
+/* 主按钮 */
+.primaryButton {
+    margin-top: 25px;
+    width: 100%;
+    height: 65px;
+    background: #2c3e50;
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 19px;
+    transition: all 0.2s;
+    box-shadow: 0 10px 25px rgba(44, 62, 80, 0.25);
+}
+
+.primaryButton:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    background: #95a5a6 !important; /* 强制覆盖 */
+}
+
+/* 首次加载提示 */
+.firstLoadTip {
+    text-align: center;
+    margin-top: 15px;
+    font-size: 13px;
+    color: #e74c3c;
+    background: #fdedec;
+    padding: 8px;
+    border-radius: 8px;
+}
+
+/* 动画定义 */
+@keyframes popIn {
+    0% { transform: scale(0.95); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Loading 旋转动画 (全局) */
+:global(.spin) {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

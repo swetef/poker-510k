@@ -221,7 +221,12 @@ export const useBattleLogic = (socket, username, mySocketId, roomId) => {
 
     // --- 交互 Actions ---
 
-    const toggleSort = () => setSortMode(prev => prev === 'POINT' ? 'ARRANGE' : 'POINT');
+    // [修改] 排序模式切换逻辑：点数 -> 理牌(提) -> 理牌(合) -> 点数
+    const toggleSort = () => setSortMode(prev => {
+        if (prev === 'POINT') return 'ARRANGE';
+        if (prev === 'ARRANGE') return 'ARRANGE_MERGED';
+        return 'POINT';
+    });
     
     const handleToggleAutoPlay = (roomId) => socket.emit('toggle_auto_play', { roomId });
     const handlePass = (roomId) => {

@@ -55,23 +55,30 @@ export const getCardDisplay = (cardVal) => {
 };
 
 // 智能理牌逻辑
-export const arrangeHand = (cards) => {
-    const scoreCards = []; // 右侧：分牌
-    const otherCards = []; // 待分类的牌
+// [修改] 增加 extractScore 参数，默认为 true (提取分牌)
+// 如果为 false，则不单独提取分牌，而是按照普通牌逻辑（炸弹/三张/对子）处理
+export const arrangeHand = (cards, extractScore = true) => {
+    let scoreCards = []; // 右侧：分牌
+    let otherCards = []; // 待分类的牌
 
-    // 1. 先把所有分牌(5, 10, K)提取出来 (不做特殊修正，严格分离)
-    cards.forEach(c => {
-        if (isScoreCard(c)) scoreCards.push(c);
-        else otherCards.push(c);
-    });
+    if (extractScore) {
+        // 1. 先把所有分牌(5, 10, K)提取出来
+        cards.forEach(c => {
+            if (isScoreCard(c)) scoreCards.push(c);
+            else otherCards.push(c);
+        });
 
-    // 2. 对分牌进行排序：K > 10 > 5 (KKKK 1010 5555)
-    scoreCards.sort((a, b) => {
-        const rA = getScoreCardRank(a);
-        const rB = getScoreCardRank(b);
-        if (rA !== rB) return rB - rA; // 降序 (K=3, 10=2, 5=1)
-        return getSuitSortValue(b) - getSuitSortValue(a); // 同分按花色排
-    });
+        // 2. 对分牌进行排序：K > 10 > 5 (KKKK 1010 5555)
+        scoreCards.sort((a, b) => {
+            const rA = getScoreCardRank(a);
+            const rB = getScoreCardRank(b);
+            if (rA !== rB) return rB - rA; // 降序 (K=3, 10=2, 5=1)
+            return getSuitSortValue(b) - getSuitSortValue(a); // 同分按花色排
+        });
+    } else {
+        // [新增] 不提取模式：所有牌都进入普通分类逻辑
+        otherCards = [...cards];
+    }
 
     // 3. 对剩余牌进行分组
     const groups = new Map();
@@ -129,7 +136,12 @@ export const sortHand = (cards, mode = 'POINT') => {
         return [...cards].sort((a, b) => getSuitSortValue(b) - getSuitSortValue(a));
     }
     if (mode === 'ARRANGE') {
-        return arrangeHand(cards);
+        // 模式1：提取510K
+        return arrangeHand(cards, true);
+    }
+    if (mode === 'ARRANGE_MERGED') {
+        // [新增] 模式2：融合510K
+        return arrangeHand(cards, false);
     }
     // 默认 POINT
     return [...cards].sort((a, b) => getSortValue(b) - getSortValue(a));

@@ -1,0 +1,173 @@
+/* 抽签页主容器 (复用游戏页背景风格) */
+.drawTable {
+    height: 100dvh;
+    width: 100vw;
+    background-color: #1e3c29;
+    background-image: radial-gradient(circle at center, #2d7a54 0%, #173b25 100%);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    
+    /* 适配安全区域 */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+.contentContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+/* 顶部提示框 */
+.infoBox {
+    background: rgba(0, 0, 0, 0.6);
+    padding: 20px 30px;
+    border-radius: 20px;
+    margin-bottom: 40px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: center;
+    color: white;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    animation: fadeInDown 0.5s ease-out;
+}
+
+.title {
+    margin: 0 0 10px 0;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.desc {
+    font-size: 14px;
+    color: #bdc3c7;
+    max-width: 400px;
+    line-height: 1.6;
+}
+
+/* 卡牌网格 */
+.cardGrid {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 800px;
+    padding: 10px;
+}
+
+/* 单个卡位容器 */
+.cardSlot {
+    position: relative;
+    width: 80px;
+    height: 110px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    perspective: 1000px; /* 为翻牌动画做准备 */
+}
+
+/* 名字标签 */
+.nameTag {
+    position: absolute;
+    top: -28px;
+    width: 120px;
+    text-align: center;
+    font-size: 12px;
+    color: white;
+    font-weight: bold;
+    text-shadow: 0 1px 2px black;
+    white-space: nowrap;
+    z-index: 10;
+    animation: popIn 0.3s ease-back;
+}
+
+.nameTagMine {
+    color: #f1c40f;
+}
+
+/* 翻开的牌包装器 */
+.flippedWrapper {
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    pointer-events: auto;
+    border-radius: 6px;
+    transform-origin: center center;
+}
+
+.flippedWrapperMine {
+    transform: scale(1.1);
+    box-shadow: 0 0 20px rgba(241, 196, 15, 0.6);
+}
+
+/* 卡背 (未翻开) */
+.cardBack {
+    width: 55px;
+    height: 70px;
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    border-radius: 6px;
+    border: 2px solid #bdc3c7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s;
+    pointer-events: auto;
+}
+
+.cardBack:active {
+    transform: scale(0.95);
+}
+
+.cardBackInner {
+    width: 40px;
+    height: 55px;
+    border: 1px dashed rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cardBackText {
+    font-size: 20px;
+    opacity: 0.5;
+    color: white;
+}
+
+/* 底部状态文本 */
+.statusText {
+    margin-top: 40px;
+    color: #f1c40f;
+    font-size: 18px;
+    font-weight: bold;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    height: 30px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes popIn {
+    from { opacity: 0; transform: scale(0.5); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse {
+    0% { opacity: 0.8; }
+    50% { opacity: 1; }
+    100% { opacity: 0.8; }
+}

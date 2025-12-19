@@ -1,3 +1,16 @@
+/* --- [新增] 大厅页专用容器 --- */
+.lobbyContainer {
+    height: 100dvh;
+    width: 100vw;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #1e272e;
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-image: radial-gradient(circle at top right, #34495e 0%, #000000 100%);
+    overflow: hidden;
+}
+
 /* --- 容器与卡片 --- */
 .lobbyCard {
     background: white;
@@ -171,6 +184,7 @@
     align-items: center;
 }
 
+/* --- [补全] 配置表单样式 --- */
 .configGrid {
     display: grid;
     grid-template-columns: 1fr 1fr;

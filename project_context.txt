@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/19 15:14:35
+Project Context Generated at 2025/12/19 16:00:26
 
 
 ================================================================================
@@ -226,224 +226,13 @@ export default function App() {
 ================================================================================
 FILE PATH: client\src\components\BaseUI.jsx
 ================================================================================
-import React, { useEffect, useRef, useState } from 'react'; 
-import { Coins, History, Trophy, Flag, ChevronDown, ChevronUp, Shield } from 'lucide-react'; 
-import { getCardDisplay } from '../utils/cardLogic.js';
-import { styles } from '../styles.js';
-import CountDownTimer from './CountDownTimer.jsx'; 
+// BaseUI.jsx 现在主要作为组件导出入口
+// 具体的组件逻辑已经拆分到 ui/ 目录下
+// 这样可以大幅减少单个文件的长度，便于 AI 阅读和维护
 
-export const GameLogPanel = ({ logs }) => {
-    const [isCollapsed, setIsCollapsed] = useState(false); 
-    const endRef = useRef(null);
-
-    useEffect(() => {
-        if (!isCollapsed) {
-            endRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }
-    }, [logs, isCollapsed]);
-
-    return (
-        <div 
-            style={{
-                ...styles.gameLogPanel,
-                zIndex: 1000,
-                height: isCollapsed ? 36 : 140, 
-                background: 'transparent', 
-                backdropFilter: 'none',
-                border: isCollapsed ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
-                boxShadow: 'none',
-                cursor: 'pointer',
-                textShadow: '1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 2px 4px rgba(0,0,0,0.8)'
-            }}
-            onClick={() => setIsCollapsed(!isCollapsed)} 
-        >
-            <div style={styles.logHeader}>
-                <History size={14} color="#f1c40f" style={{filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))'}}/> 
-                <span style={{color:'#fff', fontWeight:'bold', flex: 1}}>
-                    对局记录
-                </span>
-                {isCollapsed ? <ChevronDown size={14} color="#ccc" style={{filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))'}}/> : <ChevronUp size={14} color="#ccc" style={{filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))'}}/>}
-            </div>
-            
-            <div style={{
-                ...styles.logList, 
-                opacity: isCollapsed ? 0 : 1,
-                pointerEvents: isCollapsed ? 'none' : 'auto'
-            }}>
-                {logs.map((log, i) => (
-                    <div key={i} style={styles.logItem}>
-                        <span style={styles.logTime}>[{log.time.split(' ')[0]}]</span>
-                        <span style={{color: '#eee'}}>{log.text}</span>
-                    </div>
-                ))}
-                <div ref={endRef} />
-            </div>
-        </div>
-    );
-};
-
-export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacing }) => {
-    const { suit, text, color, isScore } = getCardDisplay(cardVal);
-    
-    const handlePointerDown = (e) => {
-        if (e.pointerType === 'touch') return;
-        if (e.button !== 0 && e.pointerType === 'mouse') return;
-        e.stopPropagation();
-        onClick(cardVal);
-    };
-
-    return (
-        <div 
-            onPointerDown={handlePointerDown}
-            onMouseEnter={(e) => {
-                if (e.pointerType === 'mouse') {
-                     onMouseEnter(cardVal);
-                }
-            }}
-            style={{
-                ...styles.card, 
-                color, 
-                left: index * spacing, 
-                zIndex: index,
-                transform: isSelected ? 'translateY(-35px)' : 'translateY(0)',
-                borderColor: isSelected ? '#3498db' : (isScore ? '#f1c40f' : '#bdc3c7'),
-                boxShadow: isSelected ? '0 0 15px rgba(52, 152, 219, 0.6)' : (isScore ? '0 0 8px rgba(241, 196, 15, 0.4)' : '0 -2px 5px rgba(0,0,0,0.1)'),
-                touchAction: 'none' 
-            }}
-        >
-            <div style={{position: 'absolute', top: 0, left: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 0.9}}>
-                <div style={{fontSize: 16, fontWeight: '900', letterSpacing: -1}}>{text}</div>
-                <div style={{fontSize: 14, marginTop: -1}}>{suit}</div>
-            </div>
-            {isScore && <div style={{position:'absolute', bottom:1, right:2, fontSize:10, color:'#f1c40f'}}>★</div>}
-        </div>
-    );
-};
-export const MiniCard = ({ cardVal, index }) => {
-    const { text, suit, color, isScore } = getCardDisplay(cardVal);
-    return (
-        <div style={{
-            ...styles.miniCard, color,
-            border: isScore ? '2px solid #f1c40f' : '1px solid #ccc',
-            transform: isScore ? 'scale(1.1) translateY(-10px)' : 'scale(1)',
-            zIndex: index
-        }}>
-            {suit}{text}
-        </div>
-    );
-};
-
-// [修改] 增加 roundScore 参数
-export const PlayerAvatar = ({ player, isTurn, score, roundScore = 0, targetScore, isMySocket, remainingSeconds, rank, timerPosition, hideTimer, cardCount, showCardCountMode, team }) => {
-    const progress = Math.min((score / targetScore) * 100, 100);
-    const containerOpacity = rank ? 0.75 : 1; 
-
-    let showBadge = false;
-    if (showCardCountMode === 2) showBadge = true;
-    if (showCardCountMode === 1 && cardCount <= 2 && cardCount > 0) showBadge = true;
-    if (rank) showBadge = false;
-
-    const isTeamMode = team !== undefined && team !== null;
-    const teamColor = team === 0 ? '#e74c3c' : '#3498db'; 
-    const teamName = team === 0 ? '红' : '蓝';
-    
-    let borderColor = 'rgba(255,255,255,0.1)';
-    if (isTeamMode) borderColor = teamColor;
-    if (isTurn) borderColor = '#f1c40f'; 
-
-    let bgColor = isTurn ? 'rgba(44, 62, 80, 0.9)' : 'rgba(44, 62, 80, 0.6)';
-    if (isTeamMode && !isTurn) {
-        bgColor = team === 0 ? 'rgba(231, 76, 60, 0.2)' : 'rgba(52, 152, 219, 0.2)';
-    }
-
-    return (
-        <div style={{
-            ...styles.playerBox,
-            borderColor: borderColor,
-            borderWidth: isTeamMode ? 2 : 1, 
-            transform: isTurn ? 'scale(1.1)' : 'scale(1)',
-            boxShadow: isTurn ? '0 0 25px rgba(241, 196, 15, 0.5)' : 'none',
-            background: bgColor,
-            position: 'relative',
-            opacity: containerOpacity
-        }}>
-            {showBadge && (
-                <div style={styles.cardCountBadge}>
-                    {cardCount}
-                </div>
-            )}
-
-            {isTeamMode && (
-                <div style={{
-                    position: 'absolute', 
-                    top: -10, 
-                    right: -8, 
-                    background: teamColor, color: 'white',
-                    fontSize: 9, padding: '1px 4px', borderRadius: 4,
-                    display: 'flex', alignItems: 'center', gap: 2,
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                    zIndex: 25
-                }}>
-                    <Shield size={8} fill="currentColor"/> {teamName}队
-                </div>
-            )}
-
-            {rank && (
-                <div style={{
-                    position: 'absolute',
-                    top: -16, 
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    background: rank === 1 ? '#f1c40f' : (rank === 2 ? '#bdc3c7' : '#e67e22'), 
-                    color: '#fff',
-                    padding: '2px 8px',
-                    borderRadius: 20,
-                    fontSize: 11,
-                    fontWeight: 'bold',
-                    boxShadow: '0 2px 5px rgba(0,0,0,0.4)',
-                    zIndex: 30, 
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 3,
-                    whiteSpace: 'nowrap',
-                    border: '1px solid white'
-                }}>
-                    {rank === 1 ? <Trophy size={10} fill="white" /> : <Flag size={10} fill="white"/>}
-                    {rank === 1 ? 'NO.1' : `NO.${rank}`}
-                </div>
-            )}
-
-            <div style={{...styles.avatar, borderColor: isTeamMode ? teamColor : 'rgba(255,255,255,0.3)'}}>
-                {player.name[0]}
-            </div>
-            
-            <div style={styles.playerName}>
-                {player.name} {isMySocket && '(我)'}
-            </div>
-            
-            <div style={styles.scoreBarBg}>
-                <div style={{...styles.scoreBarFill, width:`${progress}%`, background: progress>=100?'#e74c3c':'#2ecc71'}}></div>
-            </div>
-            
-            {/* [核心修改] 分数显示优化 */}
-            <div style={styles.playerScore}>
-                <Coins size={10} color="#f1c40f"/> 
-                {score}
-                {roundScore > 0 && (
-                    <span style={{color: '#f1c40f', fontSize: 9, marginLeft: 2, fontWeight: 900}}>(+{roundScore})</span>
-                )}
-            </div>
-            
-            {isTurn && !rank && !hideTimer && (
-                <CountDownTimer 
-                    initialSeconds={remainingSeconds} 
-                    totalSeconds={60} 
-                    position={timerPosition}
-                />
-            )}
-        </div>
-    );
-};
+export { Card, MiniCard } from './ui/Card.jsx';
+export { GameLogPanel } from './ui/GameLogPanel.jsx';
+export { PlayerAvatar } from './ui/PlayerAvatar.jsx';
 
 ================================================================================
 FILE PATH: client\src\components\CountDownTimer.jsx
@@ -565,21 +354,17 @@ export default CountDownTimer;
 FILE PATH: client\src\components\game\GameActionBar.jsx
 ================================================================================
 import React from 'react';
-import { RotateCcw, Zap, Lightbulb, Clock, Loader2 } from 'lucide-react'; // 增加 Loader2
-import { styles } from '../../styles.js';
+import { RotateCcw, Zap, Lightbulb, Clock, Loader2 } from 'lucide-react';
+import css from './GameActionBar.module.css'; // 新 CSS
 import { useGame } from '../../context/GameContext.jsx';
 import TimerComponent from '../CountDownTimer.jsx';
 
-/**
- * [操作栏组件]
- * 包含：出牌、不要、提示、重选、取消托管等按钮
- */
 export const GameActionBar = () => {
     const { 
         winner, roundResult, grandResult, selectedCards, 
         playersInfo, mySocketId, currentTurnId, players, turnRemaining,
         handleClearSelection, handleToggleAutoPlay, handlePass, handleRequestHint, handlePlayCards,
-        isSubmitting // [新增] 获取防抖状态
+        isSubmitting
     } = useGame();
 
     if (winner || roundResult || grandResult) return null;
@@ -592,49 +377,49 @@ export const GameActionBar = () => {
     const waitingText = currentTurnPlayer ? `等待 ${currentTurnPlayer.name}...` : '等待中...';
 
     return (
-        <div style={styles.actionBar}>
-            <div style={{display:'flex', alignItems: 'center', gap: 20}}>
+        <div className={css.actionBar}>
+            <div className={css.buttonGroup}>
                 {selectedCards.length > 0 && (
                     <button 
-                        style={{...styles.passButton, background: '#95a5a6', padding: '8px 15px', display: 'flex', alignItems: 'center', gap: 5}} 
+                        className={css.btnReset}
                         onClick={handleClearSelection}
-                        disabled={isSubmitting} // 提交中禁用
+                        disabled={isSubmitting}
                     >
                         <RotateCcw size={16} /> 重选
                     </button>
                 )}
+                
                 {amIAutoPlay ? (
                     <button 
-                        style={{...styles.playButton, background: '#e74c3c', width: 180, fontSize: 16, display: 'flex', justifyContent: 'center', alignItems: 'center'}} 
+                        className={css.btnCancelAuto}
                         onClick={handleToggleAutoPlay}
                     >
-                        <Zap size={18} style={{marginRight:8}}/> 取消托管
+                        <Zap size={18} /> 取消托管
                     </button>
                 ) : (
                     <>
                         {myTurn ? (
                             <>
                                 <button 
-                                    style={{...styles.passButton, opacity: isSubmitting ? 0.6 : 1}} 
+                                    className={css.btnSecondary}
                                     onClick={handlePass}
-                                    disabled={isSubmitting} // 提交中禁用
+                                    disabled={isSubmitting}
                                 >
                                     不要
                                 </button>
                                 
                                 <button 
-                                    style={{...styles.passButton, background: '#8e44ad', marginRight: 0, padding:'8px 15px', display:'flex', alignItems:'center', gap:5, opacity: isSubmitting ? 0.6 : 1}} 
+                                    className={css.btnHint}
                                     onClick={handleRequestHint}
-                                    disabled={isSubmitting} // 提交中禁用
+                                    disabled={isSubmitting}
                                 >
                                     <Lightbulb size={16} /> 提示
                                 </button>
 
                                 <TimerComponent initialSeconds={turnRemaining} totalSeconds={60} position="inline" />
                                 
-                                {/* [修改] 增加 Loading 态和禁用逻辑 */}
                                 <button 
-                                    style={{...styles.playButton, opacity: isSubmitting ? 0.6 : 1, display: 'flex', alignItems:'center', gap: 5}} 
+                                    className={css.btnPlay} 
                                     onClick={handlePlayCards}
                                     disabled={isSubmitting}
                                 >
@@ -642,7 +427,9 @@ export const GameActionBar = () => {
                                 </button>
                             </>
                         ) : (
-                            <div style={styles.waitingBadge}><Clock size={20} className="spin" /> {waitingText}</div>
+                            <div className={css.waitingBadge}>
+                                <Clock size={20} className="spin" /> {waitingText}
+                            </div>
                         )}
                     </>
                 )}
@@ -652,11 +439,104 @@ export const GameActionBar = () => {
 };
 
 ================================================================================
+FILE PATH: client\src\components\game\GameActionBar.module.css
+================================================================================
+.actionBar {
+    position: absolute;
+    bottom: 100px;
+    width: 100%;
+    height: 60px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none; /* 容器穿透 */
+    z-index: 30;
+}
+
+.buttonGroup {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    pointer-events: auto; /* 按钮可点 */
+}
+
+/* 基础按钮样式 */
+.btn {
+    border: none;
+    border-radius: 40px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    transition: all 0.2s;
+    color: white;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn:active {
+    transform: scale(0.95);
+}
+
+/* 灰色功能按钮 (重选、不要、提示) */
+.btnSecondary {
+    composes: btn;
+    padding: 8px 15px;
+    background: #7f8c8d;
+    font-size: 14px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.btnHint {
+    composes: btnSecondary;
+    background: #8e44ad;
+}
+
+.btnReset {
+    composes: btnSecondary;
+    background: #95a5a6;
+}
+
+/* 出牌按钮 (高亮) */
+.btnPlay {
+    composes: btn;
+    padding: 8px 30px;
+    background: linear-gradient(to bottom, #f1c40f, #f39c12);
+    font-size: 16px;
+    box-shadow: 0 8px 20px rgba(243, 156, 18, 0.4);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.btnCancelAuto {
+    composes: btnPlay;
+    background: #e74c3c;
+    width: 180px;
+    box-shadow: 0 8px 20px rgba(231, 76, 60, 0.4);
+}
+
+/* 等待提示 */
+.waitingBadge {
+    color: rgba(255,255,255,0.7);
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0,0,0,0.3);
+    padding: 10px 20px;
+    border-radius: 30px;
+}
+
+================================================================================
 FILE PATH: client\src\components\game\GameHeader.jsx
 ================================================================================
 import React, { useState } from 'react';
-import { Zap, Minimize, Maximize, Layers, Shield, ChevronDown, ChevronUp, Wifi, WifiOff } from 'lucide-react'; // [新增] Wifi 图标
-import { styles } from '../../styles.js';
+import { Zap, Minimize, Maximize, Layers, Shield, ChevronDown, ChevronUp, Wifi, WifiOff } from 'lucide-react';
+import css from './GameHeader.module.css'; // 新 CSS
 import { useGame } from '../../context/GameContext.jsx';
 
 /**
@@ -680,32 +560,20 @@ const TeamScoreBoard = () => {
     if (!hasTeams) return null;
 
     return (
-        <div style={{ position: 'relative', marginRight: 10, zIndex: 50, pointerEvents: 'auto' }}>
-            <div 
-                onClick={() => setIsCollapsed(!isCollapsed)}
-                style={{
-                    background: 'rgba(0,0,0,0.3)', padding: '4px 10px', borderRadius: 20, 
-                    display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-                    border: '1px solid rgba(255,255,255,0.1)', transition: 'background 0.2s'
-                }}
-            >
-                <div style={{color:'#e74c3c', fontWeight:'bold', display:'flex', alignItems:'center', gap:3, fontSize: 13}}>
+        <div className={css.teamScoreContainer}>
+            <div className={css.teamScoreBar} onClick={() => setIsCollapsed(!isCollapsed)}>
+                <div className={css.scoreItem} style={{color:'#e74c3c'}}>
                     <Shield size={12} fill="currentColor"/> {redScore}
                 </div>
-                <div style={{width:1, height:12, background:'rgba(255,255,255,0.2)'}}></div>
-                <div style={{color:'#3498db', fontWeight:'bold', display:'flex', alignItems:'center', gap:3, fontSize: 13}}>
+                <div className={css.divider}></div>
+                <div className={css.scoreItem} style={{color:'#3498db'}}>
                     <Shield size={12} fill="currentColor"/> {blueScore}
                 </div>
                 {isCollapsed ? <ChevronDown size={14} color="#ccc"/> : <ChevronUp size={14} color="#ccc"/>}
             </div>
 
             {!isCollapsed && (
-                <div style={{
-                    position: 'absolute', top: '120%', right: 0, 
-                    background: 'rgba(30, 40, 50, 0.95)', borderRadius: 8, padding: 10,
-                    color: 'white', fontSize: 12, textAlign: 'center', width: 140,
-                    boxShadow: '0 4px 15px rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(5px)'
-                }}>
+                <div className={css.scoreDropdown}>
                     <div style={{marginBottom: 5, color: '#f1c40f', fontWeight: 'bold'}}>当前比分详情</div>
                     <div style={{display:'flex', justifyContent:'space-between', marginBottom:2}}>
                         <span style={{color:'#e74c3c'}}>红队</span> <span>{redScore}</span>
@@ -722,10 +590,9 @@ const TeamScoreBoard = () => {
 };
 
 /**
- * [Header组件] 包含房间信息、比分板、排序切换、全屏按钮
+ * [Header组件]
  */
 export const GameHeader = () => {
-    // [修改] 获取 ping 和 isConnected
     const { roomId, playersInfo, mySocketId, toggleSort, sortMode, handleToggleAutoPlay, ping, isConnected } = useGame();
     const [isFullScreen, setIsFullScreen] = useState(false);
     
@@ -744,40 +611,25 @@ export const GameHeader = () => {
         }
     };
 
-    // [新增] Ping 颜色逻辑
     const getPingColor = (p) => {
-        if (!isConnected) return '#e74c3c'; // 断线红
-        if (p < 100) return '#2ecc71'; // 流畅绿
-        if (p < 200) return '#f1c40f'; // 良好黄
-        return '#e74c3c'; // 延迟红
+        if (!isConnected) return '#e74c3c';
+        if (p < 100) return '#2ecc71';
+        if (p < 200) return '#f1c40f';
+        return '#e74c3c';
     };
 
     return (
-        <div style={styles.tableHeader}>
-            <div style={styles.roomBadgeContainer}>
-                <div style={styles.roomBadge}>Room {roomId}</div>
+        <div className={css.header}>
+            <div className={css.roomBadgeContainer}>
+                <div className={css.roomBadge}>Room {roomId}</div>
                 
-                {/* [新增] 游戏内的 Ping 值显示 */}
-                <div style={{
-                    display: 'flex', alignItems: 'center', gap: 4, 
-                    fontSize: 10, padding: '2px 8px', borderRadius: 12,
-                    background: 'rgba(0,0,0,0.3)', 
-                    color: getPingColor(ping),
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    fontWeight: 'bold',
-                    transition: 'color 0.5s'
-                }}>
+                <div className={css.pingBadge} style={{ color: getPingColor(ping) }}>
                     {isConnected ? <Wifi size={10}/> : <WifiOff size={10}/>}
                     {isConnected ? `${ping}ms` : '断线'}
                 </div>
 
                 <button 
-                    style={{
-                        pointerEvents: 'auto', background: amIAutoPlay ? '#e67e22' : 'rgba(255,255,255,0.1)', 
-                        border: '1px solid rgba(255,255,255,0.3)', color: '#ecf0f1', borderRadius: 15, 
-                        padding: '4px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer', fontSize: 11, fontWeight: 'bold', transition: 'all 0.2s'
-                    }}
+                    className={amIAutoPlay ? css.autoPlayBtnActive : css.autoPlayBtn}
                     onClick={handleToggleAutoPlay}
                 >
                     <Zap size={12} style={{marginRight: 4}} fill={amIAutoPlay ? "currentColor" : "none"}/>
@@ -785,13 +637,13 @@ export const GameHeader = () => {
                 </button>
             </div>
 
-            <div style={{display:'flex', alignItems: 'center', marginLeft: 'auto'}}>
+            <div className={css.rightSection}>
                 <TeamScoreBoard />
-                <div style={{display:'flex', gap: 10}}>
-                    <button style={{...styles.glassButton, padding: '8px 12px', pointerEvents: 'auto'}} onClick={toggleFullScreen}>
+                <div className={css.buttonGroup}>
+                    <button className={css.iconBtn} onClick={toggleFullScreen}>
                         {isFullScreen ? <Minimize size={18}/> : <Maximize size={18}/>}
                     </button>
-                    <button style={styles.sortButton} onClick={toggleSort}>
+                    <button className={css.iconBtn} onClick={toggleSort}>
                         <Layers size={16} style={{marginRight:5}}/> 
                         {sortMode === 'POINT' ? '点数' : (sortMode === 'SUIT' ? '花色' : '理牌')}
                     </button>
@@ -802,20 +654,172 @@ export const GameHeader = () => {
 };
 
 ================================================================================
+FILE PATH: client\src\components\game\GameHeader.module.css
+================================================================================
+/* 顶部栏容器 */
+.header {
+    padding: 4px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    z-index: 20;
+    width: 100%;
+    pointer-events: none; /* 让点击穿透，按钮单独开启 auto */
+    box-sizing: border-box;
+}
+
+/* 左侧：房间信息块 */
+.roomBadgeContainer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: auto;
+}
+
+.roomBadge {
+    background: rgba(0,0,0,0.3);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 15px;
+    font-size: 11px;
+    border: 1px solid rgba(255,255,255,0.1);
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+/* Ping 值徽章 */
+.pingBadge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.1);
+    font-weight: bold;
+    transition: color 0.5s;
+}
+
+/* 托管按钮 */
+.autoPlayBtn {
+    pointer-events: auto;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #ecf0f1;
+    border-radius: 15px;
+    padding: 4px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: bold;
+    transition: all 0.2s;
+}
+
+.autoPlayBtnActive {
+    composes: autoPlayBtn;
+    background: #e67e22;
+}
+
+/* 右侧：比分与功能按钮 */
+.rightSection {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+}
+
+.buttonGroup {
+    display: flex;
+    gap: 10px;
+}
+
+.iconBtn {
+    pointer-events: auto;
+    background: rgba(255,255,255,0.1);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 8px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    transition: background 0.2s;
+}
+
+.iconBtn:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+/* --- 内部组件：队伍比分板 --- */
+.teamScoreContainer {
+    position: relative;
+    margin-right: 10px;
+    z-index: 50;
+    pointer-events: auto;
+}
+
+.teamScoreBar {
+    background: rgba(0,0,0,0.3);
+    padding: 4px 10px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.1);
+    transition: background 0.2s;
+}
+
+.scoreItem {
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 13px;
+}
+
+.divider {
+    width: 1px;
+    height: 12px;
+    background: rgba(255,255,255,0.2);
+}
+
+.scoreDropdown {
+    position: absolute;
+    top: 120%;
+    right: 0;
+    background: rgba(30, 40, 50, 0.95);
+    border-radius: 8px;
+    padding: 10px;
+    color: white;
+    font-size: 12px;
+    text-align: center;
+    width: 140px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(5px);
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+================================================================================
 FILE PATH: client\src\components\game\HandArea.jsx
 ================================================================================
 import React, { useState, useEffect } from 'react';
 import { Bot } from 'lucide-react';
-import { styles } from '../../styles.js';
+import css from './HandArea.module.css'; // 新的 CSS
 import { Card } from '../BaseUI.jsx';
 import { calculateCardSpacing } from '../../utils/cardLogic.js';
 import { useGame } from '../../context/GameContext.jsx';
 import { useHandGesture } from '../../hooks/useHandGesture.js';
 
-/**
- * [手牌区域组件]
- * 包含：手牌渲染、触摸手势逻辑、窗口自适应逻辑、托管遮罩
- */
 export const HandArea = () => {
     const { 
         myHand, selectedCards, handleMouseDown, handleMouseEnter, 
@@ -825,7 +829,6 @@ export const HandArea = () => {
     const myInfo = playersInfo[mySocketId] || {};
     const amIAutoPlay = myInfo.isAutoPlay;
 
-    // 自适应逻辑移入组件内部
     const [dimensions, setDimensions] = useState({ width: window.innerWidth });
     
     useEffect(() => {
@@ -836,43 +839,88 @@ export const HandArea = () => {
 
     const cardSpacing = calculateCardSpacing(myHand.length, dimensions.width);
 
-    // 绑定手势 Hook
     const handContainerRef = useHandGesture({
         myHand, selectedCards, cardSpacing, handleMouseDown, amIAutoPlay
     });
 
+    const containerClass = [
+        css.handArea,
+        amIAutoPlay ? css.autoPlayMode : ''
+    ].join(' ');
+
     return (
-        <div 
-            ref={handContainerRef}
-            style={{
-                ...styles.handArea, 
-                opacity: amIAutoPlay ? 0.6 : 1, 
-                filter: amIAutoPlay ? 'grayscale(0.6)' : 'none',
-                pointerEvents: amIAutoPlay ? 'none' : 'auto' 
-            }}
-        >
+        <div ref={handContainerRef} className={containerClass}>
             {amIAutoPlay && (
-                <div style={{
-                    position: 'absolute', top: -40, left: 20,
-                    background: 'rgba(230, 126, 34, 0.9)', color: 'white', padding: '5px 10px', 
-                    borderRadius: 20, fontSize: 12, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 5,
-                    boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 50
-                }}>
+                <div className={css.autoPlayBadge}>
                     <Bot size={14} /> 系统代打中
                 </div>
             )}
             
             {myHand.map((c, i) => (
                 <Card 
-                    key={`${c}-${i}`} cardVal={c} index={i} 
+                    key={`${c}-${i}`} 
+                    cardVal={c} 
+                    index={i} 
                     isSelected={selectedCards.includes(c)} 
-                    onClick={handleMouseDown} onMouseEnter={handleMouseEnter} 
+                    onClick={handleMouseDown} 
+                    onMouseEnter={handleMouseEnter} 
                     spacing={cardSpacing} 
                 />
             ))}
         </div>
     );
 };
+
+================================================================================
+FILE PATH: client\src\components\game\HandArea.module.css
+================================================================================
+.handArea {
+    position: absolute;
+    /* 适配 iPhone 底部黑条 */
+    bottom: max(25px, env(safe-area-inset-bottom));
+    /* 左侧避开头像区域 */
+    left: 90px;
+    right: 10px;
+    height: 160px;
+    display: flex;
+    justify-content: flex-start;
+    align-items: flex-end;
+    z-index: 20;
+    touch-action: none;
+    pointer-events: auto;
+    padding-bottom: 10px;
+    transition: all 0.3s;
+}
+
+/* 托管模式下的遮罩效果 */
+.autoPlayMode {
+    opacity: 0.6;
+    filter: grayscale(0.6);
+    pointer-events: none;
+}
+
+.autoPlayBadge {
+    position: absolute;
+    top: -40px;
+    left: 20px;
+    background: rgba(230, 126, 34, 0.9);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    z-index: 50;
+    animation: floatBadge 2s infinite ease-in-out;
+}
+
+@keyframes floatBadge {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
 
 ================================================================================
 FILE PATH: client\src\components\game\PlayerLayout.jsx
@@ -1436,7 +1484,7 @@ FILE PATH: client\src\components\game\SettlementModal.jsx
 ================================================================================
 import React from 'react';
 import { Crown, Coins } from 'lucide-react';
-import { styles } from '../../styles.js';
+import css from './SettlementModal.module.css'; // 新 CSS
 import { ScoreTable } from '../ScoreTable.jsx';
 import { useGame } from '../../context/GameContext.jsx';
 
@@ -1457,30 +1505,46 @@ export const SettlementModal = () => {
     }));
 
     return (
-        <div style={styles.modalOverlay}>
-            <div className="modal-content-wrapper" style={{
-                ...styles.modalContent, width: '95%', maxWidth: 600, padding: 0, 
-                background: 'white', overflowY: 'auto', overflowX: 'hidden'
-            }}>
+        <div className={css.modalOverlay}>
+            <div className={css.modalContent}>
                 {grandResult ? (
-                    <div style={{padding: 20, width: '100%'}}>
+                    <div className={css.resultContainer}>
                         <Crown size={60} color="#e74c3c" style={{marginBottom: 10}} />
-                        <h2 style={{fontSize: 28, marginBottom: 5, color:'#2c3e50'}}>{grandResult.grandWinner} 夺冠!</h2>
-                        <div style={{margin: '15px 0'}}>
-                            <ScoreTable players={playersWithTeamInfo} matchHistory={grandResult.matchHistory} currentScores={grandResult.grandScores} roomConfig={roomConfig} grandResult={grandResult}/>
+                        <h2 className={css.winnerTitle}>{grandResult.grandWinner} 夺冠!</h2>
+                        
+                        <div className={css.tableWrapper}>
+                            <ScoreTable 
+                                players={playersWithTeamInfo} 
+                                matchHistory={grandResult.matchHistory} 
+                                currentScores={grandResult.grandScores} 
+                                roomConfig={roomConfig} 
+                                grandResult={grandResult}
+                            />
                         </div>
-                        <button style={{...styles.primaryButton, fontSize: 16, height: 50}} onClick={handleStartGame}>重新开始</button>
+                        
+                        <button className={css.primaryButton} onClick={handleStartGame}>重新开始</button>
                     </div>
                 ) : roundResult ? (
-                    <div style={{padding: 20, width: '100%'}}>
-                        <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:10, marginBottom: 15}}>
+                    <div className={css.resultContainer}>
+                        <div className={css.titleRow}>
                             <Coins size={30} color="#f1c40f" />
-                            <h2 style={{fontSize: 24, margin:0}}>小局结算</h2>
+                            <h2 className={css.roundTitle}>小局结算</h2>
                         </div>
-                        <div style={{margin: '10px 0'}}>
-                            <ScoreTable players={playersWithTeamInfo} matchHistory={roundResult.matchHistory} currentScores={roundResult.grandScores} roomConfig={roomConfig}/>
+                        
+                        <div className={css.tableWrapper}>
+                            <ScoreTable 
+                                players={playersWithTeamInfo} 
+                                matchHistory={roundResult.matchHistory} 
+                                currentScores={roundResult.grandScores} 
+                                roomConfig={roomConfig}
+                            />
                         </div>
-                        {amIHost ? <button style={styles.primaryButton} onClick={handleNextRound}>下一局</button> : <div style={{color:'#999', marginTop:10}}>等待房主...</div>}
+                        
+                        {amIHost ? (
+                            <button className={css.primaryButton} onClick={handleNextRound}>下一局</button>
+                        ) : (
+                            <div className={css.waitingText}>等待房主...</div>
+                        )}
                     </div>
                 ) : null}
             </div>
@@ -1489,11 +1553,105 @@ export const SettlementModal = () => {
 };
 
 ================================================================================
+FILE PATH: client\src\components\game\SettlementModal.module.css
+================================================================================
+.modalOverlay {
+    position: fixed; 
+    top:0; left:0; right:0; bottom:0; 
+    background: rgba(0,0,0,0.85); 
+    display:flex; 
+    justify-content:center; 
+    align-items:center; 
+    z-index: 99; 
+    backdrop-filter: blur(8px);
+    pointer-events: auto;
+}
+
+.modalContent {
+    background: white; 
+    padding: 0; /* 内部 Padding 由子元素控制 */
+    border-radius: 24px; 
+    text-align: center; 
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6); 
+    animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    width: 95%;        
+    max-width: 600px;       
+    max-height: 85vh;   
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+@keyframes popIn {
+    0% { transform: scale(0.8); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.resultContainer {
+    padding: 20px;
+    width: 100%;
+}
+
+.winnerTitle {
+    font-size: 28px;
+    margin-bottom: 5px;
+    color: #2c3e50;
+    font-weight: bold;
+}
+
+.roundTitle {
+    font-size: 24px;
+    margin: 0;
+    font-weight: bold;
+}
+
+.titleRow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.tableWrapper {
+    margin: 15px 0;
+    width: 100%;
+}
+
+.waitingText {
+    color: #999;
+    margin-top: 10px;
+    font-size: 14px;
+}
+
+/* 按钮样式复用，但独立定义 */
+.primaryButton {
+    width: 100%;
+    height: 50px;
+    background: #2c3e50;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s;
+    box-shadow: 0 5px 15px rgba(44, 62, 80, 0.2);
+    margin-top: 10px;
+}
+
+.primaryButton:hover {
+    background: #34495e;
+}
+
+================================================================================
 FILE PATH: client\src\components\game\TableCenterArea.jsx
 ================================================================================
 import React from 'react';
 import { Coins } from 'lucide-react';
-import { styles } from '../../styles.js';
+import css from './TableCenterArea.module.css'; // 新 CSS
 import { MiniCard } from '../BaseUI.jsx';
 import { useGame } from '../../context/GameContext.jsx';
 
@@ -1507,26 +1665,33 @@ export const TableCenterArea = () => {
         infoMessage: serverInfoMessage 
     } = useGame();
 
-    // 可以在这里处理本地消息逻辑，目前暂且直接展示
     const displayMessage = serverInfoMessage;
 
     return (
         <>
-            <div style={styles.scoreBoard}>
-                <div style={{fontSize: 10, opacity: 0.8, textTransform:'uppercase'}}>POINTS</div>
-                <div style={{fontSize: 24, fontWeight: 'bold', color: '#f1c40f', display:'flex', alignItems:'center', justifyContent:'center', gap:5}}>
+            <div className={css.scoreBoard}>
+                <div className={css.scoreLabel}>POINTS</div>
+                <div className={css.scoreValue}>
                     <Coins size={20} /> {pendingPoints}
                 </div>
             </div>
 
-            <div style={styles.infoMessage}>{displayMessage}</div>
+            {displayMessage && (
+                <div className={css.infoMessage} key={Date.now()}>
+                    {displayMessage}
+                </div>
+            )}
 
-            <div style={styles.tableCenter}>
+            <div className={css.tableCenter}>
                 {lastPlayed.length > 0 && (
-                    <div style={{animation: 'popIn 0.3s'}}>
-                        <div style={styles.playerNameTag}>{lastPlayerName}</div>
-                        <div style={styles.playedRow}> 
-                            {lastPlayed.map((c, i) => <MiniCard key={i} cardVal={c} index={i} />)}
+                    <div className={css.playedContainer}>
+                        <div className={css.playerNameTag}>{lastPlayerName}</div>
+                        <div className={css.playedRow}> 
+                            {lastPlayed.map((c, i) => (
+                                <div key={i} className={css.miniCardWrapper}>
+                                    <MiniCard cardVal={c} index={i} />
+                                </div>
+                            ))}
                         </div>
                     </div>
                 )}
@@ -1534,6 +1699,117 @@ export const TableCenterArea = () => {
         </>
     );
 };
+
+================================================================================
+FILE PATH: client\src\components\game\TableCenterArea.module.css
+================================================================================
+/* 底分面板 */
+.scoreBoard {
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -100%) scale(0.8);
+    background: rgba(0,0,0,0.6);
+    padding: 5px 20px;
+    borderRadius: 20px;
+    text-align: center;
+    color: white;
+    border: 1px solid rgba(255,255,255,0.2);
+    backdrop-filter: blur(5px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    z-index: 5;
+}
+
+.scoreLabel {
+    font-size: 10px;
+    opacity: 0.8;
+    text-transform: uppercase;
+}
+
+.scoreValue {
+    font-size: 24px;
+    font-weight: bold;
+    color: #f1c40f;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+/* 系统消息 (全屏大字) */
+.infoMessage {
+    position: absolute;
+    top: 25%;
+    width: 100%;
+    text-align: center;
+    color: #f1c40f;
+    font-size: 40px;
+    font-weight: bold;
+    text-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    pointer-events: none;
+    z-index: 50;
+    letter-spacing: 2px;
+    animation: fadeInOut 2s forwards;
+}
+
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translateY(10px); }
+    10% { opacity: 1; transform: translateY(0); }
+    90% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-10px); }
+}
+
+/* 桌面出牌展示区 */
+.tableCenter {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+}
+
+/* 弹出动画容器 */
+.playedContainer {
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes popIn {
+    0% { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* 出牌者名字标签 */
+.playerNameTag {
+    color: white;
+    text-align: center;
+    margin-bottom: 5px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    font-size: 14px;
+    font-weight: bold;
+    background: rgba(0,0,0,0.3);
+    padding: 2px 10px;
+    border-radius: 20px;
+    display: inline-block;
+}
+
+/* 牌型行 */
+.playedRow {
+    display: flex;
+    /* 负间距让牌叠在一起 */
+    gap: -10px; 
+    filter: drop-shadow(0 10px 20px rgba(0,0,0,0.3));
+}
+
+/* 特殊修正：MiniCard 的负 margin 需要配合 CSS */
+.miniCardWrapper {
+    margin-right: -10px;
+}
+.miniCardWrapper:last-child {
+    margin-right: 0;
+}
 
 ================================================================================
 FILE PATH: client\src\components\ScoreTable.jsx
@@ -1705,6 +1981,475 @@ export const ScoreTable = ({
         </div>
     );
 };
+
+================================================================================
+FILE PATH: client\src\components\ui\Card.jsx
+================================================================================
+import React from 'react';
+import { getCardDisplay } from '../../utils/cardLogic.js';
+import { styles } from '../../styles.js';
+
+export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacing }) => {
+    const { suit, text, color, isScore } = getCardDisplay(cardVal);
+    
+    const handlePointerDown = (e) => {
+        if (e.pointerType === 'touch') return;
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
+        e.stopPropagation();
+        onClick(cardVal);
+    };
+
+    return (
+        <div 
+            onPointerDown={handlePointerDown}
+            onMouseEnter={(e) => {
+                if (e.pointerType === 'mouse') {
+                     onMouseEnter(cardVal);
+                }
+            }}
+            style={{
+                ...styles.card, 
+                color, 
+                left: index * spacing, 
+                zIndex: index,
+                transform: isSelected ? 'translateY(-35px)' : 'translateY(0)',
+                borderColor: isSelected ? '#3498db' : (isScore ? '#f1c40f' : '#bdc3c7'),
+                boxShadow: isSelected ? '0 0 15px rgba(52, 152, 219, 0.6)' : (isScore ? '0 0 8px rgba(241, 196, 15, 0.4)' : '0 -2px 5px rgba(0,0,0,0.1)'),
+                touchAction: 'none' 
+            }}
+        >
+            <div style={{position: 'absolute', top: 0, left: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 0.9}}>
+                <div style={{fontSize: 16, fontWeight: '900', letterSpacing: -1}}>{text}</div>
+                <div style={{fontSize: 14, marginTop: -1}}>{suit}</div>
+            </div>
+            {isScore && <div style={{position:'absolute', bottom:1, right:2, fontSize:10, color:'#f1c40f'}}>★</div>}
+        </div>
+    );
+};
+
+export const MiniCard = ({ cardVal, index }) => {
+    const { text, suit, color, isScore } = getCardDisplay(cardVal);
+    return (
+        <div style={{
+            ...styles.miniCard, color,
+            border: isScore ? '2px solid #f1c40f' : '1px solid #ccc',
+            transform: isScore ? 'scale(1.1) translateY(-10px)' : 'scale(1)',
+            zIndex: index
+        }}>
+            {suit}{text}
+        </div>
+    );
+};
+
+================================================================================
+FILE PATH: client\src\components\ui\Card.module.css
+================================================================================
+/* 基础卡牌容器 */
+.card {
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #999;
+    position: absolute;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    padding: 4px;
+    transition: transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1);
+    width: 55px;
+    height: 70px;
+    box-sizing: border-box;
+    /* 禁止触摸时的默认动作，交由 JS 处理 */
+    touch-action: none; 
+    box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+}
+
+/* 选中状态 (JS 动态添加类名或保留部分 inline transform 也可以，这里推荐用类名辅助) */
+.cardSelected {
+    transform: translateY(-35px);
+    border-color: #3498db !important;
+    box-shadow: 0 0 15px rgba(52, 152, 219, 0.6) !important;
+}
+
+/* 分牌高亮 */
+.cardScore {
+    border-color: #f1c40f;
+    box-shadow: 0 0 8px rgba(241, 196, 15, 0.4);
+}
+
+/* 普通牌 */
+.cardNormal {
+    border-color: #bdc3c7;
+}
+
+/* 卡面内容布局 */
+.cardContent {
+    position: absolute;
+    top: 0;
+    left: 1px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 0.9;
+}
+
+.cardText {
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: -1px;
+}
+
+.cardSuit {
+    font-size: 14px;
+    margin-top: -1px;
+}
+
+/* 右下角星星 */
+.starBadge {
+    position: absolute;
+    bottom: 1px;
+    right: 2px;
+    font-size: 10px;
+    color: #f1c40f;
+}
+
+/* --- 小卡牌 (用于历史记录/桌面展示) --- */
+.miniCard {
+    background: white;
+    padding: 10px 15px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 24px;
+    min-width: 40px;
+    text-align: center;
+    border: 1px solid #ccc;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    position: relative;
+}
+
+.miniCardScore {
+    border: 2px solid #f1c40f;
+    transform: scale(1.1) translateY(-10px);
+    z-index: 10;
+}
+
+================================================================================
+FILE PATH: client\src\components\ui\GameLogPanel.jsx
+================================================================================
+import React, { useEffect, useRef, useState } from 'react'; 
+import { History, ChevronDown, ChevronUp } from 'lucide-react'; 
+import { styles } from '../../styles.js';
+
+export const GameLogPanel = ({ logs }) => {
+    const [isCollapsed, setIsCollapsed] = useState(false); 
+    const endRef = useRef(null);
+
+    useEffect(() => {
+        if (!isCollapsed) {
+            endRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [logs, isCollapsed]);
+
+    return (
+        <div 
+            style={{
+                ...styles.gameLogPanel,
+                zIndex: 1000,
+                height: isCollapsed ? 36 : 140, 
+                background: 'transparent', 
+                backdropFilter: 'none',
+                border: isCollapsed ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
+                boxShadow: 'none',
+                cursor: 'pointer',
+                textShadow: '1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 2px 4px rgba(0,0,0,0.8)'
+            }}
+            onClick={() => setIsCollapsed(!isCollapsed)} 
+        >
+            <div style={styles.logHeader}>
+                <History size={14} color="#f1c40f" style={{filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))'}}/> 
+                <span style={{color:'#fff', fontWeight:'bold', flex: 1}}>
+                    对局记录
+                </span>
+                {isCollapsed ? <ChevronDown size={14} color="#ccc" style={{filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))'}}/> : <ChevronUp size={14} color="#ccc" style={{filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))'}}/>}
+            </div>
+            
+            <div style={{
+                ...styles.logList, 
+                opacity: isCollapsed ? 0 : 1,
+                pointerEvents: isCollapsed ? 'none' : 'auto'
+            }}>
+                {logs.map((log, i) => (
+                    <div key={i} style={styles.logItem}>
+                        <span style={styles.logTime}>[{log.time.split(' ')[0]}]</span>
+                        <span style={{color: '#eee'}}>{log.text}</span>
+                    </div>
+                ))}
+                <div ref={endRef} />
+            </div>
+        </div>
+    );
+};
+
+================================================================================
+FILE PATH: client\src\components\ui\PlayerAvatar.jsx
+================================================================================
+import React from 'react';
+import { Trophy, Flag, Shield, Coins } from 'lucide-react';
+import { styles } from '../../styles.js';
+import CountDownTimer from '../CountDownTimer.jsx';
+
+export const PlayerAvatar = ({ player, isTurn, score, roundScore = 0, targetScore, isMySocket, remainingSeconds, rank, timerPosition, hideTimer, cardCount, showCardCountMode, team }) => {
+    const progress = Math.min((score / targetScore) * 100, 100);
+    const containerOpacity = rank ? 0.75 : 1; 
+
+    let showBadge = false;
+    if (showCardCountMode === 2) showBadge = true;
+    if (showCardCountMode === 1 && cardCount <= 2 && cardCount > 0) showBadge = true;
+    if (rank) showBadge = false;
+
+    const isTeamMode = team !== undefined && team !== null;
+    const teamColor = team === 0 ? '#e74c3c' : '#3498db'; 
+    const teamName = team === 0 ? '红' : '蓝';
+    
+    let borderColor = 'rgba(255,255,255,0.1)';
+    if (isTeamMode) borderColor = teamColor;
+    if (isTurn) borderColor = '#f1c40f'; 
+
+    let bgColor = isTurn ? 'rgba(44, 62, 80, 0.9)' : 'rgba(44, 62, 80, 0.6)';
+    if (isTeamMode && !isTurn) {
+        bgColor = team === 0 ? 'rgba(231, 76, 60, 0.2)' : 'rgba(52, 152, 219, 0.2)';
+    }
+
+    return (
+        <div style={{
+            ...styles.playerBox,
+            borderColor: borderColor,
+            borderWidth: isTeamMode ? 2 : 1, 
+            transform: isTurn ? 'scale(1.1)' : 'scale(1)',
+            boxShadow: isTurn ? '0 0 25px rgba(241, 196, 15, 0.5)' : 'none',
+            background: bgColor,
+            position: 'relative',
+            opacity: containerOpacity
+        }}>
+            {showBadge && (
+                <div style={styles.cardCountBadge}>
+                    {cardCount}
+                </div>
+            )}
+
+            {isTeamMode && (
+                <div style={{
+                    position: 'absolute', 
+                    top: -10, 
+                    right: -8, 
+                    background: teamColor, color: 'white',
+                    fontSize: 9, padding: '1px 4px', borderRadius: 4,
+                    display: 'flex', alignItems: 'center', gap: 2,
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                    zIndex: 25
+                }}>
+                    <Shield size={8} fill="currentColor"/> {teamName}队
+                </div>
+            )}
+
+            {rank && (
+                <div style={{
+                    position: 'absolute',
+                    top: -16, 
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: rank === 1 ? '#f1c40f' : (rank === 2 ? '#bdc3c7' : '#e67e22'), 
+                    color: '#fff',
+                    padding: '2px 8px',
+                    borderRadius: 20,
+                    fontSize: 11,
+                    fontWeight: 'bold',
+                    boxShadow: '0 2px 5px rgba(0,0,0,0.4)',
+                    zIndex: 30, 
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 3,
+                    whiteSpace: 'nowrap',
+                    border: '1px solid white'
+                }}>
+                    {rank === 1 ? <Trophy size={10} fill="white" /> : <Flag size={10} fill="white"/>}
+                    {rank === 1 ? 'NO.1' : `NO.${rank}`}
+                </div>
+            )}
+
+            <div style={{...styles.avatar, borderColor: isTeamMode ? teamColor : 'rgba(255,255,255,0.3)'}}>
+                {player.name[0]}
+            </div>
+            
+            <div style={styles.playerName}>
+                {player.name} {isMySocket && '(我)'}
+            </div>
+            
+            <div style={styles.scoreBarBg}>
+                <div style={{...styles.scoreBarFill, width:`${progress}%`, background: progress>=100?'#e74c3c':'#2ecc71'}}></div>
+            </div>
+            
+            <div style={styles.playerScore}>
+                <Coins size={10} color="#f1c40f"/> 
+                {score}
+                {roundScore > 0 && (
+                    <span style={{color: '#f1c40f', fontSize: 9, marginLeft: 2, fontWeight: 900}}>(+{roundScore})</span>
+                )}
+            </div>
+            
+            {isTurn && !rank && !hideTimer && (
+                <CountDownTimer 
+                    initialSeconds={remainingSeconds} 
+                    totalSeconds={60} 
+                    position={timerPosition}
+                />
+            )}
+        </div>
+    );
+};
+
+================================================================================
+FILE PATH: client\src\components\ui\PlayerAvatar.module.css
+================================================================================
+/* 头像容器 */
+.playerBox {
+    pointer-events: auto;
+    padding: 2px 4px;
+    border-radius: 8px;
+    text-align: center;
+    min-width: 45px;
+    color: white;
+    border: 1px solid transparent;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    position: relative;
+    backdrop-filter: blur(3px);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    background: rgba(44, 62, 80, 0.6);
+}
+
+/* 轮到该玩家时的激活状态 */
+.activeTurn {
+    transform: scale(1.1);
+    box-shadow: 0 0 25px rgba(241, 196, 15, 0.5);
+    background: rgba(44, 62, 80, 0.9);
+    border-color: #f1c40f !important; /* 强制覆盖队伍色 */
+    z-index: 20;
+}
+
+/* 队伍背景色 (JS动态控制太繁琐，还是保留部分inline，这里处理基础) */
+.teamRed { background: rgba(231, 76, 60, 0.2); }
+.teamBlue { background: rgba(52, 152, 219, 0.2); }
+
+/* 剩余手牌数徽章 */
+.cardCountBadge {
+    position: absolute;
+    top: -8px;
+    left: -8px;
+    background: #e74c3c;
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    z-index: 25;
+}
+
+/* 组队标签 */
+.teamBadge {
+    position: absolute; 
+    top: -10px; 
+    right: -8px; 
+    color: white;
+    font-size: 9px; 
+    padding: 1px 4px; 
+    border-radius: 4px;
+    display: flex; 
+    align-items: center; 
+    gap: 2px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    z-index: 25;
+}
+
+/* 排名标签 (NO.1 etc) */
+.rankBadge {
+    position: absolute;
+    top: -16px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: bold;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+    border: 1px solid white;
+}
+
+/* 圆形头像 */
+.avatar {
+    width: 30px;
+    height: 30px;
+    background: #ecf0f1;
+    border-radius: 50%;
+    margin: 0 auto 2px;
+    line-height: 30px;
+    color: #333;
+    font-weight: bold;
+    font-size: 14px;
+    border: 1px solid rgba(255,255,255,0.3);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.playerName {
+    font-size: 10px;
+    font-weight: bold;
+    margin-bottom: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 50px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* 分数条 */
+.scoreBarBg {
+    width: 100%;
+    height: 4px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 2px;
+    margin-top: 2px;
+    overflow: hidden;
+}
+
+.scoreBarFill {
+    height: 100%;
+    transition: width 0.5s;
+}
+
+.playerScore {
+    font-size: 9px;
+    color: #f1c40f;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    margin-top: 1px;
+}
 
 ================================================================================
 FILE PATH: client\src\context\GameContext.jsx
@@ -3379,28 +4124,22 @@ createRoot(document.getElementById('root')).render(
 FILE PATH: client\src\screens\DrawSeatScreen.jsx
 ================================================================================
 import React, { useState, useEffect } from 'react';
-import { styles } from '../styles.js';
 import { Card } from '../components/BaseUI.jsx'; 
 import { Shuffle } from 'lucide-react';
-// [新增] 引入 useGame
 import { useGame } from '../context/GameContext.jsx';
+import css from './DrawSeatScreen.module.css'; // 新 CSS
 
-// [修改] 移除 Props 参数
 export const DrawSeatScreen = () => {
-
-    // [新增] 从 Context 获取数据
     const { 
-        roomId, players, mySocketId, 
+        players, mySocketId, 
         drawState, // { totalCards, history: [...] }
         handleDrawCard,
-        roomConfig // 接收配置，用于判断显示什么文案
+        roomConfig
     } = useGame();
 
-    // 本地状态用于动画展示
-    const [flippedCards, setFlippedCards] = useState({}); // { index: { val: 54, playerName: 'xxx' } }
+    const [flippedCards, setFlippedCards] = useState({}); 
     const [infoText, setInfoText] = useState("请点击一张卡背进行抽签");
 
-    // 监听服务器数据更新
     useEffect(() => {
         if (drawState && drawState.history) {
             const newFlipped = {};
@@ -3409,7 +4148,6 @@ export const DrawSeatScreen = () => {
             });
             setFlippedCards(newFlipped);
 
-            // 检查自己是否抽了
             const myLog = drawState.history.find(h => h.playerId === mySocketId);
             if (myLog) {
                 setInfoText(`等待其他玩家完成抽签...`);
@@ -3418,9 +4156,8 @@ export const DrawSeatScreen = () => {
     }, [drawState, mySocketId]);
 
     const onCardClick = (index) => {
-        if (flippedCards[index]) return; // 已经翻开了
+        if (flippedCards[index]) return; 
         
-        // 检查自己是否已经抽过
         const myName = players.find(p=>p.id===mySocketId)?.name;
         if (Object.values(flippedCards).some(c => c.playerName === myName)) {
              return; 
@@ -3429,26 +4166,18 @@ export const DrawSeatScreen = () => {
         handleDrawCard(index);
     };
 
-    // 判断是否是真正的组队模式 (开启了开关 且 人数是偶数)
     const isTeamMode = roomConfig && roomConfig.isTeamMode && (players.length % 2 === 0);
 
     return (
-        <div style={styles.gameTable}>
-            {/* [修复说明] styles.gameSafeArea 默认带有 pointerEvents: 'none'。
-               这会导致其子元素无法接收点击事件。下面的卡片元素通过 pointerEvents: 'auto' 重新开启了交互。
-            */}
-            <div style={{...styles.gameSafeArea, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center'}}>
+        <div className={css.drawTable}>
+            <div className={css.contentContainer}>
                 
-                <div style={{
-                    background: 'rgba(0,0,0,0.6)', padding: '20px 30px', borderRadius: 20, 
-                    marginBottom: 40, backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)',
-                    textAlign: 'center', color: 'white'
-                }}>
-                    <h2 style={{margin: '0 0 10px 0', fontSize: 24, display:'flex', alignItems:'center', justifyContent:'center', gap:10}}>
+                <div className={css.infoBox}>
+                    <h2 className={css.title}>
                         <Shuffle size={24} color="#f1c40f"/> 赛前抽卡定座
                     </h2>
                     
-                    <div style={{fontSize: 14, color: '#bdc3c7', maxWidth: 400, lineHeight: '1.6'}}>
+                    <div className={css.desc}>
                         {isTeamMode ? (
                             <>
                                 点数<span style={{color:'#e74c3c', fontWeight:'bold'}}>大</span>的半数玩家 → <span style={{color:'#e74c3c'}}>红队</span> (1, 3, 5号位)<br/>
@@ -3465,43 +4194,26 @@ export const DrawSeatScreen = () => {
                     </div>
                 </div>
 
-                <div style={{
-                    display: 'flex', gap: 15, flexWrap: 'wrap', justifyContent: 'center', 
-                    maxWidth: 800, padding: 10
-                }}>
+                <div className={css.cardGrid}>
                     {Array.from({ length: players.length }).map((_, index) => {
                         const flipData = flippedCards[index];
                         const isFlipped = !!flipData;
                         const isMine = isFlipped && flipData.playerName === players.find(p=>p.id===mySocketId)?.name;
 
                         return (
-                            <div key={index} style={{position: 'relative', width: 80, height: 110, display:'flex', flexDirection:'column', alignItems:'center'}}>
-                                {/* 玩家名字标签 - [修改] 稍微调高 top 避免视觉拥挤 */}
+                            <div key={index} className={css.cardSlot}>
                                 {isFlipped && (
-                                    <div style={{
-                                        position: 'absolute', top: -28, width: 120, textAlign: 'center',
-                                        fontSize: 12, color: isMine ? '#f1c40f' : 'white', fontWeight: 'bold',
-                                        textShadow: '0 1px 2px black', whiteSpace:'nowrap',
-                                        zIndex: 10 // 确保名字在最上层
-                                    }}>
+                                    <div className={`${css.nameTag} ${isMine ? css.nameTagMine : ''}`}>
                                         {flipData.playerName}
                                     </div>
                                 )}
 
                                 {isFlipped ? (
                                     // 翻开后的牌
-                                    <div style={{
-                                        transform: isMine ? 'scale(1.1)' : 'scale(1)', 
-                                        transition: 'all 0.3s',
-                                        pointerEvents: 'auto',
-                                        // [修改] 如果是我的牌，在外层加光晕，而不是让 Card 组件自己弹起
-                                        boxShadow: isMine ? '0 0 20px rgba(241, 196, 15, 0.6)' : 'none',
-                                        borderRadius: 6
-                                    }}>
+                                    <div className={`${css.flippedWrapper} ${isMine ? css.flippedWrapperMine : ''}`}>
                                         <Card 
                                             cardVal={flipData.val} 
                                             index={0} 
-                                            // [修改] 强制设为 false，防止 Card 组件内部执行 translateY(-35px) 导致遮挡名字
                                             isSelected={false} 
                                             onClick={()=>{}} 
                                             onMouseEnter={()=>{}} 
@@ -3510,27 +4222,9 @@ export const DrawSeatScreen = () => {
                                     </div>
                                 ) : (
                                     // 卡背
-                                    <div 
-                                        onClick={() => onCardClick(index)}
-                                        style={{
-                                            width: 55, height: 70, 
-                                            background: 'linear-gradient(135deg, #2c3e50 0%, #34495e 100%)',
-                                            borderRadius: 6,
-                                            border: '2px solid #bdc3c7',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            cursor: 'pointer',
-                                            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-                                            transition: 'transform 0.2s',
-                                            pointerEvents: 'auto'
-                                        }}
-                                        onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
-                                        onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                                    >
-                                        <div style={{
-                                            width: 40, height: 55, border: '1px dashed rgba(255,255,255,0.3)', 
-                                            borderRadius: 4, display:'flex', alignItems:'center', justifyContent:'center'
-                                        }}>
-                                            <span style={{fontSize: 20, opacity: 0.5, color: 'white'}}>?</span>
+                                    <div className={css.cardBack} onClick={() => onCardClick(index)}>
+                                        <div className={css.cardBackInner}>
+                                            <span className={css.cardBackText}>?</span>
                                         </div>
                                     </div>
                                 )}
@@ -3539,7 +4233,7 @@ export const DrawSeatScreen = () => {
                     })}
                 </div>
 
-                <div style={{marginTop: 40, color: '#f1c40f', fontSize: 18, fontWeight: 'bold', textShadow: '0 2px 4px rgba(0,0,0,0.5)', height: 30}}>
+                <div className={css.statusText}>
                     {infoText}
                 </div>
 
@@ -3547,6 +4241,183 @@ export const DrawSeatScreen = () => {
         </div>
     );
 };
+
+================================================================================
+FILE PATH: client\src\screens\DrawSeatScreen.module.css
+================================================================================
+/* 抽签页主容器 (复用游戏页背景风格) */
+.drawTable {
+    height: 100dvh;
+    width: 100vw;
+    background-color: #1e3c29;
+    background-image: radial-gradient(circle at center, #2d7a54 0%, #173b25 100%);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    
+    /* 适配安全区域 */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+.contentContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+/* 顶部提示框 */
+.infoBox {
+    background: rgba(0, 0, 0, 0.6);
+    padding: 20px 30px;
+    border-radius: 20px;
+    margin-bottom: 40px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: center;
+    color: white;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    animation: fadeInDown 0.5s ease-out;
+}
+
+.title {
+    margin: 0 0 10px 0;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.desc {
+    font-size: 14px;
+    color: #bdc3c7;
+    max-width: 400px;
+    line-height: 1.6;
+}
+
+/* 卡牌网格 */
+.cardGrid {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 800px;
+    padding: 10px;
+}
+
+/* 单个卡位容器 */
+.cardSlot {
+    position: relative;
+    width: 80px;
+    height: 110px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    perspective: 1000px; /* 为翻牌动画做准备 */
+}
+
+/* 名字标签 */
+.nameTag {
+    position: absolute;
+    top: -28px;
+    width: 120px;
+    text-align: center;
+    font-size: 12px;
+    color: white;
+    font-weight: bold;
+    text-shadow: 0 1px 2px black;
+    white-space: nowrap;
+    z-index: 10;
+    animation: popIn 0.3s ease-back;
+}
+
+.nameTagMine {
+    color: #f1c40f;
+}
+
+/* 翻开的牌包装器 */
+.flippedWrapper {
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    pointer-events: auto;
+    border-radius: 6px;
+    transform-origin: center center;
+}
+
+.flippedWrapperMine {
+    transform: scale(1.1);
+    box-shadow: 0 0 20px rgba(241, 196, 15, 0.6);
+}
+
+/* 卡背 (未翻开) */
+.cardBack {
+    width: 55px;
+    height: 70px;
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    border-radius: 6px;
+    border: 2px solid #bdc3c7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s;
+    pointer-events: auto;
+}
+
+.cardBack:active {
+    transform: scale(0.95);
+}
+
+.cardBackInner {
+    width: 40px;
+    height: 55px;
+    border: 1px dashed rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cardBackText {
+    font-size: 20px;
+    opacity: 0.5;
+    color: white;
+}
+
+/* 底部状态文本 */
+.statusText {
+    margin-top: 40px;
+    color: #f1c40f;
+    font-size: 18px;
+    font-weight: bold;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    height: 30px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes popIn {
+    from { opacity: 0; transform: scale(0.5); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse {
+    0% { opacity: 0.8; }
+    50% { opacity: 1; }
+    100% { opacity: 0.8; }
+}
 
 ================================================================================
 FILE PATH: client\src\screens\GameScreen.jsx
@@ -3721,10 +4592,9 @@ FILE PATH: client\src\screens\LobbyScreen.jsx
 ================================================================================
 import React, { useState } from 'react';
 import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Sparkles, Award } from 'lucide-react';
-import { styles } from '../styles.js'; 
+// [修改] 彻底移除 styles.js 引用
 import css from './LobbyScreen.module.css'; 
 import { useGame } from '../context/GameContext.jsx';
-// [新增]
 import { RoomSettingsForm } from '../components/game/RoomSettingsForm.jsx';
 
 export const LobbyScreen = () => {
@@ -3741,13 +4611,11 @@ export const LobbyScreen = () => {
     const isTeamMode = roomConfig.isTeamMode && roomConfig.maxPlayers % 2 === 0;
     const [showSettings, setShowSettings] = useState(false);
     
-    // [修改] 统一更新入口
     const handleConfigChange = (key, value) => {
         const newConfig = { ...roomConfig, [key]: value };
         handleUpdateConfig(newConfig);
     };
 
-    // [修改] 渲染设置弹窗，使用新组件
     const renderSettingsModal = () => (
         <div className={css.modalOverlay}>
             <div className={css.modalContent} style={{textAlign:'left'}}>
@@ -3761,11 +4629,10 @@ export const LobbyScreen = () => {
                 </div>
 
                 <div style={{maxHeight: '60vh', overflowY:'auto', paddingRight: 5, width:'100%'}}>
-                    {/* [使用通用组件] */}
                     <RoomSettingsForm 
                         config={roomConfig} 
                         onChange={handleConfigChange} 
-                        readOnly={!amIHost} // 非房主只读
+                        readOnly={!amIHost} 
                     />
                 </div>
 
@@ -3779,7 +4646,8 @@ export const LobbyScreen = () => {
     );
 
     return (
-    <div style={styles.container}>
+    // [修改] 使用 css.lobbyContainer
+    <div className={css.lobbyContainer}>
       {showSettings && renderSettingsModal()}
 
       <div className={`${css.lobbyCard} mobile-layout-column`}>
@@ -3846,9 +4714,9 @@ export const LobbyScreen = () => {
                  <span className={css.tag}><Target size={12}/> {roomConfig.targetScore}</span>
                  <span className={css.tag}><Layers size={12}/> {roomConfig.deckCount}副</span>
                  <span className={css.tag}><User size={12}/> {roomConfig.maxPlayers}人</span>
-                 {roomConfig.shuffleStrategy === 'NO_SHUFFLE' && <span style={{...styles.tag, background:'#fdf2e9', color:'#e67e22', border:'1px solid #e67e22'}}><Sparkles size={12}/> 不洗牌</span>}
-                 {roomConfig.shuffleStrategy === 'SIMULATION' && <span style={{...styles.tag, background:'#f5eef8', color:'#9b59b6', border:'1px solid #9b59b6'}}><Layers size={12}/> 模拟叠牌</span>}
-                 {roomConfig.enableRankPenalty && <span style={{...styles.tag, color:'#e67e22', background:'#fdf2e9'}}><Award size={12}/> 赏罚</span>}
+                 {roomConfig.shuffleStrategy === 'NO_SHUFFLE' && <span className={css.tag} style={{background:'#fdf2e9', color:'#e67e22', border:'1px solid #e67e22'}}><Sparkles size={12}/> 不洗牌</span>}
+                 {roomConfig.shuffleStrategy === 'SIMULATION' && <span className={css.tag} style={{background:'#f5eef8', color:'#9b59b6', border:'1px solid #9b59b6'}}><Layers size={12}/> 模拟叠牌</span>}
+                 {roomConfig.enableRankPenalty && <span className={css.tag} style={{color:'#e67e22', background:'#fdf2e9'}}><Award size={12}/> 赏罚</span>}
             </div>
             <style>{`@media (min-width: 769px) { .mobile-only-tags { display: none !important; } }`}</style>
 
@@ -3984,6 +4852,19 @@ export const LobbyScreen = () => {
 ================================================================================
 FILE PATH: client\src\screens\LobbyScreen.module.css
 ================================================================================
+/* --- [新增] 大厅页专用容器 --- */
+.lobbyContainer {
+    height: 100dvh;
+    width: 100vw;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #1e272e;
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-image: radial-gradient(circle at top right, #34495e 0%, #000000 100%);
+    overflow: hidden;
+}
+
 /* --- 容器与卡片 --- */
 .lobbyCard {
     background: white;
@@ -4157,6 +5038,7 @@ FILE PATH: client\src\screens\LobbyScreen.module.css
     align-items: center;
 }
 
+/* --- [补全] 配置表单样式 --- */
 .configGrid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -4241,11 +5123,12 @@ FILE PATH: client\src\screens\LobbyScreen.module.css
 FILE PATH: client\src\screens\LoginScreen.jsx
 ================================================================================
 import React, { useState } from 'react'; 
-import { User, Monitor, RefreshCw, Plus, LogIn, Maximize, Minimize, Wifi, WifiOff } from 'lucide-react'; // 移除多余图标引用
-import { styles } from '../styles.js';
+import { User, Monitor, RefreshCw, Plus, LogIn, Maximize, Minimize, Wifi, WifiOff } from 'lucide-react'; 
 import { useGame } from '../context/GameContext.jsx';
-// [新增] 引入通用配置组件
 import { RoomSettingsForm } from '../components/game/RoomSettingsForm.jsx';
+
+// [修改] 引入 CSS Modules，不再使用 styles.js
+import css from './LoginScreen.module.css';
 
 export const LoginScreen = () => {
     
@@ -4265,14 +5148,14 @@ export const LoginScreen = () => {
     const toggleFullScreen = () => {
         if (!document.fullscreenElement) {
             const docEl = document.documentElement;
-            const requestFull = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+            const requestFull = docEl.requestFullscreen || docEl.webkitRequestFullscreen;
             if (requestFull) {
                 requestFull.call(docEl)
                     .then(() => setIsFullScreen(true))
                     .catch(err => console.log("全屏请求被拦截:", err));
             }
         } else {
-            const exitFull = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+            const exitFull = document.exitFullscreen || document.webkitExitFullscreen;
             if (exitFull) {
                 exitFull.call(document)
                     .then(() => setIsFullScreen(false));
@@ -4284,16 +5167,13 @@ export const LoginScreen = () => {
         try {
             if (!document.fullscreenElement) {
                 const docEl = document.documentElement;
-                const requestFull = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
-                
+                const requestFull = docEl.requestFullscreen || docEl.webkitRequestFullscreen;
                 if (requestFull) {
-                    requestFull.call(docEl)
-                        .then(() => setIsFullScreen(true))
-                        .catch(err => console.log("全屏自动触发被拦截 (正常):", err));
+                    requestFull.call(docEl).catch(() => {});
                 }
             }
         } catch (e) {
-            console.log("全屏错误:", e);
+            // Ignore
         }
     };
 
@@ -4302,7 +5182,6 @@ export const LoginScreen = () => {
         handleRoomAction();   
     };
 
-    // [新增] 统一更新函数适配器
     const handleConfigChange = (key, value) => {
         setRoomConfig(prev => ({ ...prev, [key]: value }));
     };
@@ -4314,71 +5193,93 @@ export const LoginScreen = () => {
         return '#e74c3c';
     };
 
+    // 动态计算 Ping Badge 样式
+    const pingStyle = {
+        background: isConnected ? (ping < 150 ? '#eafaf1' : '#fef9e7') : '#fdedec',
+        color: getPingColor(ping),
+        borderColor: isConnected ? '#e1e4e8' : '#fadbd8'
+    };
+
     return (
-        <div style={styles.container}>
-            <div style={styles.loginCard} className="mobile-layout-column">
-                <div style={styles.loginLeft} className="mobile-login-left">
-                    <div style={styles.logoCircle}>
-                        <div style={styles.logoText}>510K</div>
+        <div className={css.container}>
+            {/* [关键说明] 
+               这里同时使用了 css.loginCard (模块化样式) 和 mobile-layout-column (全局 index.css 样式)。
+               这样既享受了 CSS Module 的整洁，又保留了你在 index.css 里写的移动端强制适配规则。
+            */}
+            <div className={`${css.loginCard} mobile-layout-column`}>
+                
+                {/* 左侧品牌区 */}
+                <div className={`${css.loginLeft} mobile-login-left`}>
+                    <div className={css.logoCircle}>
+                        <div className={css.logoText}>510K</div>
                     </div>
-                    <h1 style={styles.brandTitle}>扑克对战</h1>
-                    <div style={styles.brandSubtitle}>多人在线 · 自由规则 · 极速畅玩</div>
+                    <h1 className={css.brandTitle}>扑克对战</h1>
+                    <div className={css.brandSubtitle}>多人在线 · 自由规则 · 极速畅玩</div>
                     
-                    <div style={styles.featureList} className="hide-on-mobile">
-                        <div style={styles.featureItem}>✨ 支持 2-12 人同台竞技</div>
-                        <div style={styles.featureItem}>🚀 只有 1 副牌? 不，现在支持 8 副!</div>
-                        <div style={styles.featureItem}>⏱️ 自定义思考时间与获胜目标</div>
+                    <div className={`${css.featureList} hide-on-mobile`}>
+                        <div className={css.featureItem}>✨ 支持 2-12 人同台竞技</div>
+                        <div className={css.featureItem}>🚀 只有 1 副牌? 不，现在支持 8 副!</div>
+                        <div className={css.featureItem}>⏱️ 自定义思考时间与获胜目标</div>
                     </div>
                 </div>
 
-                <div style={styles.loginRight} className="mobile-login-right">
-                    <div style={{
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        alignItems: 'center',
-                        marginBottom: 20
-                    }}>
-                        <button 
-                            onClick={toggleFullScreen}
-                            style={{
-                                background: '#f8f9fa', border: '1px solid #e1e4e8', borderRadius: 20, padding: '6px 12px',
-                                cursor: 'pointer', color: '#7f8c8d', display: 'flex', alignItems: 'center', gap: 6,
-                                fontSize: 12, fontWeight: 'bold', transition: 'all 0.2s'
-                            }}
-                        >
+                {/* 右侧表单区 */}
+                <div className={`${css.loginRight} mobile-login-right`}>
+                    
+                    {/* 顶部工具栏 */}
+                    <div className={css.topBar}>
+                        <button onClick={toggleFullScreen} className={css.fullScreenBtn}>
                             {isFullScreen ? <Minimize size={14}/> : <Maximize size={14}/>}
                             <span>{isFullScreen ? '退出全屏' : '全屏模式'}</span>
                         </button>
 
-                        <div style={{
-                            display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 12px', borderRadius: 20,
-                            background: isConnected ? (ping < 150 ? '#eafaf1' : '#fef9e7') : '#fdedec', 
-                            color: getPingColor(ping),
-                            fontWeight: 'bold', border: `1px solid ${isConnected ? '#e1e4e8' : '#fadbd8'}`
-                        }}>
+                        <div className={css.pingBadge} style={pingStyle}>
                             {isConnected ? <Wifi size={14}/> : <WifiOff size={14}/>}
                             {isConnected ? `${ping}ms` : '连接中...'}
                         </div>
                     </div>
 
-                    <div style={styles.tabs}>
-                        <button style={!isCreatorMode ? styles.tabBtnActive : styles.tabBtn} onClick={()=>setIsCreatorMode(false)}>加入房间</button>
-                        <button style={isCreatorMode ? styles.tabBtnActive : styles.tabBtn} onClick={()=>setIsCreatorMode(true)}>创建房间</button>
+                    {/* Tab 切换 */}
+                    <div className={css.tabs}>
+                        <button 
+                            className={!isCreatorMode ? css.tabBtnActive : css.tabBtn} 
+                            onClick={()=>setIsCreatorMode(false)}
+                        >
+                            加入房间
+                        </button>
+                        <button 
+                            className={isCreatorMode ? css.tabBtnActive : css.tabBtn} 
+                            onClick={()=>setIsCreatorMode(true)}
+                        >
+                            创建房间
+                        </button>
                     </div>
 
-                    <div style={styles.formContent}>
-                        <div style={styles.inputGroup}>
+                    {/* 表单内容 */}
+                    <div className={css.formContent}>
+                        <div className={css.inputGroup}>
                             <User size={18} color="#7f8c8d" />
-                            <input style={styles.input} value={username} onChange={e=>setUsername(e.target.value)} placeholder="请输入你的昵称" maxLength={10}/>
+                            <input 
+                                className={css.input} 
+                                value={username} 
+                                onChange={e=>setUsername(e.target.value)} 
+                                placeholder="请输入你的昵称" 
+                                maxLength={10}
+                            />
                         </div>
-                        <div style={styles.inputGroup}>
+                        <div className={css.inputGroup}>
                             <Monitor size={18} color="#7f8c8d" />
-                            <input style={styles.input} value={roomId} onChange={e=>setRoomId(e.target.value)} placeholder="请输入房间号 (如: 888)" maxLength={6}/>
+                            <input 
+                                className={css.input} 
+                                value={roomId} 
+                                onChange={e=>setRoomId(e.target.value)} 
+                                placeholder="请输入房间号 (如: 888)" 
+                                maxLength={6}
+                            />
                         </div>
 
-                        {/* [修改] 使用新的通用组件替代手动代码 */}
                         {isCreatorMode && (
-                            <div style={styles.advancedConfigPanel}>
+                            <div className={css.advancedConfigPanel}>
                                 <RoomSettingsForm 
                                     config={roomConfig} 
                                     onChange={handleConfigChange} 
@@ -4389,14 +5290,12 @@ export const LoginScreen = () => {
                         <div style={{flex: 1}}></div>
 
                         <button 
-                            style={{
-                                ...styles.primaryButton,
-                                opacity: (!isConnected || isLoading) ? 0.7 : 1,
-                                cursor: (!isConnected || isLoading) ? 'not-allowed' : 'pointer',
-                                background: (!isConnected) ? '#95a5a6' : '#2c3e50'
-                            }} 
+                            className={css.primaryButton}
                             onClick={onActionClick} 
                             disabled={isLoading || !isConnected}
+                            style={{
+                                background: (!isConnected) ? '#95a5a6' : '#2c3e50'
+                            }}
                         >
                             {(isLoading || !isConnected) ? <RefreshCw className="spin" size={20}/> : (isCreatorMode ? <Plus size={20}/> : <LogIn size={20}/>)}
                             <span style={{marginLeft:10}}>
@@ -4405,511 +5304,306 @@ export const LoginScreen = () => {
                         </button>
                         
                         {!isConnected && (
-                            <div style={{textAlign:'center', marginTop: 15, fontSize: 13, color:'#e74c3c', background:'#fdedec', padding:'8px', borderRadius:8}}>
+                            <div className={css.firstLoadTip}>
                                 ⚠️ 首次访问可能需要 30-50秒 唤醒服务器，请耐心等待右上角变为绿色。
                             </div>
                         )}
                     </div>
                 </div>
             </div>
-            <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
         </div>
     );
 };
 
 ================================================================================
+FILE PATH: client\src\screens\LoginScreen.module.css
+================================================================================
+/* =========================================
+   登录页专属样式 (LoginScreen)
+   替代原 styles.js 中的 loginCard 相关样式
+   ========================================= */
+
+/* 页面主容器 (继承原 styles.container) */
+.container {
+    height: 100dvh; /* 适配移动端动态地址栏 */
+    width: 100vw;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #1e272e;
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-image: radial-gradient(circle at top right, #34495e 0%, #000000 100%);
+    overflow: hidden;
+}
+
+/* 卡片主体 */
+.loginCard {
+    background: white;
+    border-radius: 24px;
+    width: 95%;
+    max-width: 1100px;
+    min-height: 600px;
+    max-height: 90vh;
+    display: flex;
+    box-shadow: 0 50px 100px -20px rgba(0, 0, 0, 0.7);
+    overflow: hidden;
+    animation: popIn 0.5s ease-out;
+}
+
+/* --- 左侧品牌区 --- */
+.loginLeft {
+    flex: 0.8;
+    background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+    padding: 60px 50px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.logoCircle {
+    width: 90px;
+    height: 90px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 25px;
+    backdrop-filter: blur(10px);
+}
+
+.logoText {
+    font-size: 28px;
+    font-weight: 900;
+    color: white;
+}
+
+.brandTitle {
+    font-size: 48px;
+    font-weight: 800;
+    margin: 0 0 15px 0;
+    letter-spacing: -1.5px;
+}
+
+.brandSubtitle {
+    font-size: 18px;
+    opacity: 0.9;
+    margin-bottom: 50px;
+    font-weight: 500;
+}
+
+.featureList {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.featureItem {
+    font-size: 15px;
+    opacity: 0.95;
+    display: flex;
+    align-items: center;
+    font-weight: 500;
+}
+
+/* --- 右侧表单区 --- */
+.loginRight {
+    flex: 1.2;
+    padding: 50px 60px;
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    overflow-y: auto;
+}
+
+/* 顶部工具栏 */
+.topBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.fullScreenBtn {
+    background: #f8f9fa;
+    border: 1px solid #e1e4e8;
+    border-radius: 20px;
+    padding: 6px 12px;
+    cursor: pointer;
+    color: #7f8c8d;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: bold;
+    transition: all 0.2s;
+}
+
+.pingBadge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: bold;
+    border: 1px solid transparent;
+}
+
+/* Tab 切换 */
+.tabs {
+    display: flex;
+    gap: 35px;
+    margin-bottom: 35px;
+    border-bottom: 2px solid #f1f2f6;
+}
+
+.tabBtn {
+    padding: 12px 0;
+    font-size: 18px;
+    font-weight: bold;
+    color: #95a5a6;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -3px;
+}
+
+.tabBtnActive {
+    composes: tabBtn;
+    color: #2c3e50;
+    border-bottom: 3px solid #27ae60;
+}
+
+/* 表单内容 */
+.formContent {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.inputGroup {
+    display: flex;
+    align-items: center;
+    background: #f8f9fa;
+    border-radius: 14px;
+    padding: 0 20px;
+    margin-bottom: 20px;
+    border: 1px solid #e1e4e8;
+    height: 60px;
+    transition: all 0.2s;
+}
+
+.input {
+    padding: 10px;
+    border: none;
+    background: transparent;
+    flex: 1;
+    outline: none;
+    font-size: 17px;
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+/* 高级设置面板容器 */
+.advancedConfigPanel {
+    margin-top: 15px;
+    background: #fff;
+    border-radius: 12px;
+    animation: fadeIn 0.4s ease;
+}
+
+/* 主按钮 */
+.primaryButton {
+    margin-top: 25px;
+    width: 100%;
+    height: 65px;
+    background: #2c3e50;
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 19px;
+    transition: all 0.2s;
+    box-shadow: 0 10px 25px rgba(44, 62, 80, 0.25);
+}
+
+.primaryButton:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    background: #95a5a6 !important; /* 强制覆盖 */
+}
+
+/* 首次加载提示 */
+.firstLoadTip {
+    text-align: center;
+    margin-top: 15px;
+    font-size: 13px;
+    color: #e74c3c;
+    background: #fdedec;
+    padding: 8px;
+    border-radius: 8px;
+}
+
+/* 动画定义 */
+@keyframes popIn {
+    0% { transform: scale(0.95); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Loading 旋转动画 (全局) */
+:global(.spin) {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+================================================================================
 FILE PATH: client\src\styles.js
 ================================================================================
-// 统一样式文件 - 移动端适配版
-// [完整版] 包含所有原有布局、拇指热区、以及新增的滑动选牌支持和剩余牌数徽章
-// [本次修复] 修复大厅人多时撑破屏幕的问题：给 lobbyCard 加限高，给 playerGrid 加滚动
-// [本次新增] kickButton
+// =========================================================
+// [DEPRECATED] 该文件已废弃
+// =========================================================
+// 所有的样式都已经迁移到了各个组件的 *.module.css 中。
+// 
+// 1. DrawSeatScreen -> DrawSeatScreen.module.css
+// 2. LobbyScreen -> LobbyScreen.module.css
+// 3. GameScreen -> GameScreen.module.css
+// 4. Card, Avatar -> ui/*.module.css
+// 
+// 如果你看到这里，说明你的代码中可能还有残留的 import { styles } from ...
+// 请将它们删除，并确保组件使用了正确的 module.css 类名。
+// =========================================================
 
 export const styles = {
-  // ============================
-  // 全局容器
-  // ============================
-  container: { 
-      height: '100dvh', // 使用 100dvh 自动适配动态地址栏
-      width: '100vw', 
-      display: 'flex', 
-      justifyContent: 'center', 
-      alignItems: 'center', 
-      background: '#1e272e', 
-      fontFamily: '"Segoe UI", Roboto, Helvetica, Arial, sans-serif', 
-      backgroundImage: 'radial-gradient(circle at top right, #34495e 0%, #000000 100%)',
-      overflow: 'hidden' 
-  },
-  
-  // ============================
-  // 登录页 (Login Screen)
-  // ============================
-  loginCard: { 
-      background: 'white', 
-      borderRadius: 24, 
-      width: '95%', 
-      maxWidth: '1100px', 
-      minHeight: '600px', 
-      maxHeight: '90vh',
-      display: 'flex', 
-      boxShadow: '0 50px 100px -20px rgba(0,0,0,0.7)',
-      overflow: 'hidden',
-      animation: 'popIn 0.5s ease-out'
-  },
-
-  // 左侧品牌区
-  loginLeft: { 
-      flex: 0.8, 
-      background: 'linear-gradient(135deg, #27ae60 0%, #2ecc71 100%)', 
-      padding: '60px 50px', 
-      display:'flex', 
-      flexDirection:'column', 
-      justifyContent:'center', 
-      alignItems: 'flex-start',
-      color: 'white',
-      position: 'relative',
-      overflow: 'hidden'
-  },
-  logoCircle: { width: 90, height: 90, background: 'rgba(255,255,255,0.2)', borderRadius: 24, display:'flex', alignItems:'center', justifyContent:'center', marginBottom: 25, backdropFilter: 'blur(10px)' },
-  logoText: { fontSize: 28, fontWeight: '900', color: 'white' },
-  brandTitle: { fontSize: 48, fontWeight: '800', margin: '0 0 15px 0', letterSpacing: -1.5 },
-  brandSubtitle: { fontSize: 18, opacity: 0.9, marginBottom: 50, fontWeight: '500' },
-  featureList: { marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 15 },
-  featureItem: { fontSize: 15, opacity: 0.95, display:'flex', alignItems:'center', fontWeight: '500' },
-
-  // 右侧表单区
-  loginRight: { 
-      flex: 1.2, 
-      padding: '50px 60px', 
-      display: 'flex',
-      flexDirection: 'column',
-      background: '#ffffff',
-      overflowY: 'auto' 
-  },
-  
-  tabs: { display: 'flex', gap: 35, marginBottom: 35, borderBottom: '2px solid #f1f2f6' },
-  tabBtn: { padding: '12px 0', fontSize: 18, fontWeight: 'bold', color: '#95a5a6', background: 'none', border: 'none', cursor: 'pointer', transition: 'all 0.3s', borderBottom: '3px solid transparent', marginBottom: -3 },
-  tabBtnActive: { padding: '12px 0', fontSize: 18, fontWeight: 'bold', color: '#2c3e50', background: 'none', border: 'none', cursor: 'pointer', transition: 'all 0.3s', borderBottom: '3px solid #27ae60', marginBottom: -3 },
-  
-  formContent: { flex: 1, display: 'flex', flexDirection: 'column' },
-
-  inputGroup: { display: 'flex', alignItems: 'center', background: '#f8f9fa', borderRadius: 14, padding: '0 20px', marginBottom: 20, border: '1px solid #e1e4e8', height: 60, transition: 'all 0.2s' },
-  input: { padding: '10px', border: 'none', background: 'transparent', flex: 1, outline:'none', fontSize: 17, color: '#2c3e50', fontWeight: '500' },
-
-  // 高级配置面板
-  advancedConfigPanel: { 
-      marginTop: 15, 
-      background: '#fff', 
-      borderRadius: 12,
-      animation: 'fadeIn 0.4s ease'
-  },
-  configGrid: {
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr', 
-      gap: '25px 35px'
-  },
-  configItem: { display: 'flex', flexDirection: 'column', gap: 10 },
-  configLabel: { display: 'flex', justifyContent: 'space-between', fontSize: 14, color: '#7f8c8d', fontWeight: '600' },
-  configValue: { color: '#27ae60', fontWeight: 'bold' },
-  
-  rangeInput: { width: '100%', cursor: 'pointer', accentColor: '#27ae60', height: 6 },
-
-  radioGroup: { display: 'flex', gap: 10 },
-  radioBtn: { flex: 1, padding: '8px 0', borderRadius: 8, border: '1px solid #e1e4e8', background: 'white', color: '#7f8c8d', fontSize: 13, cursor: 'pointer', transition: 'all 0.2s' },
-  radioBtnActive: { flex: 1, padding: '8px 0', borderRadius: 8, border: '1px solid #27ae60', background: '#eafaf1', color: '#27ae60', fontSize: 13, fontWeight: 'bold', cursor: 'pointer' },
-
-  primaryButton: { 
-      marginTop: 25, 
-      width: '100%', 
-      height: 65, 
-      background: '#2c3e50', 
-      color: 'white', 
-      border: 'none', 
-      borderRadius: 14, 
-      fontWeight: 'bold', 
-      cursor: 'pointer', 
-      display: 'flex', 
-      justifyContent: 'center', 
-      alignItems: 'center', 
-      fontSize: 19, 
-      transition: 'all 0.2s', 
-      boxShadow: '0 10px 25px rgba(44, 62, 80, 0.25)' 
-  },
-
-  // ============================
-  // 游戏界面 (Game Screen)
-  // ============================
-
-  gameTable: { 
-      height: '100dvh', // 使用 100dvh
-      width: '100vw', 
-      background: '#1e3c29', 
-      backgroundImage: 'radial-gradient(circle at center, #2d7a54 0%, #173b25 100%)', 
-      position: 'relative', 
-      overflow: 'hidden', 
-      display: 'flex', 
-      flexDirection: 'column', 
-      userSelect: 'none',
-      
-      // [关键] 必须加上 border-box，防止宽度溢出
-      boxSizing: 'border-box',
-
-      paddingTop: 'env(safe-area-inset-top)',
-      paddingLeft: 'max(15px, env(safe-area-inset-left))',
-      paddingRight: 'max(15px, env(safe-area-inset-right))',
-      paddingBottom: 'env(safe-area-inset-bottom)'
-  },
-  
-  // 安全区域包装层
-  gameSafeArea: {
-      position: 'absolute',
-      top: 0, left: 0, right: 0, bottom: 0,
-      width: '100%',
-      height: '100%',
-      boxSizing: 'border-box',
-      paddingTop: 'env(safe-area-inset-top)',
-      paddingLeft: 'max(15px, env(safe-area-inset-left))',
-      paddingRight: 'max(15px, env(safe-area-inset-right))',
-      paddingBottom: 'env(safe-area-inset-bottom)',
-      display: 'flex',
-      flexDirection: 'column',
-      pointerEvents: 'none' 
-  },
-
-  playersArea: { 
-      position: 'absolute',
-      top: 0, left: 0, right: 0, bottom: 0,
-      pointerEvents: 'none',
-      zIndex: 10
-  },
-  
-  playerBox: { 
-      pointerEvents: 'auto',
-      padding: '2px 4px',   
-      borderRadius: 8, 
-      textAlign: 'center', 
-      minWidth: 45,           
-      color:'white', 
-      border: '1px solid transparent', 
-      transition: 'all 0.3s', 
-      position: 'relative',
-      backdropFilter: 'blur(3px)',
-      boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
-  },
-
-  // [新增] 剩余牌数小徽章样式
-  cardCountBadge: {
-      position: 'absolute',
-      top: -8,
-      left: -8,
-      background: '#e74c3c',
-      color: 'white',
-      borderRadius: '50%',
-      width: 20,
-      height: 20,
-      fontSize: 12,
-      fontWeight: 'bold',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      border: '2px solid #fff',
-      boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
-      zIndex: 25
-  },
-
-  avatar: { 
-      width: 30, 
-      height: 30, 
-      background: '#ecf0f1', 
-      borderRadius: '50%', 
-      margin: '0 auto 2px', 
-      lineHeight: '30px', 
-      color:'#333', 
-      fontWeight:'bold', 
-      fontSize: 14, 
-      border: '1px solid rgba(255,255,255,0.3)', 
-      boxShadow: '0 2px 5px rgba(0,0,0,0.2)' 
-  },
-
-  playerName: { 
-      fontSize: 10, 
-      fontWeight: 'bold', 
-      marginBottom: 1, 
-      whiteSpace: 'nowrap', 
-      overflow: 'hidden', 
-      textOverflow: 'ellipsis', 
-      maxWidth: 50 
-  },
-  
-  // [修改] 左上角日志面板 (GameLogPanel) - 支持折叠动画
-  gameLogPanel: { 
-      position: 'absolute', 
-      top: 50, 
-      left: 10, 
-      width: 200, 
-      background: 'rgba(0, 0, 0, 0.35)', 
-      borderRadius: 10, 
-      padding: '8px 12px', 
-      border: '1px solid rgba(255,255,255,0.1)',
-      backdropFilter: 'blur(5px)',
-      
-      display: 'flex', 
-      flexDirection: 'column', 
-      zIndex: 5, 
-      pointerEvents: 'auto', 
-      boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
-      
-      // [关键修改] 增加过渡动画，让折叠更丝滑
-      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-      overflow: 'hidden' // 防止折叠时内容溢出
-  },
-  
-  logHeader: { 
-      display: 'flex', 
-      alignItems: 'center', 
-      gap: 5, 
-      fontSize: 12, 
-      borderBottom: '1px solid rgba(255,255,255,0.2)', 
-      paddingBottom: 4, 
-      marginBottom: 4 
-  }, 
-  
-  logList: { 
-      flex: 1, 
-      overflowY: 'auto', 
-      display: 'flex', 
-      flexDirection: 'column', 
-      gap: 4, 
-      fontSize: 12,
-      // 增加透明度过渡
-      transition: 'opacity 0.2s ease-in-out',
-      maskImage: 'linear-gradient(to bottom, transparent, black 10%)',
-      WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 10%)'
-  },
-  
-  logItem: { 
-      lineHeight: 1.4, 
-      display: 'flex', 
-      alignItems: 'flex-start', 
-      color: '#ecf0f1',
-      fontSize: 12,
-      textShadow: '0 1px 1px rgba(0,0,0,0.8)'
-  },
-  
-  logTime: { display: 'none' },
-  
-  tableHeader: { 
-      padding: '4px 10px', 
-      display: 'flex', 
-      justifyContent: 'space-between', 
-      alignItems:'flex-start', 
-      zIndex: 20,
-      width: '100%',
-      pointerEvents: 'none',
-      boxSizing: 'border-box' 
-  },
-  
-  roomBadgeContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8, 
-    pointerEvents: 'auto'
-  },
-
-  roomBadge: { 
-    background: 'rgba(0,0,0,0.3)', 
-    color:'white', 
-    padding: '4px 8px', 
-    borderRadius: 15, 
-    fontSize: 11, 
-    border: '1px solid rgba(255,255,255,0.1)', 
-    fontWeight: 'bold',
-    whiteSpace: 'nowrap'
-  },
-  
-  scoreBoard: { 
-      position: 'absolute', 
-      top: '40%', 
-      left: '50%', 
-      transform: 'translate(-50%, -100%) scale(0.8)', 
-      background: 'rgba(0,0,0,0.6)', 
-      padding: '5px 20px', 
-      borderRadius: 20, 
-      textAlign: 'center', 
-      color: 'white', 
-      border: '1px solid rgba(255,255,255,0.2)', 
-      backdropFilter: 'blur(5px)', 
-      boxShadow: '0 5px 15px rgba(0,0,0,0.3)',
-      zIndex: 5 
-  },
-  
-  glassButton: { pointerEvents: 'auto', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 20px', borderRadius: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: 14, transition: 'background 0.2s' },
-  sortButton: { pointerEvents: 'auto', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 20px', borderRadius: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: 14, transition: 'background 0.2s' },
-  
-  infoMessage: { position: 'absolute', top: '25%', width: '100%', textAlign: 'center', color: '#f1c40f', fontSize: 40, fontWeight: 'bold', textShadow: '0 5px 15px rgba(0,0,0,0.5)', pointerEvents: 'none', zIndex: 50, letterSpacing: 2 },
-  
-  tableCenter: { 
-      position: 'absolute',
-      top: '50%',
-      left: '50%',
-      transform: 'translate(-50%, -50%)',
-      display: 'flex', 
-      alignItems: 'center', 
-      justifyContent: 'center', 
-      zIndex: 1
-  },
-  
-  playerNameTag: { color: 'white', textAlign: 'center', marginBottom: 5, textShadow: '0 2px 4px rgba(0,0,0,0.5)', fontSize: 14, fontWeight: 'bold', background: 'rgba(0,0,0,0.3)', padding: '2px 10px', borderRadius: 20, display: 'inline-block' },
-  playedRow: { display: 'flex', gap: -10, filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.3))' }, 
-  miniCard: { background: 'white', padding: '10px 15px', borderRadius: 8, fontWeight: 'bold', fontSize: 24, minWidth: 40, textAlign:'center' },
-  
-  scoreBarBg: { width:'100%', height:4, background:'rgba(0,0,0,0.5)', borderRadius:2, marginTop:2, overflow:'hidden' },
-  scoreBarFill: { height:'100%', transition:'width 0.5s' },
-  playerScore: { fontSize: 9, color: '#f1c40f', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, marginTop: 1 },
-  turnProgress: { position: 'absolute', bottom: 0, left: 0, height: 4, background: '#f1c40f', width: '100%', animation: 'progress 15s linear forwards' },
-  
-  // HandArea
-  handArea: { 
-      position: 'absolute', 
-      // [关键修改] 抬高底部距离
-      bottom: 'max(25px, env(safe-area-inset-bottom))',
-      
-      // [关键修改] 加大左侧间距 (65 -> 110)，防止被左下角头像遮挡
-      left: 90,
-      
-      right: 10, 
-      height: 160,            
-      display: 'flex', 
-      justifyContent:'flex-start', 
-      alignItems: 'flex-end', 
-      zIndex: 20,
-      touchAction: 'none', 
-      pointerEvents: 'auto',
-      paddingBottom: 10       
-  },
-  
-  card: { 
-      background: 'white', 
-      borderRadius: 6,      
-      border: '1px solid #999', 
-      position: 'absolute', 
-      cursor: 'pointer', 
-      display: 'flex', 
-      flexDirection: 'column', 
-      padding: 4,            
-      transition: 'transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1)', 
-      width: 55,         
-      height: 70 
-  },
-  
-  actionBar: { position: 'absolute', bottom: 100, width: '100%', height: 60, display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', zIndex: 30 }, 
-  playButton: { pointerEvents: 'auto', padding: '8px 30px', background: 'linear-gradient(to bottom, #f1c40f, #f39c12)', border: 'none', borderRadius: 40, fontWeight: 'bold', cursor: 'pointer', marginLeft: 20, fontSize: 16, boxShadow: '0 8px 20px rgba(243, 156, 18, 0.4)', color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.2)', transition: 'transform 0.1s' },
-  passButton: { pointerEvents: 'auto', padding: '8px 25px', background: '#7f8c8d', border: 'none', borderRadius: 40, fontWeight: 'bold', cursor: 'pointer', fontSize: 14, color: 'white', boxShadow: '0 5px 15px rgba(0,0,0,0.3)' },
-  waitingBadge: { color: 'rgba(255,255,255,0.7)', fontSize: 16, display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(0,0,0,0.3)', padding: '10px 20px', borderRadius: 30 },
-  
-  // 弹窗遮罩
-  modalOverlay: { 
-      position: 'fixed', 
-      top:0, left:0, right:0, bottom:0, 
-      background: 'rgba(0,0,0,0.85)', 
-      display:'flex', 
-      justifyContent:'center', 
-      alignItems:'center', 
-      zIndex: 99, 
-      backdropFilter: 'blur(8px)',
-      pointerEvents: 'auto' 
-  },
-
-  // 弹窗内容
-  modalContent: { 
-      background: 'white', 
-      padding: 30, 
-      borderRadius: 24, 
-      textAlign: 'center', 
-      boxShadow: '0 30px 80px rgba(0,0,0,0.6)', 
-      animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-      width: '90%',        
-      maxWidth: 500,       
-      maxHeight: '85vh',   
-      overflowY: 'auto',   
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center'
-  },
-  
-  // 大厅页 (Lobby) - [修复]
-  lobbyCard: { 
-      background: 'white', 
-      padding: 40, 
-      borderRadius: 20, 
-      width: '1000px', 
-      maxWidth: '95vw', 
-      minHeight: '600px',
-      // [核心修复] 限制最大高度，防止在大屏或人数过多时撑破屏幕
-      maxHeight: '85vh', 
-      display: 'flex', 
-      flexDirection: 'column', 
-      boxShadow: '0 30px 60px rgba(0,0,0,0.5)',
-      // 确保内容溢出时不会破坏圆角或溢出 Card
-      overflow: 'hidden' 
-  },
-
-  lobbyHeader: { 
-      display: 'flex', 
-      justifyContent: 'space-between', 
-      alignItems: 'center', 
-      marginBottom: 30, 
-      paddingBottom: 20, 
-      borderBottom: '1px solid #eee',
-      // 防止头部被压缩
-      flexShrink: 0
-  },
-  
-  tag: { background: '#f0f9f4', color: '#27ae60', padding: '5px 10px', borderRadius: 20, fontSize: 14, display: 'flex', alignItems: 'center', gap: 5 },
-  
-  playerGrid: { 
-      display: 'grid', 
-      gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', 
-      gap: 20, 
-      flex: 1, 
-      alignContent: 'start',
-      // [核心修复] 允许网格内部滚动
-      overflowY: 'auto',
-      minHeight: 0
-  },
-  
-  lobbyPlayer: { border: '2px solid #eee', borderRadius: 12, padding: 25, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15, position: 'relative', transition: 'all 0.2s' },
-  avatarLarge: { width: 80, height: 80, borderRadius: '50%', background: '#34495e', color: 'white', fontSize: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
-  hostBadge: { position: 'absolute', top: 10, right: 10, background: '#f1c40f', color: '#333', fontSize: 12, padding: '4px 8px', borderRadius: 4, fontWeight: 'bold' },
-  
-  // [新增] 踢人按钮样式
-  kickButton: {
-      position: 'absolute',
-      top: -8,
-      right: -8,
-      width: 24,
-      height: 24,
-      borderRadius: '50%',
-      background: '#e74c3c',
-      border: '2px solid white',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      cursor: 'pointer',
-      padding: 0,
-      zIndex: 10,
-      boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
-  },
-
-  lobbyFooter: { 
-      marginTop: 'auto', 
-      borderTop: '1px solid #eee', 
-      paddingTop: 20, 
-      display: 'flex', 
-      justifyContent: 'center',
-      // 防止底部被压缩
-      flexShrink: 0 
-  },
+    // 留下空对象防止 import 报错
+    container: {},
+    gameTable: {},
+    gameSafeArea: {},
+    card: {},
+    miniCard: {},
+    playerBox: {},
+    avatar: {},
+    // ...
 };
 
 ================================================================================
@@ -5215,6 +5909,53 @@ export default defineConfig({
   plugins: [react()],
 })
 
+
+================================================================================
+FILE PATH: server\config\constants.js
+================================================================================
+// ==========================================
+// 游戏服务端全局配置文件
+// 方便后续调整游戏平衡性、修改常驻房间参数
+// ==========================================
+
+// 常驻房间配置 (服务器重启后会自动创建这些房间)
+const PERMANENT_ROOMS = {
+    '888': { 
+        deckCount: 2,           // 几副牌
+        maxPlayers: 4,          // 最大人数
+        targetScore: 1000,      // 目标分数
+        turnTimeout: 60000,     // 出牌时间(毫秒)
+        showCardCountMode: 1,   // 剩牌显示模式
+        isTeamMode: false,      // 是否组队
+        enableRankPenalty: false, // 排名赏罚
+        rankPenaltyScores: [50, 20], // 赏罚分数配置
+        shuffleStrategy: 'CLASSIC' // 洗牌策略: CLASSIC(随机), NO_SHUFFLE(不洗牌)
+    },
+    '666': { 
+        deckCount: 3, 
+        maxPlayers: 6, 
+        targetScore: 1000, 
+        turnTimeout: 60000,
+        showCardCountMode: 1,
+        isTeamMode: true, 
+        enableRankPenalty: false,
+        rankPenaltyScores: [50, 20],
+        shuffleStrategy: 'NO_SHUFFLE'
+    }
+};
+
+// 可以在这里添加更多全局常量
+const GLOBAL_CONFIG = {
+    SERVER_PORT: 3001,
+    // 比如：Bot 的思考时间波动范围
+    BOT_THINK_MIN: 1000,
+    BOT_THINK_MAX: 2000
+};
+
+module.exports = {
+    PERMANENT_ROOMS,
+    GLOBAL_CONFIG
+};
 
 ================================================================================
 FILE PATH: server\game\BotLogic.js
@@ -7558,6 +8299,9 @@ const path = require('path');
 const registerRoomHandlers = require('./handlers/roomHandler');
 const registerGameHandlers = require('./handlers/gameHandler');
 
+// [修改] 引入配置文件
+const { PERMANENT_ROOMS, GLOBAL_CONFIG } = require('./config/constants');
+
 const app = express();
 app.use(cors());
 
@@ -7569,36 +8313,11 @@ const io = new Server(server, {
 // 内存数据库
 const rooms = {}; 
 
-// --- 常驻房间配置定义 ---
-const PERMANENT_ROOMS = {
-    '888': { 
-        deckCount: 2, 
-        maxPlayers: 4, 
-        targetScore: 1000, 
-        turnTimeout: 60000,
-        showCardCountMode: 1,
-        isTeamMode: false,
-        enableRankPenalty: false,
-        rankPenaltyScores: [50, 20],
-        shuffleStrategy: 'CLASSIC'
-    },
-    '666': { 
-        deckCount: 3, 
-        maxPlayers: 6, 
-        targetScore: 1000, 
-        turnTimeout: 60000,
-        showCardCountMode: 1,
-        isTeamMode: true, 
-        enableRankPenalty: false,
-        rankPenaltyScores: [50, 20],
-        shuffleStrategy: 'NO_SHUFFLE'
-    }
-};
-
 /**
  * 辅助函数：初始化/重置常驻房间
  */
 function initPermanentRoom(roomId) {
+    // [修改] 从配置文件读取配置
     const defaultConfig = PERMANENT_ROOMS[roomId];
     if (!defaultConfig) return;
 
@@ -7730,7 +8449,8 @@ if (process.env.NODE_ENV === 'production') {
     });
 }
 
-const PORT = process.env.PORT || 3001;
+// [修改] 使用配置端口
+const PORT = process.env.PORT || GLOBAL_CONFIG.SERVER_PORT || 3001;
 server.listen(PORT, () => {
     console.log(`>>> Server Running on port ${PORT}`);
 });

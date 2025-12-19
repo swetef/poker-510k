@@ -9,6 +9,9 @@ const path = require('path');
 const registerRoomHandlers = require('./handlers/roomHandler');
 const registerGameHandlers = require('./handlers/gameHandler');
 
+// [修改] 引入配置文件
+const { PERMANENT_ROOMS, GLOBAL_CONFIG } = require('./config/constants');
+
 const app = express();
 app.use(cors());
 
@@ -20,36 +23,11 @@ const io = new Server(server, {
 // 内存数据库
 const rooms = {}; 
 
-// --- 常驻房间配置定义 ---
-const PERMANENT_ROOMS = {
-    '888': { 
-        deckCount: 2, 
-        maxPlayers: 4, 
-        targetScore: 1000, 
-        turnTimeout: 60000,
-        showCardCountMode: 1,
-        isTeamMode: false,
-        enableRankPenalty: false,
-        rankPenaltyScores: [50, 20],
-        shuffleStrategy: 'CLASSIC'
-    },
-    '666': { 
-        deckCount: 3, 
-        maxPlayers: 6, 
-        targetScore: 1000, 
-        turnTimeout: 60000,
-        showCardCountMode: 1,
-        isTeamMode: true, 
-        enableRankPenalty: false,
-        rankPenaltyScores: [50, 20],
-        shuffleStrategy: 'NO_SHUFFLE'
-    }
-};
-
 /**
  * 辅助函数：初始化/重置常驻房间
  */
 function initPermanentRoom(roomId) {
+    // [修改] 从配置文件读取配置
     const defaultConfig = PERMANENT_ROOMS[roomId];
     if (!defaultConfig) return;
 
@@ -181,7 +159,8 @@ if (process.env.NODE_ENV === 'production') {
     });
 }
 
-const PORT = process.env.PORT || 3001;
+// [修改] 使用配置端口
+const PORT = process.env.PORT || GLOBAL_CONFIG.SERVER_PORT || 3001;
 server.listen(PORT, () => {
     console.log(`>>> Server Running on port ${PORT}`);
 });

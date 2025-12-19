@@ -1,0 +1,107 @@
+/* 底分面板 */
+.scoreBoard {
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -100%) scale(0.8);
+    background: rgba(0,0,0,0.6);
+    padding: 5px 20px;
+    borderRadius: 20px;
+    text-align: center;
+    color: white;
+    border: 1px solid rgba(255,255,255,0.2);
+    backdrop-filter: blur(5px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    z-index: 5;
+}
+
+.scoreLabel {
+    font-size: 10px;
+    opacity: 0.8;
+    text-transform: uppercase;
+}
+
+.scoreValue {
+    font-size: 24px;
+    font-weight: bold;
+    color: #f1c40f;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+/* 系统消息 (全屏大字) */
+.infoMessage {
+    position: absolute;
+    top: 25%;
+    width: 100%;
+    text-align: center;
+    color: #f1c40f;
+    font-size: 40px;
+    font-weight: bold;
+    text-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    pointer-events: none;
+    z-index: 50;
+    letter-spacing: 2px;
+    animation: fadeInOut 2s forwards;
+}
+
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translateY(10px); }
+    10% { opacity: 1; transform: translateY(0); }
+    90% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-10px); }
+}
+
+/* 桌面出牌展示区 */
+.tableCenter {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+}
+
+/* 弹出动画容器 */
+.playedContainer {
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes popIn {
+    0% { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* 出牌者名字标签 */
+.playerNameTag {
+    color: white;
+    text-align: center;
+    margin-bottom: 5px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    font-size: 14px;
+    font-weight: bold;
+    background: rgba(0,0,0,0.3);
+    padding: 2px 10px;
+    border-radius: 20px;
+    display: inline-block;
+}
+
+/* 牌型行 */
+.playedRow {
+    display: flex;
+    /* 负间距让牌叠在一起 */
+    gap: -10px; 
+    filter: drop-shadow(0 10px 20px rgba(0,0,0,0.3));
+}
+
+/* 特殊修正：MiniCard 的负 margin 需要配合 CSS */
+.miniCardWrapper {
+    margin-right: -10px;
+}
+.miniCardWrapper:last-child {
+    margin-right: 0;
+}

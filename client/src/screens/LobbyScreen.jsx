@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Sparkles, Award } from 'lucide-react';
-import { styles } from '../styles.js'; 
+// [修改] 彻底移除 styles.js 引用
 import css from './LobbyScreen.module.css'; 
 import { useGame } from '../context/GameContext.jsx';
-// [新增]
 import { RoomSettingsForm } from '../components/game/RoomSettingsForm.jsx';
 
 export const LobbyScreen = () => {
@@ -20,13 +19,11 @@ export const LobbyScreen = () => {
     const isTeamMode = roomConfig.isTeamMode && roomConfig.maxPlayers % 2 === 0;
     const [showSettings, setShowSettings] = useState(false);
     
-    // [修改] 统一更新入口
     const handleConfigChange = (key, value) => {
         const newConfig = { ...roomConfig, [key]: value };
         handleUpdateConfig(newConfig);
     };
 
-    // [修改] 渲染设置弹窗，使用新组件
     const renderSettingsModal = () => (
         <div className={css.modalOverlay}>
             <div className={css.modalContent} style={{textAlign:'left'}}>
@@ -40,11 +37,10 @@ export const LobbyScreen = () => {
                 </div>
 
                 <div style={{maxHeight: '60vh', overflowY:'auto', paddingRight: 5, width:'100%'}}>
-                    {/* [使用通用组件] */}
                     <RoomSettingsForm 
                         config={roomConfig} 
                         onChange={handleConfigChange} 
-                        readOnly={!amIHost} // 非房主只读
+                        readOnly={!amIHost} 
                     />
                 </div>
 
@@ -58,7 +54,8 @@ export const LobbyScreen = () => {
     );
 
     return (
-    <div style={styles.container}>
+    // [修改] 使用 css.lobbyContainer
+    <div className={css.lobbyContainer}>
       {showSettings && renderSettingsModal()}
 
       <div className={`${css.lobbyCard} mobile-layout-column`}>
@@ -125,9 +122,9 @@ export const LobbyScreen = () => {
                  <span className={css.tag}><Target size={12}/> {roomConfig.targetScore}</span>
                  <span className={css.tag}><Layers size={12}/> {roomConfig.deckCount}副</span>
                  <span className={css.tag}><User size={12}/> {roomConfig.maxPlayers}人</span>
-                 {roomConfig.shuffleStrategy === 'NO_SHUFFLE' && <span style={{...styles.tag, background:'#fdf2e9', color:'#e67e22', border:'1px solid #e67e22'}}><Sparkles size={12}/> 不洗牌</span>}
-                 {roomConfig.shuffleStrategy === 'SIMULATION' && <span style={{...styles.tag, background:'#f5eef8', color:'#9b59b6', border:'1px solid #9b59b6'}}><Layers size={12}/> 模拟叠牌</span>}
-                 {roomConfig.enableRankPenalty && <span style={{...styles.tag, color:'#e67e22', background:'#fdf2e9'}}><Award size={12}/> 赏罚</span>}
+                 {roomConfig.shuffleStrategy === 'NO_SHUFFLE' && <span className={css.tag} style={{background:'#fdf2e9', color:'#e67e22', border:'1px solid #e67e22'}}><Sparkles size={12}/> 不洗牌</span>}
+                 {roomConfig.shuffleStrategy === 'SIMULATION' && <span className={css.tag} style={{background:'#f5eef8', color:'#9b59b6', border:'1px solid #9b59b6'}}><Layers size={12}/> 模拟叠牌</span>}
+                 {roomConfig.enableRankPenalty && <span className={css.tag} style={{color:'#e67e22', background:'#fdf2e9'}}><Award size={12}/> 赏罚</span>}
             </div>
             <style>{`@media (min-width: 769px) { .mobile-only-tags { display: none !important; } }`}</style>
 

@@ -1,0 +1,152 @@
+/* 顶部栏容器 */
+.header {
+    padding: 4px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    z-index: 20;
+    width: 100%;
+    pointer-events: none; /* 让点击穿透，按钮单独开启 auto */
+    box-sizing: border-box;
+}
+
+/* 左侧：房间信息块 */
+.roomBadgeContainer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: auto;
+}
+
+.roomBadge {
+    background: rgba(0,0,0,0.3);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 15px;
+    font-size: 11px;
+    border: 1px solid rgba(255,255,255,0.1);
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+/* Ping 值徽章 */
+.pingBadge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.1);
+    font-weight: bold;
+    transition: color 0.5s;
+}
+
+/* 托管按钮 */
+.autoPlayBtn {
+    pointer-events: auto;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #ecf0f1;
+    border-radius: 15px;
+    padding: 4px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: bold;
+    transition: all 0.2s;
+}
+
+.autoPlayBtnActive {
+    composes: autoPlayBtn;
+    background: #e67e22;
+}
+
+/* 右侧：比分与功能按钮 */
+.rightSection {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+}
+
+.buttonGroup {
+    display: flex;
+    gap: 10px;
+}
+
+.iconBtn {
+    pointer-events: auto;
+    background: rgba(255,255,255,0.1);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 8px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    transition: background 0.2s;
+}
+
+.iconBtn:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+/* --- 内部组件：队伍比分板 --- */
+.teamScoreContainer {
+    position: relative;
+    margin-right: 10px;
+    z-index: 50;
+    pointer-events: auto;
+}
+
+.teamScoreBar {
+    background: rgba(0,0,0,0.3);
+    padding: 4px 10px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.1);
+    transition: background 0.2s;
+}
+
+.scoreItem {
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 13px;
+}
+
+.divider {
+    width: 1px;
+    height: 12px;
+    background: rgba(255,255,255,0.2);
+}
+
+.scoreDropdown {
+    position: absolute;
+    top: 120%;
+    right: 0;
+    background: rgba(30, 40, 50, 0.95);
+    border-radius: 8px;
+    padding: 10px;
+    color: white;
+    font-size: 12px;
+    text-align: center;
+    width: 140px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(5px);
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
