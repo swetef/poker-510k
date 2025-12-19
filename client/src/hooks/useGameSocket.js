@@ -226,16 +226,22 @@ export const useGameSocket = () => {
             }
         }; 
         
+        // [修改] 增加延迟，以便展示最后一手牌
         const onRoundOver = (data) => {
-            setRoundResult(data);
-            if (data.grandScores) setPlayerScores(data.grandScores);
-            const amIWinner = data.roundWinner === usernameRef.current;
-            SoundManager.play(amIWinner ? 'win' : 'lose');
+            setTimeout(() => {
+                setRoundResult(data);
+                if (data.grandScores) setPlayerScores(data.grandScores);
+                const amIWinner = data.roundWinner === usernameRef.current;
+                SoundManager.play(amIWinner ? 'win' : 'lose');
+            }, 3000);
         };
 
+        // [修改] 增加延迟
         const onGrandGameOver = (data) => {
-            setGrandResult(data);
-            SoundManager.play('win'); 
+             setTimeout(() => {
+                setGrandResult(data);
+                SoundManager.play('win'); 
+             }, 3000);
         };
 
         const onHintResponse = (hints) => {

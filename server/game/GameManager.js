@@ -14,18 +14,15 @@ class GameManager {
         this.lastWinnerId = null;
         this.gameState = null; 
         
-        // 比赛历史记录，用于结算页面展示表格
         this.matchHistory = []; 
         
         this.timer = null;
         this.botTimer = null;
         this.turnStartTime = 0; 
 
-        // [新增] 收集本局所有打出的牌（按顺序），用于下一局“模拟洗牌”
         this.collectedCards = [];
     }
 
-    // [修改] 获取提示 - 返回所有可行解
     getHint(playerId) {
         try {
             if (!this.gameState) return [];
@@ -34,7 +31,6 @@ class GameManager {
 
             const lastPlayed = this.gameState.lastPlayedCards;
             
-            // 使用新方法 findAllSolutions 获取所有可行牌型
             const results = BotLogic.findAllSolutions(hand, lastPlayed, this.config.deckCount);
             
             return results || [];
@@ -44,20 +40,16 @@ class GameManager {
         }
     }
 
-    // 切换托管状态
     toggleAutoPlay(playerId) {
         const player = this.players.find(p => p.id === playerId);
         if (!player || player.isBot) return; 
 
         player.isAutoPlay = !player.isAutoPlay;
         
-        // 如果当前正好是该玩家的回合
         if (this.gameState && this.players[this.gameState.currentTurnIndex].id === playerId) {
             if (player.isAutoPlay) {
-                // 开启托管：立即尝试运行 Bot
                 this._checkAndRunBot();
             } else {
-                // 取消托管：清除 Bot 计时器，重置超时计时器给玩家思考时间
                 if (this.botTimer) {
                     clearTimeout(this.botTimer);
                     this.botTimer = null;
@@ -71,21 +63,18 @@ class GameManager {
         if (!isNextRound) {
             this.players.forEach(p => this.grandScores[p.id] = 0);
             this.lastWinnerId = null;
-            this.matchHistory = []; // 新比赛清空历史
-            this.collectedCards = []; // [新增] 第一局清空收集区
+            this.matchHistory = []; 
+            this.collectedCards = []; 
         }
 
         const deck = new Deck(this.config.deckCount);
         
-        // [修改] 解析洗牌策略 (兼容旧的 isNoShuffleMode)
         let strategy = this.config.shuffleStrategy || (this.config.isNoShuffleMode ? 'NO_SHUFFLE' : 'CLASSIC');
         
         console.log(`[Game] Round started. Strategy: ${strategy}, Previous Collected: ${this.collectedCards.length}`);
 
-        // [修改] 传入 strategy 和 collectedCards
         const hands = deck.deal(this.players.length, strategy, this.collectedCards);
         
-        // [新增] 发牌后，清空收集区，准备收集这一局的新牌
         this.collectedCards = [];
 
         let startIndex = 0;
@@ -94,13 +83,12 @@ class GameManager {
             if (winnerIdx !== -1) startIndex = winnerIdx;
         }
 
-        // 组队分配逻辑：间隔入座 (0,2为一队; 1,3为一队)
         const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
         this.players.forEach((p, index) => {
             if (isTeamMode) {
-                p.team = index % 2; // 0 或 1
+                p.team = index % 2; 
             } else {
-                p.team = null; // 个人战
+                p.team = null; 
             }
         });
 
@@ -112,7 +100,9 @@ class GameManager {
             roundPoints: {},        
             pendingTablePoints: 0,  
             roundWinnerId: null, 
-            finishedRank: [],    
+            finishedRank: [],
+            // [新增] 最后一手(捉鸟)阶段状态
+            lastShotPhase: null // { targetId: string, passedCount: number, requiredPasses: number }
         };
 
         this.players.forEach((p, index) => {
@@ -138,7 +128,9 @@ class GameManager {
             this.botTimer = null;
         }
 
-        if (this._getActivePlayerCount() <= 1 && this.gameState.lastPlayedCards.length === 0) return;
+        // 仅当非最后一手阶段时，才检查 activePlayerCount <= 1 的跳过逻辑
+        // 如果是 lastShotPhase，即使只有1个对手，也得让他思考出不出
+        if (!this.gameState.lastShotPhase && this._getActivePlayerCount() <= 1 && this.gameState.lastPlayedCards.length === 0) return;
 
         const currPlayer = this.players[this.gameState.currentTurnIndex];
         const isAI = currPlayer.isBot || currPlayer.isAutoPlay;
@@ -148,20 +140,23 @@ class GameManager {
             this.botTimer = setTimeout(() => {
                 this._executeBotTurn(currPlayer);
             }, delay);
+        } else if (isAI && this.gameState.hands[currPlayer.id].length === 0 && this.gameState.lastShotPhase) {
+            // [特殊] 如果是 AI 在最后一手阶段（理论上这不该发生，因为 AI 没牌了会被 _advanceTurn 跳过）
+            // 但为了保险，如果 AI 没牌了，直接过
+             this._forcePass(currPlayer);
         }
     }
 
     _executeBotTurn(botPlayer) {
         if (!this.gameState) return;
-        // 双重检查：确保当前回合确实属于该 Bot，防止 Timer 触发时回合已变
         if (this.players[this.gameState.currentTurnIndex].id !== botPlayer.id) return;
 
         try {
             const hand = this.gameState.hands[botPlayer.id];
-            // 没牌了，直接跳过
+            
+            // [修改] 如果处于 lastShotPhase 且自己没牌（理论上不该轮到我），直接 Pass
             if (!hand || hand.length === 0) {
-                 this._advanceTurn(); 
-                 this._broadcastUpdate(); // 广播状态
+                 this._forcePass(botPlayer); 
                  return;
             }
 
@@ -170,10 +165,8 @@ class GameManager {
 
             const sortedHand = [...hand].sort((a,b) => CardRules.getPoint(a) - CardRules.getPoint(b));
             
-            // 尝试获取出牌策略
             let cardsToPlay = null;
             try {
-                // [修改] Bot 使用 decideMove (内部会调用 findAllSolutions 取第一个)
                 cardsToPlay = BotLogic.decideMove(sortedHand, cardsToBeat, this.config.deckCount);
             } catch (err) {
                 console.error("[Bot Error] Logic crashed:", err);
@@ -193,9 +186,11 @@ class GameManager {
                     } else {
                         const analysis = CardRules.analyze(cardsToPlay, this.config.deckCount);
                         const desc = CardRules.getAnalysisText(analysis);
-                        // [修改] 如果 Bot 打出了天王炸，日志也需要带上加分信息
                         let logText = `${botPlayer.name}: ${desc}`;
-                        if (analysis.type === 'BOMB_KING') {
+                        // [保留] 最后一手提示
+                        if (result.logText && result.logText.includes('最后一手')) {
+                            logText = result.logText;
+                        } else if (analysis.type === 'BOMB_KING') {
                              logText += ` (+${this.config.deckCount * 100}分)`;
                         }
                         this._broadcastUpdate(logText);
@@ -210,28 +205,17 @@ class GameManager {
                 }
             } else {
                 if (isNewRound) {
-                    console.warn(`[Bot Fix] AI tried to pass on new round. Forcing min card.`);
                     this._playMinCard(botPlayer, sortedHand);
                 } else {
-                    console.log(`[Bot/Auto] ${botPlayer.name} passes.`);
                     this._forcePass(botPlayer);
                 }
             }
         } catch (error) {
             console.error(`[Bot Error] Critical Exception in _executeBotTurn:`, error);
-            
-            this._advanceTurn();
-            this._resetTimer();
-            
-            const publicState = this.getPublicState();
-            publicState.infoText = `${botPlayer.name} 发生错误，跳过`;
-            this.io.to(this.roomId).emit('game_state_update', publicState);
-
-            this._checkAndRunBot();
+            this._forcePass(botPlayer);
         }
     }
     
-    // 辅助：出最小的一张牌 (用于兜底)
     _playMinCard(botPlayer, sortedHand) {
         const minCard = [sortedHand[0]];
         const result = this.playCards(botPlayer.id, minCard);
@@ -246,17 +230,19 @@ class GameManager {
         }
     }
 
-    // 统一广播函数
     _broadcastUpdate(infoText = null) {
         const publicState = this.getPublicState();
         if (infoText) publicState.infoText = infoText;
         this.io.to(this.roomId).emit('game_state_update', publicState);
     }
     
-    // 强制过牌辅助函数
     _forcePass(botPlayer) {
         const result = this.passTurn(botPlayer.id);
-        if (result.success) {
+        
+        // [新增] 处理 passTurn 可能返回的游戏结束状态
+        if (result.isRoundOver) {
+             this._handleWin(result, botPlayer.id); // 这里的 winnerId 实际上已经在 result.roundResult 里面处理好了
+        } else if (result.success) {
             this._broadcastUpdate(`${botPlayer.name}: 不要`);
         } else {
             console.error("[Bot Critical] Failed to pass turn:", result.error);
@@ -267,15 +253,14 @@ class GameManager {
         }
     }
 
-    _handleWin(result, winnerId) {
+    _handleWin(result, triggerPlayerId) {
         const rInfo = result.roundResult;
 
-        // 构造包含所有信息的结算对象
         const settlementData = {
             roundWinner: rInfo.roundWinnerName,
             pointsEarned: rInfo.pointsEarned,
-            detail: rInfo.detail,       // 文字版日志
-            matchHistory: this.matchHistory, // 完整的历史记录
+            detail: rInfo.detail,       
+            matchHistory: this.matchHistory, 
             grandScores: rInfo.grandScores,
             roundIndex: this.matchHistory.length
         };
@@ -312,23 +297,19 @@ class GameManager {
         }
 
         this._removeCardsFromHand(playerId, cards);
-        
-        // [新增] 收集打出的牌 (模拟堆叠)
         this.collectedCards.push(...cards);
 
-        // 1. 基础分计算
         this.gameState.pendingTablePoints += CardRules.calculateTotalScore(cards);
 
-        // [新增] 2. 天王炸弹额外加分逻辑
         const analysis = CardRules.analyze(cards, this.config.deckCount);
         if (analysis.type === 'BOMB_KING') {
-            // 响应你的第3点需求：集齐所有王的炸弹，加分到公共积分池，分值为牌副数*100
             const kingBombBonus = this.config.deckCount * 100;
             this.gameState.pendingTablePoints += kingBombBonus;
         }
 
         this.gameState.lastPlayedCards = cards;
         this.gameState.consecutivePasses = 0;
+        // 注意：roundWinnerId 暂时还是记在出牌人身上
         this.gameState.roundWinnerId = playerId;
 
         const isFinished = this.gameState.hands[playerId].length === 0;
@@ -338,32 +319,89 @@ class GameManager {
             }
         }
         
+        // 构造基础日志
         const cardDesc = CardRules.getAnalysisText(analysis);
         let logText = `${currPlayer.name}: ${cardDesc}`;
-        // 如果是天王炸，在日志里也显示一下加分
-        if (analysis.type === 'BOMB_KING') {
-            logText += ` (+${this.config.deckCount * 100}分)`;
+        if (analysis.type === 'BOMB_KING') logText += ` (+${this.config.deckCount * 100}分)`;
+
+        // --- 核心修改区：结束检测 ---
+        
+        // 1. 如果当前处于“最后一手”阶段 (Last Shot Phase)
+        // 说明有人之前出完了牌，现在当前玩家成功“管”上了！
+        if (this.gameState.lastShotPhase) {
+            // 管牌者直接获得桌面积分 (截胡)
+            this.gameState.roundPoints[playerId] = (this.gameState.roundPoints[playerId] || 0) + this.gameState.pendingTablePoints;
+            this.gameState.pendingTablePoints = 0;
+
+            const targetName = this.players.find(p => p.id === this.gameState.lastShotPhase.targetId)?.name || '对手';
+            logText = `${currPlayer.name} 压死 ${targetName}! (截获底分)`;
+
+            // 游戏结束，赢家是当前管牌的人
+            this.gameState.roundWinnerId = playerId;
+            
+            // 无论当前管牌的人是否出完，游戏都因“最后一手被管”而立即结束
+            this._clearTimer();
+            const roundResult = this._concludeRound();
+            
+            return { 
+                success: true, 
+                isRoundOver: true,
+                roundResult,
+                cardsPlayed: cards,
+                pendingPoints: 0,
+                logText
+            };
         }
 
-        const activeCount = this._getActivePlayerCount();
+        // 2. 如果不处于 Last Shot，但玩家出完了牌，检测是否触发结束条件
+        const activeCount = this._getActivePlayerCount(); // 获取剩余还有牌的对手数量
         
-        // [新增] 3. 组队模式结束判断 (响应你的第2点需求)
         let isTeamFinished = false;
         const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
         if (isTeamMode) {
             const pTeam = currPlayer.team;
-            // 检查该队所有成员是否手牌都为0
             if (pTeam !== undefined && pTeam !== null) {
                 const teamMembers = this.players.filter(p => p.team === pTeam);
                 const allDone = teamMembers.every(p => this.gameState.hands[p.id].length === 0);
-                if (allDone) {
-                    isTeamFinished = true;
-                }
+                if (allDone) isTeamFinished = true;
             }
         }
+
+        // 判定是否达到了原本的结束条件
+        // (只剩1个对手 OR 某队全员出完) 且 玩家确实出完了
+        const wouldEndGame = (activeCount <= 0 || (activeCount === 1 && !isTeamFinished) || isTeamFinished); 
+        // 注意：_getActivePlayerCount() 返回的是还有牌的人数。如果我刚出完，我不算。
+        // 所以如果 activeCount > 0，说明还有对手活着。
+
+        if (isFinished && activeCount > 0) {
+            // [触发 Last Shot]
+            // 不立即结束，而是进入“最后一手”阶段，让剩下的对手尝试管一次
+            
+            this.gameState.lastShotPhase = {
+                targetId: playerId, // 谁出的最后一手
+                passedCount: 0,
+                requiredPasses: activeCount // 所有剩下的有牌玩家都必须表态
+            };
+
+            logText += ` (最后一手! 等待挑战)`;
+
+            // 继续流转到下一个人
+            this._advanceTurn();
+            this._resetTimer();
+            this._checkAndRunBot();
+
+            return { 
+                success: true, 
+                isRoundOver: false, // 暂时不结束
+                cardsPlayed: cards,
+                pendingPoints: this.gameState.pendingTablePoints,
+                logText
+            };
+        }
         
-        // 结束条件：只剩1人 OR 某队全员出完
-        if (activeCount <= 1 || isTeamFinished) {
+        // 3. 正常结束 (例如：只剩最后一个人，他出完牌，没人能管了)
+        // 或者 activeCount === 0 (我是最后一个)
+        if (activeCount === 0) {
             this._clearTimer();
             const roundResult = this._concludeRound();
             return { 
@@ -372,10 +410,11 @@ class GameManager {
                 roundResult,
                 cardsPlayed: cards,
                 pendingPoints: this.gameState.pendingTablePoints,
-                logText // 返回日志给调用者
+                logText
             };
         }
 
+        // 4. 正常流转
         this._advanceTurn();
         this._resetTimer();
         this._checkAndRunBot();
@@ -385,7 +424,7 @@ class GameManager {
             isRoundOver: false,
             cardsPlayed: cards,
             pendingPoints: this.gameState.pendingTablePoints,
-            logText // 返回日志给调用者
+            logText
         };
     }
 
@@ -399,6 +438,43 @@ class GameManager {
             return { success: false, error: '必须出牌' };
         }
 
+        // --- 核心修改区：最后一手阶段的过牌逻辑 ---
+        if (this.gameState.lastShotPhase) {
+            this.gameState.lastShotPhase.passedCount++;
+            const logText = `${currPlayer.name}: 管不起 (最后一手)`;
+
+            // 如果所有有牌的对手都过牌了
+            if (this.gameState.lastShotPhase.passedCount >= this.gameState.lastShotPhase.requiredPasses) {
+                // 原出牌者真正获胜，拿走底分
+                const targetId = this.gameState.lastShotPhase.targetId;
+                this.gameState.roundPoints[targetId] = (this.gameState.roundPoints[targetId] || 0) + this.gameState.pendingTablePoints;
+                this.gameState.pendingTablePoints = 0;
+
+                const targetName = this.players.find(p => p.id === targetId)?.name;
+                const finalLog = `${targetName} 最后一手无人能管，成功拿下底分!`;
+
+                this._clearTimer();
+                this.gameState.roundWinnerId = targetId; 
+                const roundResult = this._concludeRound();
+
+                return { 
+                    success: true, 
+                    turnCleared: true, 
+                    logText: finalLog,
+                    isRoundOver: true, // 标记游戏结束
+                    roundResult // 返回结算数据
+                };
+            }
+
+            // 还有人没表态，继续流转
+            this._advanceTurn();
+            this._resetTimer();
+            this._checkAndRunBot();
+
+            return { success: true, turnCleared: false, logText };
+        }
+
+        // --- 正常过牌逻辑 ---
         this.gameState.consecutivePasses++;
         this._advanceTurn(); 
 
@@ -417,35 +493,27 @@ class GameManager {
                 this.gameState.roundPoints[wId] = (this.gameState.roundPoints[wId] || 0) + this.gameState.pendingTablePoints;
                 this.gameState.pendingTablePoints = 0;
                 
-                // 如果赢家还有牌，赢家继续出
                 if (this.gameState.hands[wId].length > 0) {
                      const wIdx = this.players.findIndex(p => p.id === wId);
                      this.gameState.currentTurnIndex = wIdx;
                 } else {
-                    // 赢家已出完牌 (逃出)
-                    // 检查是否需要触发“队友接风”逻辑
+                    // 队友接风逻辑
                     const winnerPlayer = this.players.find(p => p.id === wId);
                     const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
                     
-                    let teammateTookOver = false;
-
-                    // 只有在组队模式下，才尝试寻找队友接风
                     if (isTeamMode && winnerPlayer && winnerPlayer.team !== undefined && winnerPlayer.team !== null) {
                         const wIdx = this.players.findIndex(p => p.id === wId);
                         const pCount = this.players.length;
                         
-                        // 接风搜索递增方向
                         for (let i = 1; i < pCount; i++) {
                             const tIdx = (wIdx + i) % pCount; 
                             const potentialTeammate = this.players[tIdx];
                             
-                            // 是队友 且 还是活跃状态
                             if (potentialTeammate.team === winnerPlayer.team && 
                                 this.gameState.hands[potentialTeammate.id] && 
                                 this.gameState.hands[potentialTeammate.id].length > 0) {
                                 
                                 this.gameState.currentTurnIndex = tIdx;
-                                teammateTookOver = true;
                                 infoMessage = `${currPlayer.name}: 不要 (队友接风)`;
                                 this._broadcastUpdate(`${winnerPlayer.name} 已逃出，队友 ${potentialTeammate.name} 接风`);
                                 break;
@@ -479,7 +547,7 @@ class GameManager {
 
     _resetTimer() {
         this._clearTimer();
-        if (this.gameState && this._getActivePlayerCount() > 1) {
+        if (this.gameState && this._getActivePlayerCount() > 0) {
             this.turnStartTime = Date.now();
             const timeLimit = this.config.turnTimeout || 60000;
             this.timer = setTimeout(() => {
@@ -516,9 +584,14 @@ class GameManager {
                 }
             }
         } else {
+            // [修改] 处理 passTurn 可能返回的 isRoundOver
             const result = this.passTurn(currPlayer.id);
             if (result.success) {
-                this._broadcastUpdate(`${currPlayer.name}: 超时过牌`);
+                if (result.isRoundOver) {
+                     this._handleWin(result, currPlayer.id);
+                } else {
+                     this._broadcastUpdate(`${currPlayer.name}: 超时过牌`);
+                }
             }
         }
     }
@@ -540,7 +613,7 @@ class GameManager {
         let attempts = 0;
         
         do {
-            nextIndex = (nextIndex + 1) % playerCount; // 轮转改为递增
+            nextIndex = (nextIndex + 1) % playerCount; 
             attempts++;
         } while (
             this.gameState.hands[this.players[nextIndex].id].length === 0 && 
@@ -554,7 +627,7 @@ class GameManager {
         if (!this.gameState) return null;
         
         const currentScoresDisplay = {};
-        const roundPointsDisplay = {}; // 每一小局的独立分数
+        const roundPointsDisplay = {}; 
         const playersInfo = {};
         const handCounts = {};
 
@@ -596,48 +669,43 @@ class GameManager {
         };
     }
 
-    // 完整的重连数据搬运
     reconnectPlayer(oldId, newId) {
         console.log(`[GameManager] Moving data from ${oldId} to ${newId}`);
 
-        // 1. 搬运全局总分
         if (this.grandScores[oldId] !== undefined) {
             this.grandScores[newId] = this.grandScores[oldId];
             delete this.grandScores[oldId];
         }
 
-        // 2. 搬运上局赢家标记
         if (this.lastWinnerId === oldId) this.lastWinnerId = newId;
 
-        // 3. 处理托管状态
         const player = this.players.find(p => p.id === newId);
         if (player) {
              player.isAutoPlay = false; 
         }
 
-        // 4. 搬运当前局数据
         if (this.gameState) {
-            // 手牌
             if (this.gameState.hands[oldId]) {
                 this.gameState.hands[newId] = this.gameState.hands[oldId];
                 delete this.gameState.hands[oldId];
             }
-            // 本局得分
             if (this.gameState.roundPoints[oldId] !== undefined) {
                 this.gameState.roundPoints[newId] = this.gameState.roundPoints[oldId];
                 delete this.gameState.roundPoints[oldId];
             }
-            // 本回合赢家
             if (this.gameState.roundWinnerId === oldId) this.gameState.roundWinnerId = newId;
             
-            // 完赛排名 (Array)
+            // [新增] 修复 lastShotPhase 中的 targetId
+            if (this.gameState.lastShotPhase && this.gameState.lastShotPhase.targetId === oldId) {
+                this.gameState.lastShotPhase.targetId = newId;
+            }
+
             const rankIdx = this.gameState.finishedRank.indexOf(oldId);
             if (rankIdx !== -1) {
                 this.gameState.finishedRank[rankIdx] = newId;
             }
         }
 
-        // 修复重连时历史记录 ID 映射
         this.matchHistory.forEach(match => {
             if (match.scores[oldId] !== undefined) {
                 match.scores[newId] = match.scores[oldId];
@@ -671,10 +739,8 @@ class GameManager {
         const lastPlayer = this.players.find(p => this.gameState.hands[p.id].length > 0);
         
         if (lastPlayer) {
-            // [新增] 收集输家的剩余手牌，确保牌数守恒
             const remaining = this.gameState.hands[lastPlayer.id];
             this.collectedCards.push(...remaining);
-
             this.gameState.finishedRank.push(lastPlayer.id);
         }
         
@@ -692,8 +758,8 @@ class GameManager {
         const firstWinnerId = fullRankIds[0];
         this.lastWinnerId = firstWinnerId;
 
-        let logLines = []; // [用于前端文字显示]
-        let penaltyDetails = []; // [用于前端 Table 的日志数组]
+        let logLines = []; 
+        let penaltyDetails = []; 
 
         let totalCardPenalty = 0;
         let currentRoundScores = {};
@@ -708,7 +774,6 @@ class GameManager {
             }
         });
 
-        // 头游收分逻辑
         if (firstWinnerId && totalCardPenalty > 0) {
             currentRoundScores[firstWinnerId] += totalCardPenalty;
             const winnerName = this.players.find(p=>p.id===firstWinnerId)?.name;
@@ -716,7 +781,6 @@ class GameManager {
             penaltyDetails.push(`第一名 ${winnerName} 获得剩余手牌分 ${totalCardPenalty}`);
         }
 
-        // 排名赏罚 + 队友保护逻辑
         if (this.config.enableRankPenalty && this.config.rankPenaltyScores && this.config.rankPenaltyScores.length > 0) {
             const penaltyConfig = this.config.rankPenaltyScores;
             const playerCount = fullRankIds.length;
@@ -733,12 +797,10 @@ class GameManager {
                         const winner = this.players.find(p=>p.id===winnerId);
                         const loser = this.players.find(p=>p.id===loserId);
                         
-                        // 队友保护判断
                         if (winner.team !== null && winner.team !== undefined && winner.team === loser.team) {
                              logLines.push(`[🛡️队友保护] 第${winnerIndex+1}名(${winner.name}) 与 倒数第${index+1}名(${loser.name}) 是队友，${score}分 免罚！`);
                              penaltyDetails.push(`[队友保护] ${winner.name} 免收 ${loser.name} ${score} 分`);
                         } else {
-                            // 正常罚分
                             currentRoundScores[winnerId] += score;
                             currentRoundScores[loserId] -= score;
                             logLines.push(`[排名赏罚] 第${winnerIndex+1}名 ${winner.name} 收取 倒数第${index+1}名 ${loser.name} ${score} 分。`);
@@ -749,12 +811,10 @@ class GameManager {
             });
         }
 
-        // 更新总分
         this.players.forEach(p => {
             this.grandScores[p.id] += currentRoundScores[p.id];
         });
 
-        // 存入 matchHistory
         this.matchHistory.push({
             roundIndex: this.matchHistory.length + 1,
             scores: {...currentRoundScores}, 
@@ -764,7 +824,7 @@ class GameManager {
 
         const firstWinnerName = this.players.find(p => p.id === firstWinnerId)?.name || '未知';
         const isGrandOver = this.grandScores[firstWinnerId] >= this.config.targetScore;
-        const totalPointsEarned = currentRoundScores[firstWinnerId]; // 使用包含罚分后的最终当局得分
+        const totalPointsEarned = currentRoundScores[firstWinnerId];
 
         return {
             roundWinnerName: firstWinnerName,

@@ -6,8 +6,8 @@ const cors = require('cors');
 const path = require('path');
 
 // 引入模块
-const GameManager = require('./game/GameManager');
-const SeatManager = require('./game/SeatManager'); 
+const registerRoomHandlers = require('./handlers/roomHandler');
+const registerGameHandlers = require('./handlers/gameHandler');
 
 const app = express();
 app.use(cors());
@@ -31,7 +31,7 @@ const PERMANENT_ROOMS = {
         isTeamMode: false,
         enableRankPenalty: false,
         rankPenaltyScores: [50, 20],
-        shuffleStrategy: 'CLASSIC' // 888 房间默认标准模式
+        shuffleStrategy: 'CLASSIC'
     },
     '666': { 
         deckCount: 3, 
@@ -42,7 +42,7 @@ const PERMANENT_ROOMS = {
         isTeamMode: true, 
         enableRankPenalty: false,
         rankPenaltyScores: [50, 20],
-        shuffleStrategy: 'NO_SHUFFLE' // 666 房间默认开启均贫富(爽局)
+        shuffleStrategy: 'NO_SHUFFLE'
     }
 };
 
@@ -53,20 +53,17 @@ function initPermanentRoom(roomId) {
     const defaultConfig = PERMANENT_ROOMS[roomId];
     if (!defaultConfig) return;
 
-    // 如果房间已存在，保留连接，只重置游戏状态
-    // 如果不存在，新建对象
     if (!rooms[roomId]) {
         rooms[roomId] = {
-            config: JSON.parse(JSON.stringify(defaultConfig)), // 深拷贝默认配置
+            config: JSON.parse(JSON.stringify(defaultConfig)),
             players: [],
             gameManager: null,
             seatManager: null, 
             destroyTimer: null,
-            isPermanent: true // 标记为常驻
+            isPermanent: true
         };
         console.log(`[System] Permanent Room ${roomId} initialized.`);
     } else {
-        // 重置逻辑：还原配置，清空游戏状态
         rooms[roomId].config = JSON.parse(JSON.stringify(defaultConfig));
         rooms[roomId].gameManager = null;
         rooms[roomId].seatManager = null;
@@ -77,27 +74,12 @@ function initPermanentRoom(roomId) {
 // 启动时初始化常驻房间
 Object.keys(PERMANENT_ROOMS).forEach(rId => initPermanentRoom(rId));
 
-/**
- * 辅助函数：向房间内所有人广播最新状态
- */
-function broadcastGameState(io, roomId, room, infoText = null) {
-    if (!room.gameManager) return;
-    
-    const publicState = room.gameManager.getPublicState();
-    if (!publicState) return;
-
-    if (infoText) publicState.infoText = infoText;
-
-    io.to(roomId).emit('game_state_update', publicState);
-}
-
-// 辅助：广播房间基础信息 (用于大厅配置更新)
-function broadcastRoomInfo(io, roomId) {
+// --- 辅助：广播房间基础信息 (用于断开连接时的广播) ---
+function broadcastRoomInfo(roomId) {
     const room = rooms[roomId];
     if (!room) return;
     
     const currentGrandScores = room.gameManager ? room.gameManager.grandScores : {};
-    // 如果还没开始游戏，给一个默认的分数对象
     if (Object.keys(currentGrandScores).length === 0) {
         room.players.forEach(p => currentGrandScores[p.id] = 0);
     }
@@ -111,428 +93,17 @@ function broadcastRoomInfo(io, roomId) {
     io.to(roomId).emit('room_info', data);
 }
 
-
 io.on('connection', (socket) => {
     console.log(`[Connect] ${socket.id}`);
     socket.emit('your_id', socket.id);
 
-    // --- 创建房间 ---
-    socket.on('create_room', ({ roomId, username, config }) => {
-        if (rooms[roomId]) {
-            // 如果是常驻房间，允许直接加入（视为 Join）
-            if (rooms[roomId].isPermanent) {
-                 return socket.emit('error_msg', '常驻房间已存在，请直接加入');
-            }
-            return socket.emit('error_msg', '房间已存在');
-        }
-        
-        const cleanName = String(username || '').trim();
-        if (!cleanName) return socket.emit('error_msg', '用户名不能为空');
+    // [核心修改] 注册拆分后的 Handler
+    // 传入 io, socket 和全局 rooms 对象
+    registerRoomHandlers(io, socket, rooms);
+    registerGameHandlers(io, socket, rooms);
 
-        const roomConfig = { 
-            deckCount: 1, 
-            maxPlayers: 3, 
-            targetScore: 500, 
-            shuffleStrategy: 'CLASSIC', // 默认经典
-            ...config 
-        };
-        
-        rooms[roomId] = {
-            config: roomConfig,
-            players: [],
-            gameManager: null,
-            seatManager: null, 
-            destroyTimer: null 
-        };
-        
-        socket.join(roomId);
-        rooms[roomId].players.push({ id: socket.id, name: cleanName, isHost: true, online: true });
-        
-        broadcastRoomInfo(io, roomId);
-    });
-
-    // --- 加入房间 ---
-    socket.on('join_room', ({ roomId, username }) => {
-        const room = rooms[roomId];
-        if (!room) return socket.emit('error_msg', '房间不存在');
-
-        const cleanName = String(username || '').trim();
-        if (!cleanName) return socket.emit('error_msg', '用户名不能为空');
-
-        const existingPlayerIndex = room.players.findIndex(p => p.name === cleanName);
-        let isReconnect = false;
-        let oldSocketId = null;
-
-        if (existingPlayerIndex !== -1) {
-            const existingPlayer = room.players[existingPlayerIndex];
-            
-            if (existingPlayer.online) {
-                return socket.emit('error_msg', `名字 "${cleanName}" 已被使用且玩家在线`);
-            }
-
-            isReconnect = true;
-            oldSocketId = existingPlayer.id;
-            console.log(`[Reconnect] Success! ${cleanName} (${oldSocketId} -> ${socket.id})`);
-
-            existingPlayer.id = socket.id;
-            existingPlayer.online = true; 
-
-            if (room.destroyTimer) {
-                clearTimeout(room.destroyTimer);
-                room.destroyTimer = null;
-                console.log(`[Room] Destruction cancelled for ${roomId} (player returned)`);
-            }
-
-            if (room.gameManager) room.gameManager.reconnectPlayer(oldSocketId, socket.id);
-            if (room.seatManager) room.seatManager.reconnectPlayer(oldSocketId, socket.id);
-
-        } else {
-            if (room.players.length >= room.config.maxPlayers) {
-                return socket.emit('error_msg', '房间已满');
-            }
-            
-            socket.join(roomId);
-            if (!room.players.find(u => u.id === socket.id)) {
-                // 判断是否需要成为房主：
-                // 1. 如果房间没人，新来的是房主
-                // 2. 如果常驻房间当前没有在线房主，新来的继承房主
-                const hasHost = room.players.some(p => p.isHost && p.online);
-                const isHost = !hasHost;
-
-                room.players.push({ id: socket.id, name: cleanName, isHost: isHost, online: true });
-            }
-        }
-
-        socket.join(roomId);
-        
-        // 广播最新的房间信息（包含房主变更、人数变更）
-        broadcastRoomInfo(io, roomId);
-
-        // 如果游戏正在进行，发送游戏状态
-        const isGameRunning = room.gameManager && room.gameManager.gameState;
-        if (isGameRunning) {
-            if (isReconnect) {
-                const hand = room.gameManager.getPlayerHand(socket.id);
-                socket.emit('game_started', { 
-                    hand: hand, 
-                    grandScores: room.gameManager.grandScores,
-                    handCounts: room.gameManager.getPublicState().handCounts
-                });
-            }
-            broadcastGameState(io, roomId, room);
-        }
-        
-        // 重连抽卡状态补发
-        if (room.seatManager && room.seatManager.drawResults) {
-             socket.emit('enter_draw_phase', { totalCards: room.players.length });
-             Object.entries(room.seatManager.drawResults).forEach(([pid, val]) => {
-                 const pName = room.players.find(p=>p.id===pid)?.name || '未知';
-                 let cardIndex = -1;
-                 room.seatManager.availableCards.forEach((c, idx) => {
-                     if (c === val) cardIndex = idx;
-                 });
-                 socket.emit('seat_draw_update', {
-                    index: cardIndex,
-                    val: val,
-                    playerId: pid,
-                    name: pName
-                });
-             });
-        }
-    });
-    
-    // --- 更新房间配置 ---
-    socket.on('update_room_config', ({ roomId, config }) => {
-        const room = rooms[roomId];
-        if (!room) return;
-
-        // 验证权限
-        const player = room.players.find(p => p.id === socket.id);
-        if (!player || !player.isHost) {
-            return socket.emit('error_msg', '只有房主可以修改规则');
-        }
-
-        // 验证游戏状态：游戏中不能改
-        if (room.gameManager || room.seatManager) {
-            return socket.emit('error_msg', '游戏进行中无法修改规则');
-        }
-
-        // [修复] 同时处理新旧两种参数
-        if (config.isNoShuffleMode !== undefined) {
-            // 兼容旧逻辑
-            room.config.shuffleStrategy = config.isNoShuffleMode ? 'NO_SHUFFLE' : 'CLASSIC';
-        }
-        if (config.shuffleStrategy) {
-            // 新逻辑
-            room.config.shuffleStrategy = config.shuffleStrategy;
-        }
-
-        // 更新配置
-        room.config = { ...room.config, ...config };
-        
-        // 广播新的配置给所有人
-        broadcastRoomInfo(io, roomId);
-    });
-
-    // 添加机器人
-    socket.on('add_bot', ({ roomId }) => {
-        const room = rooms[roomId];
-        if (!room) return;
-        
-        if (room.players.length >= room.config.maxPlayers) return socket.emit('error_msg', '房间已满');
-        
-        const botId = `bot_${Date.now()}_${Math.floor(Math.random()*1000)}`;
-        const botName = `Robot ${Math.floor(Math.random()*100)}`;
-        
-        room.players.push({ 
-            id: botId, 
-            name: botName, 
-            isHost: false, 
-            online: true,
-            isBot: true 
-        });
-        
-        broadcastRoomInfo(io, roomId);
-    });
-
-    // 踢人功能
-    socket.on('kick_player', ({ roomId, targetId }) => {
-        const room = rooms[roomId];
-        if (!room) return;
-
-        // 1. 验证权限：只有房主能踢人
-        const sender = room.players.find(p => p.id === socket.id);
-        if (!sender || !sender.isHost) {
-            return socket.emit('error_msg', '只有房主可以踢人');
-        }
-
-        // 2. 游戏中严禁踢人，防止崩盘
-        if (room.gameManager || room.seatManager) {
-            return socket.emit('error_msg', '游戏进行中无法踢人');
-        }
-
-        const targetIndex = room.players.findIndex(p => p.id === targetId);
-        if (targetIndex === -1) return;
-
-        const targetPlayer = room.players[targetIndex];
-
-        // 3. 不能踢自己
-        if (targetPlayer.id === socket.id) return;
-
-        // 4. 移除玩家
-        room.players.splice(targetIndex, 1);
-
-        // 5. 如果是真人，通知他被踢了
-        if (!targetPlayer.isBot) {
-            io.to(targetPlayer.id).emit('kicked', '你已被房主移出房间');
-            const targetSocket = io.sockets.sockets.get(targetPlayer.id);
-            if (targetSocket) {
-                targetSocket.leave(roomId);
-            }
-        }
-
-        console.log(`[Room] ${sender.name} kicked ${targetPlayer.name} from ${roomId}`);
-        
-        // 6. 广播更新
-        broadcastRoomInfo(io, roomId);
-    });
-
-    // 切换托管
-    socket.on('toggle_auto_play', ({ roomId }) => {
-        const room = rooms[roomId];
-        if (!room || !room.gameManager) return;
-
-        room.gameManager.toggleAutoPlay(socket.id);
-        broadcastGameState(io, roomId, room);
-    });
-
-    // 座位调整
-    socket.on('switch_seat', ({ roomId, index1, index2 }) => {
-        const room = rooms[roomId];
-        if (!room) return;
-
-        const requestPlayer = room.players.find(p => p.id === socket.id);
-        if (!requestPlayer || !requestPlayer.isHost) {
-            return socket.emit('error_msg', '只有房主可以调整座位');
-        }
-
-        if (index1 < 0 || index1 >= room.players.length || index2 < 0 || index2 >= room.players.length) return;
-        if (room.gameManager && room.gameManager.gameState) return socket.emit('error_msg', '游戏中无法调整座位');
-
-        const temp = room.players[index1];
-        room.players[index1] = room.players[index2];
-        room.players[index2] = temp;
-
-        broadcastRoomInfo(io, roomId);
-    });
-
-    // 抽卡交互逻辑
-    socket.on('draw_seat_card', ({ roomId, cardIndex }) => {
-        const room = rooms[roomId];
-        if (!room || !room.seatManager) return;
-
-        const result = room.seatManager.playerDraw(socket.id, cardIndex);
-        if (!result.success) return socket.emit('error_msg', result.msg);
-
-        const player = room.players.find(p => p.id === socket.id);
-        io.to(roomId).emit('seat_draw_update', {
-            index: cardIndex,
-            val: result.cardVal,
-            playerId: socket.id,
-            name: player ? player.name : '未知'
-        });
-
-        if (result.isFinished) {
-            setTimeout(() => {
-                const { newPlayers, drawDetails } = room.seatManager.finalizeSeats();
-                room.players = newPlayers;
-                room.seatManager = null; 
-
-                io.to(roomId).emit('seat_draw_finished', {
-                    players: newPlayers,
-                    details: drawDetails
-                });
-
-                setTimeout(() => handleGameStart(roomId, false), 3000);
-            }, 1000); 
-        }
-    });
-
-    // 游戏流程控制
-    const handleGameStart = (roomId, isNextRound) => {
-        const room = rooms[roomId];
-        if (!room) return;
-
-        // 如果是新的一局（isNextRound=false），或者 GameManager 实例不存在，则创建新实例
-        // 如果是下一轮（isNextRound=true），则复用实例（以保留 collectedCards）
-        if (!isNextRound || !room.gameManager) {
-            room.gameManager = new GameManager(room.config, room.players, io, roomId);
-        }
-
-        const startInfo = room.gameManager.startRound(isNextRound);
-
-        room.players.forEach((p) => {
-            if (!p.isBot) { 
-                const hand = startInfo.hands[p.id];
-                io.to(p.id).emit('game_started', { 
-                    hand: hand, 
-                    grandScores: room.gameManager.grandScores,
-                    handCounts: room.gameManager.getPublicState().handCounts
-                });
-            }
-        });
-
-        const startPlayerName = room.players[startInfo.startPlayerIndex].name;
-        const msg = isNextRound 
-            ? `新一轮开始！由 ${startPlayerName} 先出` 
-            : `游戏开始！目标 ${room.config.targetScore} 分`;
-        
-        broadcastGameState(io, roomId, room, msg);
-    };
-
-    socket.on('start_game', ({ roomId }) => {
-        const room = rooms[roomId];
-        if (!room) return;
-        
-        // 修正：如果人数为奇数，强制关闭组队模式，防止逻辑冲突
-        if (room.config.isTeamMode && room.players.length % 2 !== 0) {
-            room.config.isTeamMode = false;
-            io.to(roomId).emit('error_msg', '人数为奇数，已自动关闭组队模式');
-            broadcastRoomInfo(io, roomId); // 广播配置变更
-        }
-
-        const isTeamMode = room.config.isTeamMode && (room.players.length % 2 === 0);
-        room.seatManager = new SeatManager(io, roomId, room.players, isTeamMode);
-        
-        io.to(roomId).emit('enter_draw_phase', { totalCards: room.players.length });
-        
-        const bots = room.players.filter(p => p.isBot);
-        bots.forEach((bot, i) => {
-            setTimeout(() => {
-                if(room.seatManager) {
-                    const availableIdx = room.seatManager.pendingIndices[0];
-                    if (availableIdx !== undefined) {
-                        const res = room.seatManager.playerDraw(bot.id, availableIdx);
-                        if(res.success) {
-                            io.to(roomId).emit('seat_draw_update', {
-                                index: res.cardIndex,
-                                val: res.cardVal,
-                                playerId: bot.id,
-                                name: bot.name
-                            });
-                            if (res.isFinished) {
-                                setTimeout(() => {
-                                    const { newPlayers } = room.seatManager.finalizeSeats();
-                                    room.players = newPlayers;
-                                    room.seatManager = null;
-                                    io.to(roomId).emit('seat_draw_finished', { players: newPlayers });
-                                    setTimeout(() => handleGameStart(roomId, false), 3000);
-                                }, 1000);
-                            }
-                        }
-                    }
-                }
-            }, 1000 + i * 1500); 
-        });
-    });
-
-    socket.on('next_round', ({ roomId }) => handleGameStart(roomId, true));
-
-    socket.on('play_cards', ({ roomId, cards }) => {
-        const room = rooms[roomId];
-        if (!room || !room.gameManager) return;
-        
-        const result = room.gameManager.playCards(socket.id, cards);
-
-        if (!result.success) return socket.emit('play_error', result.error);
-
-        const currentHand = room.gameManager.gameState.hands[socket.id];
-        io.to(socket.id).emit('hand_update', currentHand);
-
-        if (result.isRoundOver) { 
-            const rInfo = result.roundResult;
-            if (rInfo.isGrandOver) {
-                io.to(roomId).emit('grand_game_over', { 
-                    grandWinner: rInfo.roundWinnerName, 
-                    grandScores: rInfo.grandScores,
-                    matchHistory: rInfo.matchHistory,
-                    detail: rInfo.detail
-                });
-                room.gameManager = null; 
-            } else {
-                io.to(roomId).emit('round_over', {
-                    roundWinner: rInfo.roundWinnerName,
-                    pointsEarned: rInfo.pointsEarned,
-                    detail: rInfo.detail,
-                    grandScores: rInfo.grandScores,
-                    matchHistory: rInfo.matchHistory
-                });
-            }
-        } else {
-            broadcastGameState(io, roomId, room, result.logText);
-        }
-    });
-
-    socket.on('pass_turn', ({ roomId }) => {
-        const room = rooms[roomId];
-        if (!room || !room.gameManager) return;
-
-        const result = room.gameManager.passTurn(socket.id);
-        if (!result.success) return socket.emit('play_error', result.error);
-
-        broadcastGameState(io, roomId, room, result.logText || "PASS");
-    });
-
-    // 提示请求监听
-    socket.on('request_hint', ({ roomId }) => {
-        const room = rooms[roomId];
-        if (room && room.gameManager) {
-            const cards = room.gameManager.getHint(socket.id);
-            socket.emit('hint_response', cards);
-        }
-    });
-
-    // 断开连接处理
+    // 断开连接处理 (Disconnect logic)
+    // 这里的逻辑比较复杂且涉及全局清理，保留在 index.js 比较安全，也便于全局管理
     socket.on('disconnect', () => {
         Object.keys(rooms).forEach(rId => {
             const r = rooms[rId];
@@ -562,7 +133,7 @@ io.on('connection', (socket) => {
                         console.log(`[Room] Room ${rId} deleted (empty lobby).`);
                     }
                 } else {
-                    broadcastRoomInfo(io, rId);
+                    broadcastRoomInfo(rId);
                 }
             } else {
                 // 游戏中掉线
@@ -589,18 +160,15 @@ io.on('connection', (socket) => {
         });
     });
 });
-// 这一段的意思是：如果是在线上环境，就把 React 打包好的文件(build)发给浏览器
+
 if (process.env.NODE_ENV === 'production') {
-    // 1. 指定静态文件目录
     const buildPath = path.join(__dirname, '../client/dist');
     app.use(express.static(buildPath));
-    // 2. 任何其他请求，都返回 index.html
     app.get(/(.*)/, (req, res) => {
         res.sendFile(path.join(__dirname, '../client/dist', 'index.html'));
     });
 }
 
-// 启动服务器
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
     console.log(`>>> Server Running on port ${PORT}`);

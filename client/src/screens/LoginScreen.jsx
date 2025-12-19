@@ -264,20 +264,20 @@ export const LoginScreen = () => {
                                     </div>
                                     <div style={styles.radioGroup}>
                                         <button 
-                                            style={roomConfig.showCardCountMode === 0 ? styles.radioBtnActive : styles.radioBtn}
-                                            onClick={() => setRoomConfig({...roomConfig, showCardCountMode: 0})}
-                                        >
-                                            不显示
-                                        </button>
-                                        <button 
-                                            style={roomConfig.showCardCountMode === 1 ? styles.radioBtnActive : styles.radioBtn}
-                                            onClick={() => setRoomConfig({...roomConfig, showCardCountMode: 1})}
-                                        >
-                                            ≤3张显示
-                                        </button>
-                                        <button 
-                                            style={roomConfig.showCardCountMode === 2 ? styles.radioBtnActive : styles.radioBtn}
-                                            onClick={() => setRoomConfig({...roomConfig, showCardCountMode: 2})}
+                                style={roomConfig.showCardCountMode === 0 ? styles.radioBtnActive : styles.radioBtn}
+                                onClick={() => updateConfig('showCardCountMode', 0)}
+                            >
+                                不显示
+                            </button>
+                            <button 
+                                style={roomConfig.showCardCountMode === 1 ? styles.radioBtnActive : styles.radioBtn}
+                                onClick={() => updateConfig('showCardCountMode', 1)}
+                            >
+                                ≤2张显示
+                            </button>
+                            <button 
+                                style={roomConfig.showCardCountMode === 2 ? styles.radioBtnActive : styles.radioBtn}
+                                onClick={() => updateConfig('showCardCountMode', 2)}
                                         >
                                             一直显示
                                         </button>
