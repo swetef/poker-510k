@@ -1,21 +1,17 @@
 import React from 'react';
-import { Users, Layers, Target, Clock, Shuffle, Sparkles, Shield, Eye, Award } from 'lucide-react';
+import { Users, Layers, Target, Clock, Shuffle, Sparkles, Shield, Eye, Award, Sliders } from 'lucide-react'; // 新增 Sliders 图标
 import css from './RoomSettingsForm.module.css';
 
 /**
  * 通用房间配置组件
- * @param {Object} config - 当前配置对象
- * @param {Function} onChange - 配置变更回调 (key, value) => void
- * @param {Boolean} readOnly - 是否只读 (非房主模式)
  */
 export const RoomSettingsForm = ({ config, onChange, readOnly = false }) => {
     
-    // 辅助封装：更新某个字段
     const update = (key, val) => {
         if (!readOnly && onChange) onChange(key, val);
     };
 
-    // 渲染滑块
+    // 渲染滑块 (保持不变)
     const renderSlider = (icon, label, field, min, max, step, suffix = '') => (
         <div className={css.configItem}>
             <div className={css.configLabel}>
@@ -43,19 +39,21 @@ export const RoomSettingsForm = ({ config, onChange, readOnly = false }) => {
                 {renderSlider(<Layers size={14}/>, "牌库数量", 'deckCount', 1, 8, 1, '副')}
                 {renderSlider(<Target size={14}/>, "获胜目标", 'targetScore', 500, 5000, 500, '分')}
 
-                {/* 洗牌策略 */}
+                {/* --- [修改] 洗牌策略区域 --- */}
                 <div className={css.configItem} style={{gridColumn: '1 / -1', marginTop: 5}}>
                     <div className={css.configLabel} style={{marginBottom: 8}}>
                         <span style={{display:'flex', alignItems:'center', gap:6}}><Shuffle size={14}/> 洗牌策略</span>
                     </div>
-                    <div className={css.radioGroup}>
+                    
+                    {/* 一级策略选择 */}
+                    <div className={css.radioGroup} style={{marginBottom: 10}}>
                         <button 
                             className={css.strategyBtn}
                             style={(!config.shuffleStrategy || config.shuffleStrategy === 'CLASSIC') ? {borderColor: '#2ecc71', background: '#eafaf1', color: '#2ecc71'} : {}}
                             onClick={() => update('shuffleStrategy', 'CLASSIC')}
                             disabled={readOnly}
                         >
-                            🎲 普通随机
+                            🎲 随机
                         </button>
                         <button 
                             className={css.strategyBtn}
@@ -63,7 +61,7 @@ export const RoomSettingsForm = ({ config, onChange, readOnly = false }) => {
                             onClick={() => update('shuffleStrategy', 'NO_SHUFFLE')}
                             disabled={readOnly}
                         >
-                            <Sparkles size={14}/> 均贫富(爽局)
+                            <Sparkles size={14}/> 均贫富
                         </button>
                         <button 
                             className={css.strategyBtn}
@@ -71,19 +69,68 @@ export const RoomSettingsForm = ({ config, onChange, readOnly = false }) => {
                             onClick={() => update('shuffleStrategy', 'SIMULATION')}
                             disabled={readOnly}
                         >
-                            <Layers size={14}/> 模拟叠牌
+                            <Layers size={14}/> 模拟手洗
+                        </button>
+                        <button 
+                            className={css.strategyBtn}
+                            style={config.shuffleStrategy === 'PRECISE' ? {borderColor: '#e74c3c', background: '#fdedec', color: '#e74c3c'} : {}}
+                            onClick={() => update('shuffleStrategy', 'PRECISE')}
+                            disabled={readOnly}
+                        >
+                            <Sliders size={14}/> 智能控牌
                         </button>
                     </div>
+
+                    {/* [新增] 二级选项：仅当选择了“智能控牌”时显示 */}
+                    {config.shuffleStrategy === 'PRECISE' && (
+                        <div style={{
+                            background: '#fdedec', padding: 10, borderRadius: 8, marginBottom: 5,
+                            border: '1px dashed #e74c3c', animation: 'fadeIn 0.3s'
+                        }}>
+                            <div style={{fontSize: 12, color: '#c0392b', marginBottom: 6, fontWeight:'bold'}}>选择刺激程度:</div>
+                            <div className={css.radioGroup}>
+                                {['normal', 'stimulating', 'thrilling', 'exciting'].map(mode => {
+                                    const labels = { normal: '常规', stimulating: '刺激', thrilling: '惊险', exciting: '爽局' };
+                                    const isActive = (config.preciseMode || 'stimulating') === mode;
+                                    return (
+                                        <button 
+                                            key={mode}
+                                            onClick={() => update('preciseMode', mode)}
+                                            disabled={readOnly}
+                                            style={{
+                                                flex: 1, padding: '4px 0', fontSize: 12, borderRadius: 4, cursor: readOnly ? 'not-allowed' : 'pointer', border: 'none',
+                                                background: isActive ? '#e74c3c' : 'rgba(255,255,255,0.5)',
+                                                color: isActive ? 'white' : '#c0392b',
+                                                fontWeight: isActive ? 'bold' : 'normal',
+                                                transition: 'all 0.2s'
+                                            }}
+                                        >
+                                            {labels[mode]}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
                     <div style={{fontSize: 11, color: '#999', marginTop: 4, lineHeight: '1.4'}}>
                         {(!config.shuffleStrategy || config.shuffleStrategy === 'CLASSIC') && "完全随机，运气至上。"}
-                        {config.shuffleStrategy === 'NO_SHUFFLE' && "系统平均分配好牌，炸弹更多。"}
-                        {config.shuffleStrategy === 'SIMULATION' && "还原线下洗牌手感，可能出现连长龙。"}
+                        {config.shuffleStrategy === 'NO_SHUFFLE' && "系统平均分配炸弹，拒绝一面倒。"}
+                        {config.shuffleStrategy === 'SIMULATION' && "还原线下叠牌切牌，保留连对长龙。"}
+                        {config.shuffleStrategy === 'PRECISE' && (
+                            <span style={{color: '#c0392b'}}>
+                                {config.preciseMode === 'normal' && "普通概率，大炸弹较少。"}
+                                {(!config.preciseMode || config.preciseMode === 'stimulating') && "炸弹增多，节奏加快。"}
+                                {config.preciseMode === 'thrilling' && "大炸频出，对抗激烈。"}
+                                {config.preciseMode === 'exciting' && "满屏炸弹，超大牌型！"}
+                            </span>
+                        )}
                     </div>
                 </div>
 
-                {/* 组队模式 */}
+                {/* 组队模式 (保持不变) */}
                 <div className={config.maxPlayers % 2 !== 0 ? css.toggleContainerDisabled : css.toggleContainer}>
-                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                     <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                         <div style={{display:'flex', alignItems:'center', gap:6, fontWeight:'600', color: config.maxPlayers % 2 !== 0 ? '#999' : '#27ae60', fontSize: 14}}>
                             <Shield size={14} /> 组队对抗 (2v2, 3v3...)
                         </div>
@@ -114,7 +161,7 @@ export const RoomSettingsForm = ({ config, onChange, readOnly = false }) => {
                     </div>
                 </div>
 
-                {/* 出牌时限 */}
+                {/* 出牌时限 (保持不变) */}
                 <div className={css.configItem}>
                     <div className={css.configLabel}>
                         <span style={{display:'flex', alignItems:'center', gap:6}}><Clock size={14}/> 出牌时限</span>
@@ -137,7 +184,7 @@ export const RoomSettingsForm = ({ config, onChange, readOnly = false }) => {
 
             <div className={css.divider}></div>
 
-            {/* 剩余牌数显示 */}
+            {/* 剩余牌数显示 (保持不变) */}
             <div>
                 <div className={css.configLabel} style={{marginBottom: 8}}>
                     <span style={{display:'flex', alignItems:'center', gap:6}}><Eye size={14}/> 剩余牌数显示</span>
@@ -151,7 +198,7 @@ export const RoomSettingsForm = ({ config, onChange, readOnly = false }) => {
 
             <div className={css.divider}></div>
 
-            {/* 排名赏罚 */}
+            {/* 排名赏罚 (保持不变) */}
             <div>
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 10}}>
                     <div style={{display:'flex', alignItems:'center', gap:6, fontWeight:'600', color:'#555', fontSize:14}}>
@@ -208,6 +255,8 @@ export const RoomSettingsForm = ({ config, onChange, readOnly = false }) => {
                     </div>
                 )}
             </div>
+            
+            <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }`}</style>
         </div>
     );
 };

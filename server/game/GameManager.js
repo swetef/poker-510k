@@ -6,7 +6,6 @@ const BotManager = require('./BotManager');
 
 class GameManager {
     constructor(roomConfig, players, io, roomId) {
-        // ... (保留 constructor, getHint, toggleAutoPlay, startRound, _broadcastUpdate, _handleWin, playCards, passTurn, _clearTimer, _resetTimer 等方法不变) ...
         this.config = roomConfig;
         this.players = players; 
         this.io = io; 
@@ -28,6 +27,7 @@ class GameManager {
         this.botManager = new BotManager(this);
     }
 
+    // [修改] 使用新的 getSortedHints 获取智能排序后的提示
     getHint(playerId) {
         try {
             if (!this.gameState) return [];
@@ -36,7 +36,8 @@ class GameManager {
 
             const lastPlayed = this.gameState.lastPlayedCards;
             
-            const results = BotLogic.findAllSolutions(hand, lastPlayed, this.config.deckCount);
+            // 替换原有的 findAllSolutions，使用 getSortedHints
+            const results = BotLogic.getSortedHints(hand, lastPlayed, this.config.deckCount);
             
             return results || [];
         } catch (error) {
@@ -46,7 +47,6 @@ class GameManager {
     }
 
     toggleAutoPlay(playerId) {
-        // [修改] 委托给 BotManager
         this.botManager.toggleAutoPlay(playerId);
     }
 
@@ -62,9 +62,13 @@ class GameManager {
         
         let strategy = this.config.shuffleStrategy || (this.config.isNoShuffleMode ? 'NO_SHUFFLE' : 'CLASSIC');
         
-        console.log(`[Game] Round started. Strategy: ${strategy}, Previous Collected: ${this.collectedCards.length}`);
+        // [新增] 获取精确控制模式的参数
+        let preciseMode = this.config.preciseMode || 'stimulating';
+        
+        console.log(`[Game] Round started. Strategy: ${strategy}, Mode: ${preciseMode}, Previous Collected: ${this.collectedCards.length}`);
 
-        const hands = deck.deal(this.players.length, strategy, this.collectedCards);
+        // [修改] 将 preciseMode 传给 deal
+        const hands = deck.deal(this.players.length, strategy, this.collectedCards, preciseMode);
         
         this.collectedCards = [];
 
@@ -92,7 +96,6 @@ class GameManager {
             pendingTablePoints: 0,  
             roundWinnerId: null, 
             finishedRank: [],
-            // [修改] 移除 lastShotPhase，回归自然流转
             lastShotPhase: null 
         };
 
@@ -175,7 +178,7 @@ class GameManager {
 
         this.gameState.lastPlayedCards = cards;
         this.gameState.consecutivePasses = 0;
-        this.gameState.roundWinnerId = playerId; // 当前轮次的“庄主”是出牌人
+        this.gameState.roundWinnerId = playerId;
 
         const isFinished = this.gameState.hands[playerId].length === 0;
         if (isFinished) {
@@ -189,23 +192,18 @@ class GameManager {
         if (analysis.type === 'BOMB_KING') logText += ` (+${this.config.deckCount * 100}分)`;
         if (isFinished) logText += ` (牌出完了!)`;
 
-        // [核心修复] 判定游戏是否彻底结束
-        // 规则：单人模式 -> 剩1人结束。组队模式 -> 剩1队结束。
         const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
         let shouldEndGame = false;
 
         if (isTeamMode) {
-            // 检查还有几个队伍存活（有手牌）
             const activeTeams = new Set();
             this.players.forEach(p => {
                 if (this.gameState.hands[p.id] && this.gameState.hands[p.id].length > 0) {
                     if (p.team !== undefined && p.team !== null) activeTeams.add(p.team);
                 }
             });
-            // 如果只剩1个队伍有牌，或者0个队伍有牌，则结束
             if (activeTeams.size <= 1) shouldEndGame = true;
         } else {
-            // 检查还有几个人存活
             let activeCount = 0;
             this.players.forEach(p => {
                 if (this.gameState.hands[p.id] && this.gameState.hands[p.id].length > 0) activeCount++;
@@ -214,8 +212,6 @@ class GameManager {
         }
 
         if (shouldEndGame) {
-            // 如果我是最后一个出牌的人，并且我出完导致游戏结束了
-            // 那么桌面上的 pendingTablePoints 归我（或者归当前轮次赢家，也就是我）
             this.gameState.roundPoints[playerId] = (this.gameState.roundPoints[playerId] || 0) + this.gameState.pendingTablePoints;
             this.gameState.pendingTablePoints = 0;
 
@@ -231,7 +227,6 @@ class GameManager {
             };
         }
 
-        // 如果游戏没结束，继续流转（即使我没牌了，轮次也正常流转给下家，下家需要管我的牌）
         this._advanceTurn();
         this._resetTimer();
         this.botManager.checkAndRun();
@@ -272,26 +267,20 @@ class GameManager {
         if (this.gameState.consecutivePasses >= passesNeeded) {
             const wId = this.gameState.roundWinnerId;
             if (wId) {
-                // 结算当前桌面的分
                 this.gameState.roundPoints[wId] = (this.gameState.roundPoints[wId] || 0) + this.gameState.pendingTablePoints;
                 this.gameState.pendingTablePoints = 0;
                 
-                // [关键逻辑] 决定下一轮谁先出牌 (接风逻辑)
                 if (this.gameState.hands[wId] && this.gameState.hands[wId].length > 0) {
-                     // 赢家还有牌，赢家继续
                      const wIdx = this.players.findIndex(p => p.id === wId);
                      this.gameState.currentTurnIndex = wIdx;
                 } else {
-                    // 赢家没牌了 (跑了)
                     const winnerPlayer = this.players.find(p => p.id === wId);
                     const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
                     
                     if (isTeamMode && winnerPlayer && winnerPlayer.team !== undefined && winnerPlayer.team !== null) {
-                        // --- 组队模式：找队友接风 ---
                         const wIdx = this.players.findIndex(p => p.id === wId);
                         const pCount = this.players.length;
                         
-                        // 从赢家下家开始找，找第一个有牌的队友
                         let foundTeammate = false;
                         for (let i = 1; i < pCount; i++) {
                             const tIdx = (wIdx + i) % pCount; 
@@ -308,13 +297,10 @@ class GameManager {
                                 break;
                             }
                         }
-                        // 如果队友都没牌了（理论上不会，否则游戏早结束了），那就给下家
                         if (!foundTeammate) {
-                             // 顺延给下家 (这在逻辑上基本不会发生，除非 activeCount计算有误)
                              this._advanceTurn(); 
                         }
                     } else {
-                        // --- 单人模式：赢家跑了，下家接风 ---
                         const wIdx = this.players.findIndex(p => p.id === wId);
                         let nextActiveIdx = wIdx;
                         let found = false;
@@ -379,7 +365,6 @@ class GameManager {
         if (isNewRound) {
             const hand = this.gameState.hands[currPlayer.id];
             
-            // [关键修复] 如果玩家没牌（异常情况），必须重置计时器并检查Bot，否则游戏会卡死在这里
             if (!hand || hand.length === 0) { 
                 this._advanceTurn(); 
                 this._resetTimer(); 
@@ -396,11 +381,9 @@ class GameManager {
                 
                 const logText = result.logText || `${currPlayer.name} 超时出牌`;
                 
-                // [修复] 先广播出牌，让前端看到最后一张牌
                 this._broadcastUpdate(logText);
 
                 if (result.isRoundOver) {
-                     // [修复] 增加 3秒 延迟
                      setTimeout(() => {
                         this._handleWin(result, currPlayer.id);
                      }, 3000);
@@ -409,7 +392,6 @@ class GameManager {
         } else {
             const result = this.passTurn(currPlayer.id);
             if (result.success) {
-                // [修复] Pass 导致结束也需要延迟（理论上 passTurn 不返回 isRoundOver，但在组队逻辑下可能需要检查）
                 if (result.isRoundOver) {
                      this._broadcastUpdate(`${currPlayer.name}: 超时过牌`);
                      setTimeout(() => {
@@ -426,7 +408,6 @@ class GameManager {
         if (!this.gameState) return 0;
         let count = 0;
         for (const p of this.players) {
-            // [安全保护] 增加对 hands[p.id] 的存在性检查
             if (this.gameState.hands[p.id] && this.gameState.hands[p.id].length > 0) {
                 count++;
             }
@@ -443,7 +424,6 @@ class GameManager {
             nextIndex = (nextIndex + 1) % playerCount; 
             attempts++;
         } while (
-            // 跳过没牌的人
             (this.gameState.hands[this.players[nextIndex].id] || []).length === 0 && 
             attempts < playerCount 
         );
@@ -497,7 +477,6 @@ class GameManager {
         };
     }
 
-    // ... (保留 reconnectPlayer, _handContainsCards, _removeCardsFromHand, _concludeRound, getPlayerHand 方法不变) ...
     reconnectPlayer(oldId, newId) {
         console.log(`[GameManager] Moving data from ${oldId} to ${newId}`);
 
@@ -572,7 +551,6 @@ class GameManager {
         
         const lastPlayer = this.players.find(p => this.gameState.hands[p.id] && this.gameState.hands[p.id].length > 0);
         
-        // 桌面剩余分归赢家
         const wId = this.gameState.roundWinnerId;
         if (wId) {
              this.gameState.roundPoints[wId] = (this.gameState.roundPoints[wId] || 0) + this.gameState.pendingTablePoints;
