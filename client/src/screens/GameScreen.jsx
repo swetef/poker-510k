@@ -1,11 +1,9 @@
 import React from 'react';
-// [修改] 引入 CSS Module，不再依赖 styles.js 中的 gameTable 等属性
 import css from './GameScreen.module.css'; 
-import { styles } from '../styles.js'; // 保留引用，以防个别子组件需要 styles.container 等通用样式
+// [修改] 彻底移除 styles.js 引用
 import { GameLogPanel } from '../components/BaseUI.jsx';
 import { useGame } from '../context/GameContext.jsx';
 
-// 引入拆分后的子组件
 import { GameHeader } from '../components/game/GameHeader.jsx';
 import { TableCenterArea } from '../components/game/TableCenterArea.jsx';
 import { SettlementModal } from '../components/game/SettlementModal.jsx';
@@ -22,12 +20,15 @@ export const GameScreen = () => {
     // 身份同步保护
     const myPlayerExists = players.some(p => p.id === mySocketId);
     if (!myPlayerExists && players.length > 0) {
-        // loading 态简单保留内联样式即可
-        return <div className={css.gameTable} style={{color:'white', display:'flex', justifyContent:'center', alignItems:'center'}}>正在同步数据...</div>;
+        // Loading 态使用简单的内联样式即可，无需依赖 styles.js
+        return (
+            <div className={css.gameTable} style={{color:'white', display:'flex', justifyContent:'center', alignItems:'center'}}>
+                正在同步数据...
+            </div>
+        );
     }
 
     return (
-        // [修改] 使用 CSS Module 类名
         <div className={css.gameTable} onMouseUp={() => { /* 全局鼠标抬起事件通常用于取消拖拽，已在 Hook 中处理 */ }}>
             <div className={css.gameSafeArea}>
                 
@@ -55,8 +56,6 @@ export const GameScreen = () => {
                 <GameActionBar />
 
             </div>
-            
-            {/* [修改] 移除内联 <style>，已迁移至 GameScreen.module.css 的 :global 块中 */}
         </div>
     );
 };

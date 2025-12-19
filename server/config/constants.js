@@ -11,8 +11,8 @@ const PERMANENT_ROOMS = {
         targetScore: 1000,      // 目标分数
         turnTimeout: 60000,     // 出牌时间(毫秒)
         showCardCountMode: 1,   // 剩牌显示模式
-        isTeamMode: false,      // 是否组队
-        enableRankPenalty: false, // 排名赏罚
+        isTeamMode: true,      // 是否组队
+        enableRankPenalty: true, // 排名赏罚
         rankPenaltyScores: [50, 20], // 赏罚分数配置
         shuffleStrategy: 'CLASSIC' // 洗牌策略: CLASSIC(随机), NO_SHUFFLE(不洗牌)
     },
@@ -23,7 +23,7 @@ const PERMANENT_ROOMS = {
         turnTimeout: 60000,
         showCardCountMode: 1,
         isTeamMode: true, 
-        enableRankPenalty: false,
+        enableRankPenalty: true,
         rankPenaltyScores: [50, 20],
         shuffleStrategy: 'NO_SHUFFLE'
     }

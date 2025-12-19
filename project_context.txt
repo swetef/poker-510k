@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/19 16:28:10
+Project Context Generated at 2025/12/19 22:22:23
 
 
 ================================================================================
@@ -931,7 +931,7 @@ FILE PATH: client\src\components\game\PlayerLayout.jsx
 ================================================================================
 import React from 'react';
 import { Bot, Zap } from 'lucide-react';
-import { styles } from '../../styles.js';
+// [修改] 移除 styles.js 引用，因为这里的样式是动态计算的，不依赖全局样式表
 import { PlayerAvatar } from '../BaseUI.jsx';
 import { useGame } from '../../context/GameContext.jsx';
 
@@ -966,6 +966,7 @@ export const PlayerLayout = () => {
 
     const isCrowded = players.length > 6;
     const avatarScale = isCrowded ? 0.85 : 1;
+    // 动态内联样式
     const avatarStyleOverride = isCrowded ? { transform: `scale(${avatarScale})`, margin: -5 } : {};
 
     const myIndex = players.findIndex(p => p.id === mySocketId);
@@ -989,7 +990,6 @@ export const PlayerLayout = () => {
 
     // 右侧布局
     rightGroup.forEach((p, i) => {
-        // [优化] 动态分布
         let topPos;
         if (countR === 1) topPos = '40%';
         else {
@@ -1014,12 +1014,10 @@ export const PlayerLayout = () => {
 
     // 左侧布局
     leftGroup.forEach((p, i) => {
-        // [修复] 动态计算垂直分布，避免重叠
         let topPos;
         if (countL === 1) {
             topPos = '40%';
         } else {
-            // 在 25% 到 65% 之间均匀分布 (拉大间距)
             const start = 25;
             const end = 65; 
             const step = (end - start) / (countL - 1);
@@ -4470,13 +4468,11 @@ FILE PATH: client\src\screens\DrawSeatScreen.module.css
 FILE PATH: client\src\screens\GameScreen.jsx
 ================================================================================
 import React from 'react';
-// [修改] 引入 CSS Module，不再依赖 styles.js 中的 gameTable 等属性
 import css from './GameScreen.module.css'; 
-import { styles } from '../styles.js'; // 保留引用，以防个别子组件需要 styles.container 等通用样式
+// [修改] 彻底移除 styles.js 引用
 import { GameLogPanel } from '../components/BaseUI.jsx';
 import { useGame } from '../context/GameContext.jsx';
 
-// 引入拆分后的子组件
 import { GameHeader } from '../components/game/GameHeader.jsx';
 import { TableCenterArea } from '../components/game/TableCenterArea.jsx';
 import { SettlementModal } from '../components/game/SettlementModal.jsx';
@@ -4493,12 +4489,15 @@ export const GameScreen = () => {
     // 身份同步保护
     const myPlayerExists = players.some(p => p.id === mySocketId);
     if (!myPlayerExists && players.length > 0) {
-        // loading 态简单保留内联样式即可
-        return <div className={css.gameTable} style={{color:'white', display:'flex', justifyContent:'center', alignItems:'center'}}>正在同步数据...</div>;
+        // Loading 态使用简单的内联样式即可，无需依赖 styles.js
+        return (
+            <div className={css.gameTable} style={{color:'white', display:'flex', justifyContent:'center', alignItems:'center'}}>
+                正在同步数据...
+            </div>
+        );
     }
 
     return (
-        // [修改] 使用 CSS Module 类名
         <div className={css.gameTable} onMouseUp={() => { /* 全局鼠标抬起事件通常用于取消拖拽，已在 Hook 中处理 */ }}>
             <div className={css.gameSafeArea}>
                 
@@ -4526,8 +4525,6 @@ export const GameScreen = () => {
                 <GameActionBar />
 
             </div>
-            
-            {/* [修改] 移除内联 <style>，已迁移至 GameScreen.module.css 的 :global 块中 */}
         </div>
     );
 };
@@ -5958,8 +5955,8 @@ const PERMANENT_ROOMS = {
         targetScore: 1000,      // 目标分数
         turnTimeout: 60000,     // 出牌时间(毫秒)
         showCardCountMode: 1,   // 剩牌显示模式
-        isTeamMode: false,      // 是否组队
-        enableRankPenalty: false, // 排名赏罚
+        isTeamMode: true,      // 是否组队
+        enableRankPenalty: true, // 排名赏罚
         rankPenaltyScores: [50, 20], // 赏罚分数配置
         shuffleStrategy: 'CLASSIC' // 洗牌策略: CLASSIC(随机), NO_SHUFFLE(不洗牌)
     },
@@ -5970,7 +5967,7 @@ const PERMANENT_ROOMS = {
         turnTimeout: 60000,
         showCardCountMode: 1,
         isTeamMode: true, 
-        enableRankPenalty: false,
+        enableRankPenalty: true,
         rankPenaltyScores: [50, 20],
         shuffleStrategy: 'NO_SHUFFLE'
     }
