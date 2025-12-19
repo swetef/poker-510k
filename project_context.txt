@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/19 16:00:26
+Project Context Generated at 2025/12/19 16:28:10
 
 
 ================================================================================
@@ -239,7 +239,6 @@ FILE PATH: client\src\components\CountDownTimer.jsx
 ================================================================================
 import React, { useState, useEffect, useRef } from 'react';
 import { Clock } from 'lucide-react';
-// [新增] 引入音效
 import SoundManager from '../utils/SoundManager.js';
 
 const CountDownTimer = ({ initialSeconds, totalSeconds = 60, position = 'top' }) => {
@@ -261,7 +260,6 @@ const CountDownTimer = ({ initialSeconds, totalSeconds = 60, position = 'top' })
                     return 0;
                 }
                 
-                // [新增] 最后5秒播放滴答声
                 if (prev <= 6 && prev > 1) {
                      SoundManager.play('tick');
                 }
@@ -276,7 +274,6 @@ const CountDownTimer = ({ initialSeconds, totalSeconds = 60, position = 'top' })
     }, [initialSeconds]);
 
     const isUrgent = seconds <= 10;
-    // [新增] 极度紧急状态，用于CSS动画
     const isCritical = seconds <= 5; 
     
     const color = isUrgent ? '#ff4d4d' : '#ffffff';
@@ -331,7 +328,6 @@ const CountDownTimer = ({ initialSeconds, totalSeconds = 60, position = 'top' })
         transition: 'all 0.3s'
     };
 
-    // [修改] 增加 critical-pulse 类名
     return (
         <div style={containerStyle} className={isCritical ? "critical-pulse" : ""}>
             <Clock size={12} color={color} className={isUrgent ? 'spin' : ''} />
@@ -618,6 +614,14 @@ export const GameHeader = () => {
         return '#e74c3c';
     };
 
+    // [修改] 增加理牌文案映射
+    const getSortButtonText = () => {
+        if (sortMode === 'POINT') return '点数';
+        if (sortMode === 'ARRANGE') return '理牌(提)'; // 提=提取510K
+        if (sortMode === 'ARRANGE_MERGED') return '理牌(合)'; // 合=融合510K
+        return '未知';
+    };
+
     return (
         <div className={css.header}>
             <div className={css.roomBadgeContainer}>
@@ -645,7 +649,7 @@ export const GameHeader = () => {
                     </button>
                     <button className={css.iconBtn} onClick={toggleSort}>
                         <Layers size={16} style={{marginRight:5}}/> 
-                        {sortMode === 'POINT' ? '点数' : (sortMode === 'SUIT' ? '花色' : '理牌')}
+                        {getSortButtonText()}
                     </button>
                 </div>
             </div>
@@ -1987,7 +1991,7 @@ FILE PATH: client\src\components\ui\Card.jsx
 ================================================================================
 import React from 'react';
 import { getCardDisplay } from '../../utils/cardLogic.js';
-import { styles } from '../../styles.js';
+import css from './Card.module.css';
 
 export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacing }) => {
     const { suit, text, color, isScore } = getCardDisplay(cardVal);
@@ -1999,8 +2003,15 @@ export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacin
         onClick(cardVal);
     };
 
+    const containerClasses = [
+        css.card,
+        isSelected ? css.cardSelected : '',
+        isScore ? css.cardScore : css.cardNormal
+    ].join(' ');
+
     return (
         <div 
+            className={containerClasses}
             onPointerDown={handlePointerDown}
             onMouseEnter={(e) => {
                 if (e.pointerType === 'mouse') {
@@ -2008,34 +2019,36 @@ export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacin
                 }
             }}
             style={{
-                ...styles.card, 
-                color, 
+                color: color, 
                 left: index * spacing, 
-                zIndex: index,
-                transform: isSelected ? 'translateY(-35px)' : 'translateY(0)',
-                borderColor: isSelected ? '#3498db' : (isScore ? '#f1c40f' : '#bdc3c7'),
-                boxShadow: isSelected ? '0 0 15px rgba(52, 152, 219, 0.6)' : (isScore ? '0 0 8px rgba(241, 196, 15, 0.4)' : '0 -2px 5px rgba(0,0,0,0.1)'),
-                touchAction: 'none' 
+                zIndex: index
             }}
         >
-            <div style={{position: 'absolute', top: 0, left: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 0.9}}>
-                <div style={{fontSize: 16, fontWeight: '900', letterSpacing: -1}}>{text}</div>
-                <div style={{fontSize: 14, marginTop: -1}}>{suit}</div>
+            <div className={css.cardContent}>
+                <div className={css.cardText}>{text}</div>
+                <div className={css.cardSuit}>{suit}</div>
             </div>
-            {isScore && <div style={{position:'absolute', bottom:1, right:2, fontSize:10, color:'#f1c40f'}}>★</div>}
+            {isScore && <div className={css.starBadge}>★</div>}
         </div>
     );
 };
 
 export const MiniCard = ({ cardVal, index }) => {
     const { text, suit, color, isScore } = getCardDisplay(cardVal);
+    
+    const miniClasses = [
+        css.miniCard,
+        isScore ? css.miniCardScore : ''
+    ].join(' ');
+
     return (
-        <div style={{
-            ...styles.miniCard, color,
-            border: isScore ? '2px solid #f1c40f' : '1px solid #ccc',
-            transform: isScore ? 'scale(1.1) translateY(-10px)' : 'scale(1)',
-            zIndex: index
-        }}>
+        <div 
+            className={miniClasses}
+            style={{ 
+                color,
+                zIndex: index 
+            }}
+        >
             {suit}{text}
         </div>
     );
@@ -2063,7 +2076,7 @@ FILE PATH: client\src\components\ui\Card.module.css
     box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
 }
 
-/* 选中状态 (JS 动态添加类名或保留部分 inline transform 也可以，这里推荐用类名辅助) */
+/* 选中状态 */
 .cardSelected {
     transform: translateY(-35px);
     border-color: #3498db !important;
@@ -2137,7 +2150,7 @@ FILE PATH: client\src\components\ui\GameLogPanel.jsx
 ================================================================================
 import React, { useEffect, useRef, useState } from 'react'; 
 import { History, ChevronDown, ChevronUp } from 'lucide-react'; 
-import { styles } from '../../styles.js';
+import css from './GameLogPanel.module.css';
 
 export const GameLogPanel = ({ logs }) => {
     const [isCollapsed, setIsCollapsed] = useState(false); 
@@ -2149,37 +2162,28 @@ export const GameLogPanel = ({ logs }) => {
         }
     }, [logs, isCollapsed]);
 
+    const panelClasses = [
+        css.panel,
+        isCollapsed ? css.panelCollapsed : css.panelExpanded
+    ].join(' ');
+
     return (
         <div 
-            style={{
-                ...styles.gameLogPanel,
-                zIndex: 1000,
-                height: isCollapsed ? 36 : 140, 
-                background: 'transparent', 
-                backdropFilter: 'none',
-                border: isCollapsed ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
-                boxShadow: 'none',
-                cursor: 'pointer',
-                textShadow: '1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 2px 4px rgba(0,0,0,0.8)'
-            }}
+            className={panelClasses}
             onClick={() => setIsCollapsed(!isCollapsed)} 
         >
-            <div style={styles.logHeader}>
-                <History size={14} color="#f1c40f" style={{filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))'}}/> 
+            <div className={css.header}>
+                <History size={14} color="#f1c40f" /> 
                 <span style={{color:'#fff', fontWeight:'bold', flex: 1}}>
                     对局记录
                 </span>
-                {isCollapsed ? <ChevronDown size={14} color="#ccc" style={{filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))'}}/> : <ChevronUp size={14} color="#ccc" style={{filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))'}}/>}
+                {isCollapsed ? <ChevronDown size={14} color="#ccc"/> : <ChevronUp size={14} color="#ccc"/>}
             </div>
             
-            <div style={{
-                ...styles.logList, 
-                opacity: isCollapsed ? 0 : 1,
-                pointerEvents: isCollapsed ? 'none' : 'auto'
-            }}>
+            <div className={isCollapsed ? css.listHidden : css.list}>
                 {logs.map((log, i) => (
-                    <div key={i} style={styles.logItem}>
-                        <span style={styles.logTime}>[{log.time.split(' ')[0]}]</span>
+                    <div key={i} className={css.logItem}>
+                        <span className={css.logTime}>[{log.time.split(' ')[0]}]</span>
                         <span style={{color: '#eee'}}>{log.text}</span>
                     </div>
                 ))}
@@ -2190,16 +2194,92 @@ export const GameLogPanel = ({ logs }) => {
 };
 
 ================================================================================
+FILE PATH: client\src\components\ui\GameLogPanel.module.css
+================================================================================
+.panel {
+    position: absolute;
+    top: 60px;
+    left: 10px;
+    width: 200px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 8px;
+    padding: 8px;
+    color: white;
+    font-size: 12px;
+    z-index: 1000;
+    backdrop-filter: blur(2px);
+    transition: all 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    cursor: pointer;
+    overflow: hidden;
+    /* [修复] 确保在任何状态下都接收鼠标事件，防止无法点击展开 */
+    pointer-events: auto; 
+}
+
+.panelCollapsed {
+    height: 36px;
+    background: rgba(0, 0, 0, 0.2);
+    border-color: transparent;
+}
+
+.panelExpanded {
+    height: 140px;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #f1c40f;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+
+.list {
+    height: 100px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    opacity: 1;
+    transition: opacity 0.2s;
+    /* 隐藏滚动条但保留功能 */
+    scrollbar-width: none; 
+}
+
+.listHidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.logItem {
+    display: flex;
+    gap: 6px;
+    line-height: 1.3;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.8);
+}
+
+.logTime {
+    color: #95a5a6;
+    font-family: monospace;
+    flex-shrink: 0;
+}
+
+================================================================================
 FILE PATH: client\src\components\ui\PlayerAvatar.jsx
 ================================================================================
 import React from 'react';
 import { Trophy, Flag, Shield, Coins } from 'lucide-react';
-import { styles } from '../../styles.js';
+import css from './PlayerAvatar.module.css';
 import CountDownTimer from '../CountDownTimer.jsx';
 
 export const PlayerAvatar = ({ player, isTurn, score, roundScore = 0, targetScore, isMySocket, remainingSeconds, rank, timerPosition, hideTimer, cardCount, showCardCountMode, team }) => {
     const progress = Math.min((score / targetScore) * 100, 100);
-    const containerOpacity = rank ? 0.75 : 1; 
+    
+    // 排名状态下的透明度
+    const containerStyle = rank ? { opacity: 0.75 } : {};
 
     let showBadge = false;
     if (showCardCountMode === 2) showBadge = true;
@@ -2207,88 +2287,50 @@ export const PlayerAvatar = ({ player, isTurn, score, roundScore = 0, targetScor
     if (rank) showBadge = false;
 
     const isTeamMode = team !== undefined && team !== null;
-    const teamColor = team === 0 ? '#e74c3c' : '#3498db'; 
     const teamName = team === 0 ? '红' : '蓝';
     
-    let borderColor = 'rgba(255,255,255,0.1)';
-    if (isTeamMode) borderColor = teamColor;
-    if (isTurn) borderColor = '#f1c40f'; 
-
-    let bgColor = isTurn ? 'rgba(44, 62, 80, 0.9)' : 'rgba(44, 62, 80, 0.6)';
-    if (isTeamMode && !isTurn) {
-        bgColor = team === 0 ? 'rgba(231, 76, 60, 0.2)' : 'rgba(52, 152, 219, 0.2)';
-    }
+    const boxClasses = [
+        css.playerBox,
+        isTurn ? css.activeTurn : '',
+        isTeamMode ? (team === 0 ? css.teamRed : css.teamBlue) : ''
+    ].join(' ');
 
     return (
-        <div style={{
-            ...styles.playerBox,
-            borderColor: borderColor,
-            borderWidth: isTeamMode ? 2 : 1, 
-            transform: isTurn ? 'scale(1.1)' : 'scale(1)',
-            boxShadow: isTurn ? '0 0 25px rgba(241, 196, 15, 0.5)' : 'none',
-            background: bgColor,
-            position: 'relative',
-            opacity: containerOpacity
-        }}>
+        <div className={boxClasses} style={containerStyle}>
             {showBadge && (
-                <div style={styles.cardCountBadge}>
+                <div className={css.cardCountBadge}>
                     {cardCount}
                 </div>
             )}
 
             {isTeamMode && (
-                <div style={{
-                    position: 'absolute', 
-                    top: -10, 
-                    right: -8, 
-                    background: teamColor, color: 'white',
-                    fontSize: 9, padding: '1px 4px', borderRadius: 4,
-                    display: 'flex', alignItems: 'center', gap: 2,
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                    zIndex: 25
-                }}>
+                <div className={css.teamBadge} style={{backgroundColor: team === 0 ? '#e74c3c' : '#3498db'}}>
                     <Shield size={8} fill="currentColor"/> {teamName}队
                 </div>
             )}
 
             {rank && (
-                <div style={{
-                    position: 'absolute',
-                    top: -16, 
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    background: rank === 1 ? '#f1c40f' : (rank === 2 ? '#bdc3c7' : '#e67e22'), 
-                    color: '#fff',
-                    padding: '2px 8px',
-                    borderRadius: 20,
-                    fontSize: 11,
-                    fontWeight: 'bold',
-                    boxShadow: '0 2px 5px rgba(0,0,0,0.4)',
-                    zIndex: 30, 
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 3,
-                    whiteSpace: 'nowrap',
-                    border: '1px solid white'
+                <div className={css.rankBadge} style={{
+                    background: rank === 1 ? '#f1c40f' : (rank === 2 ? '#bdc3c7' : '#e67e22')
                 }}>
                     {rank === 1 ? <Trophy size={10} fill="white" /> : <Flag size={10} fill="white"/>}
                     {rank === 1 ? 'NO.1' : `NO.${rank}`}
                 </div>
             )}
 
-            <div style={{...styles.avatar, borderColor: isTeamMode ? teamColor : 'rgba(255,255,255,0.3)'}}>
+            <div className={css.avatar} style={{borderColor: isTeamMode ? (team === 0 ? '#e74c3c' : '#3498db') : 'rgba(255,255,255,0.3)'}}>
                 {player.name[0]}
             </div>
             
-            <div style={styles.playerName}>
+            <div className={css.playerName}>
                 {player.name} {isMySocket && '(我)'}
             </div>
             
-            <div style={styles.scoreBarBg}>
-                <div style={{...styles.scoreBarFill, width:`${progress}%`, background: progress>=100?'#e74c3c':'#2ecc71'}}></div>
+            <div className={css.scoreBarBg}>
+                <div className={css.scoreBarFill} style={{width:`${progress}%`, background: progress>=100?'#e74c3c':'#2ecc71'}}></div>
             </div>
             
-            <div style={styles.playerScore}>
+            <div className={css.playerScore}>
                 <Coins size={10} color="#f1c40f"/> 
                 {score}
                 {roundScore > 0 && (
@@ -2335,7 +2377,7 @@ FILE PATH: client\src\components\ui\PlayerAvatar.module.css
     z-index: 20;
 }
 
-/* 队伍背景色 (JS动态控制太繁琐，还是保留部分inline，这里处理基础) */
+/* 队伍背景色 */
 .teamRed { background: rgba(231, 76, 60, 0.2); }
 .teamBlue { background: rgba(52, 152, 219, 0.2); }
 
@@ -2780,7 +2822,12 @@ export const useBattleLogic = (socket, username, mySocketId, roomId) => {
 
     // --- 交互 Actions ---
 
-    const toggleSort = () => setSortMode(prev => prev === 'POINT' ? 'ARRANGE' : 'POINT');
+    // [修改] 排序模式切换逻辑：点数 -> 理牌(提) -> 理牌(合) -> 点数
+    const toggleSort = () => setSortMode(prev => {
+        if (prev === 'POINT') return 'ARRANGE';
+        if (prev === 'ARRANGE') return 'ARRANGE_MERGED';
+        return 'POINT';
+    });
     
     const handleToggleAutoPlay = (roomId) => socket.emit('toggle_auto_play', { roomId });
     const handlePass = (roomId) => {
@@ -5666,23 +5713,27 @@ export const getCardDisplay = (cardVal) => {
 };
 
 // 智能理牌逻辑
-export const arrangeHand = (cards) => {
-    const scoreCards = []; // 右侧：分牌
-    const otherCards = []; // 待分类的牌
+export const arrangeHand = (cards, extractScore = true) => {
+    let scoreCards = []; // 右侧：分牌
+    let otherCards = []; // 待分类的牌
 
-    // 1. 先把所有分牌(5, 10, K)提取出来 (不做特殊修正，严格分离)
-    cards.forEach(c => {
-        if (isScoreCard(c)) scoreCards.push(c);
-        else otherCards.push(c);
-    });
+    if (extractScore) {
+        // 1. 先把所有分牌(5, 10, K)提取出来
+        cards.forEach(c => {
+            if (isScoreCard(c)) scoreCards.push(c);
+            else otherCards.push(c);
+        });
 
-    // 2. 对分牌进行排序：K > 10 > 5 (KKKK 1010 5555)
-    scoreCards.sort((a, b) => {
-        const rA = getScoreCardRank(a);
-        const rB = getScoreCardRank(b);
-        if (rA !== rB) return rB - rA; // 降序 (K=3, 10=2, 5=1)
-        return getSuitSortValue(b) - getSuitSortValue(a); // 同分按花色排
-    });
+        // 2. 对分牌进行排序：K > 10 > 5 (KKKK 1010 5555)
+        scoreCards.sort((a, b) => {
+            const rA = getScoreCardRank(a);
+            const rB = getScoreCardRank(b);
+            if (rA !== rB) return rB - rA; // 降序 (K=3, 10=2, 5=1)
+            return getSuitSortValue(b) - getSuitSortValue(a); // 同分按花色排
+        });
+    } else {
+        otherCards = [...cards];
+    }
 
     // 3. 对剩余牌进行分组
     const groups = new Map();
@@ -5735,12 +5786,14 @@ export const arrangeHand = (cards) => {
 
 // 手牌排序入口
 export const sortHand = (cards, mode = 'POINT') => {
-    // 即使UI删除了 SUIT 入口，为了兼容性保留代码逻辑
     if (mode === 'SUIT') {
         return [...cards].sort((a, b) => getSuitSortValue(b) - getSuitSortValue(a));
     }
     if (mode === 'ARRANGE') {
-        return arrangeHand(cards);
+        return arrangeHand(cards, true);
+    }
+    if (mode === 'ARRANGE_MERGED') {
+        return arrangeHand(cards, false);
     }
     // 默认 POINT
     return [...cards].sort((a, b) => getSortValue(b) - getSortValue(a));
@@ -5771,17 +5824,13 @@ export const calculateCardSpacing = (count, screenWidth) => {
     return (w - cardWidth) / (count - 1);
 };
 
-// [新增] 辅助函数：根据触摸X坐标计算是第几张牌
+// 辅助函数：根据触摸X坐标计算是第几张牌
 export const getCardIndexFromTouch = (touchX, containerLeft, spacing, count) => {
-    // 相对容器左侧的距离
     const relativeX = touchX - containerLeft;
-    
-    // 估算索引
     let index = Math.floor(relativeX / spacing);
     
-    // 边界检查
     if (index < 0) index = 0;
-    if (index >= count) index = count - 1; // 触摸在最后一张牌之后，也算最后一张
+    if (index >= count) index = count - 1; 
     
     return index;
 };
@@ -5791,7 +5840,6 @@ FILE PATH: client\src\utils\SoundManager.js
 ================================================================================
 /**
  * 简易 Web Audio API 音效管理器
- * 不需要外部 MP3 文件，直接用代码生成声音
  */
 const SoundManager = {
     ctx: null,
@@ -5803,36 +5851,33 @@ const SoundManager = {
         }
     },
 
-    // 播放指定类型的音效
     play: (type) => {
         try {
-            // 某些浏览器需要用户交互后才能恢复 Context
             if (SoundManager.ctx && SoundManager.ctx.state === 'suspended') {
                 SoundManager.ctx.resume();
             }
             if (!SoundManager.ctx) SoundManager.init();
 
             switch (type) {
-                case 'deal': // 发牌/点击牌 (短促的高频音)
+                case 'deal': 
                     SoundManager.beep(800, 0.05, 'sine');
                     break;
-                case 'play': // 出牌 (有打击感)
+                case 'play': 
                     SoundManager.noise(0.1); 
                     break;
-                case 'win': // 胜利 (连续的琶音)
+                case 'win': 
                     SoundManager.arpeggio([523.25, 659.25, 783.99, 1046.50], 0.1);
                     break;
-                case 'lose': // 失败/被压 (低沉)
+                case 'lose': 
                     SoundManager.beep(150, 0.3, 'sawtooth');
                     break;
-                case 'alert': // 轮到你了
+                case 'alert': 
                     SoundManager.beep(880, 0.1, 'square');
                     setTimeout(() => SoundManager.beep(880, 0.1, 'square'), 150);
                     break;
-                case 'tick': // 倒计时滴答声
+                case 'tick': 
                     SoundManager.beep(600, 0.05, 'sine');
                     break;
-                // [新增] "不要"音效 (短促低沉)
                 case 'pass': 
                     SoundManager.beep(200, 0.15, 'triangle');
                     break;
@@ -5844,51 +5889,38 @@ const SoundManager = {
         }
     },
 
-    // --- 合成器底层函数 ---
-
-    // 发出单音
     beep: (freq, duration, type = 'sine') => {
         const ctx = SoundManager.ctx;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-
         osc.type = type;
         osc.frequency.setValueAtTime(freq, ctx.currentTime);
-        
         gain.gain.setValueAtTime(0.1, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-
         osc.connect(gain);
         gain.connect(ctx.destination);
-
         osc.start();
         osc.stop(ctx.currentTime + duration);
     },
 
-    // 模拟打击声 (白噪音)
     noise: (duration) => {
         const ctx = SoundManager.ctx;
         const bufferSize = ctx.sampleRate * duration;
         const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
         const data = buffer.getChannelData(0);
-
         for (let i = 0; i < bufferSize; i++) {
             data[i] = Math.random() * 2 - 1;
         }
-
         const noise = ctx.createBufferSource();
         noise.buffer = buffer;
-        
         const gain = ctx.createGain();
         gain.gain.setValueAtTime(0.2, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-
         noise.connect(gain);
         gain.connect(ctx.destination);
         noise.start();
     },
 
-    // 琶音 (胜利音效)
     arpeggio: (freqs, interval) => {
         freqs.forEach((f, i) => {
             setTimeout(() => SoundManager.beep(f, 0.2, 'triangle'), i * interval * 1000);

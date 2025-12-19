@@ -23,7 +23,7 @@
     z-index: 20;
 }
 
-/* 队伍背景色 (JS动态控制太繁琐，还是保留部分inline，这里处理基础) */
+/* 队伍背景色 */
 .teamRed { background: rgba(231, 76, 60, 0.2); }
 .teamBlue { background: rgba(52, 152, 219, 0.2); }
 

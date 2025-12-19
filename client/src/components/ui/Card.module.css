@@ -17,7 +17,7 @@
     box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
 }
 
-/* 选中状态 (JS 动态添加类名或保留部分 inline transform 也可以，这里推荐用类名辅助) */
+/* 选中状态 */
 .cardSelected {
     transform: translateY(-35px);
     border-color: #3498db !important;

@@ -55,8 +55,6 @@ export const getCardDisplay = (cardVal) => {
 };
 
 // 智能理牌逻辑
-// [修改] 增加 extractScore 参数，默认为 true (提取分牌)
-// 如果为 false，则不单独提取分牌，而是按照普通牌逻辑（炸弹/三张/对子）处理
 export const arrangeHand = (cards, extractScore = true) => {
     let scoreCards = []; // 右侧：分牌
     let otherCards = []; // 待分类的牌
@@ -76,7 +74,6 @@ export const arrangeHand = (cards, extractScore = true) => {
             return getSuitSortValue(b) - getSuitSortValue(a); // 同分按花色排
         });
     } else {
-        // [新增] 不提取模式：所有牌都进入普通分类逻辑
         otherCards = [...cards];
     }
 
@@ -131,16 +128,13 @@ export const arrangeHand = (cards, extractScore = true) => {
 
 // 手牌排序入口
 export const sortHand = (cards, mode = 'POINT') => {
-    // 即使UI删除了 SUIT 入口，为了兼容性保留代码逻辑
     if (mode === 'SUIT') {
         return [...cards].sort((a, b) => getSuitSortValue(b) - getSuitSortValue(a));
     }
     if (mode === 'ARRANGE') {
-        // 模式1：提取510K
         return arrangeHand(cards, true);
     }
     if (mode === 'ARRANGE_MERGED') {
-        // [新增] 模式2：融合510K
         return arrangeHand(cards, false);
     }
     // 默认 POINT
@@ -172,17 +166,13 @@ export const calculateCardSpacing = (count, screenWidth) => {
     return (w - cardWidth) / (count - 1);
 };
 
-// [新增] 辅助函数：根据触摸X坐标计算是第几张牌
+// 辅助函数：根据触摸X坐标计算是第几张牌
 export const getCardIndexFromTouch = (touchX, containerLeft, spacing, count) => {
-    // 相对容器左侧的距离
     const relativeX = touchX - containerLeft;
-    
-    // 估算索引
     let index = Math.floor(relativeX / spacing);
     
-    // 边界检查
     if (index < 0) index = 0;
-    if (index >= count) index = count - 1; // 触摸在最后一张牌之后，也算最后一张
+    if (index >= count) index = count - 1; 
     
     return index;
 };

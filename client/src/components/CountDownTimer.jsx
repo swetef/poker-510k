@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Clock } from 'lucide-react';
-// [新增] 引入音效
 import SoundManager from '../utils/SoundManager.js';
 
 const CountDownTimer = ({ initialSeconds, totalSeconds = 60, position = 'top' }) => {
@@ -22,7 +21,6 @@ const CountDownTimer = ({ initialSeconds, totalSeconds = 60, position = 'top' })
                     return 0;
                 }
                 
-                // [新增] 最后5秒播放滴答声
                 if (prev <= 6 && prev > 1) {
                      SoundManager.play('tick');
                 }
@@ -37,7 +35,6 @@ const CountDownTimer = ({ initialSeconds, totalSeconds = 60, position = 'top' })
     }, [initialSeconds]);
 
     const isUrgent = seconds <= 10;
-    // [新增] 极度紧急状态，用于CSS动画
     const isCritical = seconds <= 5; 
     
     const color = isUrgent ? '#ff4d4d' : '#ffffff';
@@ -92,7 +89,6 @@ const CountDownTimer = ({ initialSeconds, totalSeconds = 60, position = 'top' })
         transition: 'all 0.3s'
     };
 
-    // [修改] 增加 critical-pulse 类名
     return (
         <div style={containerStyle} className={isCritical ? "critical-pulse" : ""}>
             <Clock size={12} color={color} className={isUrgent ? 'spin' : ''} />

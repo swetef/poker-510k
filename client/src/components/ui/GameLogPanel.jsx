@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'; 
 import { History, ChevronDown, ChevronUp } from 'lucide-react'; 
-import { styles } from '../../styles.js';
+import css from './GameLogPanel.module.css';
 
 export const GameLogPanel = ({ logs }) => {
     const [isCollapsed, setIsCollapsed] = useState(false); 
@@ -12,37 +12,28 @@ export const GameLogPanel = ({ logs }) => {
         }
     }, [logs, isCollapsed]);
 
+    const panelClasses = [
+        css.panel,
+        isCollapsed ? css.panelCollapsed : css.panelExpanded
+    ].join(' ');
+
     return (
         <div 
-            style={{
-                ...styles.gameLogPanel,
-                zIndex: 1000,
-                height: isCollapsed ? 36 : 140, 
-                background: 'transparent', 
-                backdropFilter: 'none',
-                border: isCollapsed ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
-                boxShadow: 'none',
-                cursor: 'pointer',
-                textShadow: '1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 2px 4px rgba(0,0,0,0.8)'
-            }}
+            className={panelClasses}
             onClick={() => setIsCollapsed(!isCollapsed)} 
         >
-            <div style={styles.logHeader}>
-                <History size={14} color="#f1c40f" style={{filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))'}}/> 
+            <div className={css.header}>
+                <History size={14} color="#f1c40f" /> 
                 <span style={{color:'#fff', fontWeight:'bold', flex: 1}}>
                     对局记录
                 </span>
-                {isCollapsed ? <ChevronDown size={14} color="#ccc" style={{filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))'}}/> : <ChevronUp size={14} color="#ccc" style={{filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))'}}/>}
+                {isCollapsed ? <ChevronDown size={14} color="#ccc"/> : <ChevronUp size={14} color="#ccc"/>}
             </div>
             
-            <div style={{
-                ...styles.logList, 
-                opacity: isCollapsed ? 0 : 1,
-                pointerEvents: isCollapsed ? 'none' : 'auto'
-            }}>
+            <div className={isCollapsed ? css.listHidden : css.list}>
                 {logs.map((log, i) => (
-                    <div key={i} style={styles.logItem}>
-                        <span style={styles.logTime}>[{log.time.split(' ')[0]}]</span>
+                    <div key={i} className={css.logItem}>
+                        <span className={css.logTime}>[{log.time.split(' ')[0]}]</span>
                         <span style={{color: '#eee'}}>{log.text}</span>
                     </div>
                 ))}
