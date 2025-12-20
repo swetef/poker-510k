@@ -1,7 +1,6 @@
 const CardRules = require('./CardRules');
 const Deck = require('./Deck');
 const BotLogic = require('./BotLogic');
-// [新增] 引入 BotManager
 const BotManager = require('./BotManager');
 
 class GameManager {
@@ -23,11 +22,9 @@ class GameManager {
 
         this.collectedCards = [];
 
-        // [新增] 初始化 BotManager
         this.botManager = new BotManager(this);
     }
 
-    // [修改] 使用新的 getSortedHints 获取智能排序后的提示
     getHint(playerId) {
         try {
             if (!this.gameState) return [];
@@ -36,7 +33,6 @@ class GameManager {
 
             const lastPlayed = this.gameState.lastPlayedCards;
             
-            // 替换原有的 findAllSolutions，使用 getSortedHints
             const results = BotLogic.getSortedHints(hand, lastPlayed, this.config.deckCount);
             
             return results || [];
@@ -61,13 +57,10 @@ class GameManager {
         const deck = new Deck(this.config.deckCount);
         
         let strategy = this.config.shuffleStrategy || (this.config.isNoShuffleMode ? 'NO_SHUFFLE' : 'CLASSIC');
-        
-        // [新增] 获取精确控制模式的参数
         let preciseMode = this.config.preciseMode || 'stimulating';
         
         console.log(`[Game] Round started. Strategy: ${strategy}, Mode: ${preciseMode}, Previous Collected: ${this.collectedCards.length}`);
 
-        // [修改] 将 preciseMode 传给 deal
         const hands = deck.deal(this.players.length, strategy, this.collectedCards, preciseMode);
         
         this.collectedCards = [];
@@ -105,8 +98,6 @@ class GameManager {
         });
 
         this._resetTimer();
-        
-        // [修改] 委托 BotManager 检查是否需要机器人行动
         this.botManager.checkAndRun();
 
         return {
@@ -131,7 +122,8 @@ class GameManager {
             detail: rInfo.detail,       
             matchHistory: this.matchHistory, 
             grandScores: rInfo.grandScores,
-            roundIndex: this.matchHistory.length
+            roundIndex: this.matchHistory.length,
+            scoreBreakdown: rInfo.scoreBreakdown // [新增] 传递详细得分构成
         };
 
         if (rInfo.isGrandOver) {
@@ -254,7 +246,6 @@ class GameManager {
         this._advanceTurn(); 
 
         const activeCount = this._getActivePlayerCount(); 
-        
         const winnerId = this.gameState.roundWinnerId;
         const winnerHand = this.gameState.hands[winnerId];
         const winnerIsActive = winnerHand && winnerHand.length > 0;
@@ -274,6 +265,7 @@ class GameManager {
                      const wIdx = this.players.findIndex(p => p.id === wId);
                      this.gameState.currentTurnIndex = wIdx;
                 } else {
+                    // 接风逻辑
                     const winnerPlayer = this.players.find(p => p.id === wId);
                     const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
                     
@@ -478,8 +470,6 @@ class GameManager {
     }
 
     reconnectPlayer(oldId, newId) {
-        console.log(`[GameManager] Moving data from ${oldId} to ${newId}`);
-
         if (this.grandScores[oldId] !== undefined) {
             this.grandScores[newId] = this.grandScores[oldId];
             delete this.grandScores[oldId];
@@ -497,7 +487,6 @@ class GameManager {
                 this.gameState.hands[newId] = this.gameState.hands[oldId];
                 delete this.gameState.hands[oldId];
             } else if (this.gameState.hands) {
-                console.warn(`[Warning] Old hand not found for ${oldId}, resetting ${newId} to empty.`);
                 this.gameState.hands[newId] = [];
             }
 
@@ -545,10 +534,6 @@ class GameManager {
     }
 
     _concludeRound() {
-        // [修复逻辑] 结束时，把所有还没出完牌的人的牌回收
-        // 但通常 510K 里，这些分不一定算分，或者算作输家的分归赢家
-        // 这里简化：只记录结束状态
-        
         const lastPlayer = this.players.find(p => this.gameState.hands[p.id] && this.gameState.hands[p.id].length > 0);
         
         const wId = this.gameState.roundWinnerId;
@@ -557,6 +542,7 @@ class GameManager {
              this.gameState.pendingTablePoints = 0;
         }
 
+        // 默认逻辑：不重新排序未完成的玩家
         const fullRankIds = [...this.gameState.finishedRank];
         this.players.forEach(p => {
             if (!fullRankIds.includes(p.id)) fullRankIds.push(p.id);
@@ -568,27 +554,52 @@ class GameManager {
         let logLines = []; 
         let penaltyDetails = []; 
 
-        let totalCardPenalty = 0;
         let currentRoundScores = {};
         this.players.forEach(p => {
             currentRoundScores[p.id] = (this.gameState.roundPoints[p.id] || 0);
         });
 
+        // [新增] 准备得分构成详情数据 (scoreBreakdown)
+        const scoreBreakdown = {};
+        this.players.forEach(p => {
+             scoreBreakdown[p.id] = {
+                 id: p.id,
+                 name: p.name,
+                 team: p.team,
+                 tablePoints: this.gameState.roundPoints[p.id] || 0, // 场内抓分
+                 handCount: (this.gameState.hands[p.id] || []).length,
+                 handScore: CardRules.calculateTotalScore(this.gameState.hands[p.id] || []), // 手里没打出的分
+                 penalty: 0, // 奖罚/进贡
+                 final: 0,   // 最终得分
+                 finishRank: fullRankIds.indexOf(p.id) + 1 // 跑得快排名
+             };
+        });
+
+        // 1. 手牌罚分
+        let totalCardPenalty = 0;
+        let penaltySources = [];
+        
         this.players.forEach(p => {
             const h = this.gameState.hands[p.id] || [];
             const handPts = CardRules.calculateTotalScore(h);
             if (handPts > 0) {
                 totalCardPenalty += handPts;
+                penaltySources.push(`${p.name}(${handPts})`);
             }
         });
 
         if (firstWinnerId && totalCardPenalty > 0) {
             currentRoundScores[firstWinnerId] += totalCardPenalty;
+            
+            // [新增] 记录赢家获得的额外手牌分
+            scoreBreakdown[firstWinnerId].penalty += totalCardPenalty;
+
             const winnerName = this.players.find(p=>p.id===firstWinnerId)?.name;
-            logLines.push(`[手牌罚分] 输家共计 ${totalCardPenalty} 分，归第一名 ${winnerName}。`);
-            penaltyDetails.push(`第一名 ${winnerName} 获得剩余手牌分 ${totalCardPenalty}`);
+            logLines.push(`[手牌罚分] 输家剩余手牌分 (${penaltySources.join(', ')}) 共 ${totalCardPenalty} 分，归头游 ${winnerName}。`);
+            penaltyDetails.push(`头游 ${winnerName} 收取手牌分 ${totalCardPenalty}`);
         }
 
+        // 2. 排名赏罚
         if (this.config.enableRankPenalty && this.config.rankPenaltyScores && this.config.rankPenaltyScores.length > 0) {
             const penaltyConfig = this.config.rankPenaltyScores;
             const playerCount = fullRankIds.length;
@@ -611,16 +622,23 @@ class GameManager {
                         } else {
                             currentRoundScores[winnerId] += score;
                             currentRoundScores[loserId] -= score;
+                            
+                            // [新增] 更新构成表
+                            scoreBreakdown[winnerId].penalty += score;
+                            scoreBreakdown[loserId].penalty -= score;
+
                             logLines.push(`[排名赏罚] 第${winnerIndex+1}名 ${winner.name} 收取 倒数第${index+1}名 ${loser.name} ${score} 分。`);
-                            penaltyDetails.push(`${loser.name} 进贡 ${winner.name} ${score} 分`);
+                            penaltyDetails.push(`${loser.name} 排名进贡 ${winner.name} ${score} 分`);
                         }
                     }
                 }
             });
         }
 
+        // [新增] 计算最终得分并回填 breakdown
         this.players.forEach(p => {
             this.grandScores[p.id] += currentRoundScores[p.id];
+            scoreBreakdown[p.id].final = currentRoundScores[p.id];
         });
 
         this.matchHistory.push({
@@ -639,7 +657,8 @@ class GameManager {
             pointsEarned: totalPointsEarned, 
             detail: logLines.join('\n') || '完美结束，未设置额外罚分', 
             grandScores: this.grandScores,
-            isGrandOver
+            isGrandOver,
+            scoreBreakdown // [新增]
         };
     }
     

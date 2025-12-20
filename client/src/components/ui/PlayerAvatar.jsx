@@ -11,7 +11,8 @@ export const PlayerAvatar = ({ player, isTurn, score, roundScore = 0, targetScor
 
     let showBadge = false;
     if (showCardCountMode === 2) showBadge = true;
-    if (showCardCountMode === 1 && cardCount <= 2 && cardCount > 0) showBadge = true;
+    // [修改] 2 改为 3
+    if (showCardCountMode === 1 && cardCount <= 3 && cardCount > 0) showBadge = true;
     if (rank) showBadge = false;
 
     const isTeamMode = team !== undefined && team !== null;

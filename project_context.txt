@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/19 22:22:23
+Project Context Generated at 2025/12/20 20:16:44
 
 
 ================================================================================
@@ -349,9 +349,9 @@ export default CountDownTimer;
 ================================================================================
 FILE PATH: client\src\components\game\GameActionBar.jsx
 ================================================================================
-import React from 'react';
-import { RotateCcw, Zap, Lightbulb, Clock, Loader2 } from 'lucide-react';
-import css from './GameActionBar.module.css'; // 新 CSS
+import React, { useState, useEffect } from 'react';
+import { RotateCcw, Zap, Lightbulb, Clock, Loader2, AlertTriangle } from 'lucide-react';
+import css from './GameActionBar.module.css';
 import { useGame } from '../../context/GameContext.jsx';
 import TimerComponent from '../CountDownTimer.jsx';
 
@@ -360,8 +360,16 @@ export const GameActionBar = () => {
         winner, roundResult, grandResult, selectedCards, 
         playersInfo, mySocketId, currentTurnId, players, turnRemaining,
         handleClearSelection, handleToggleAutoPlay, handlePass, handleRequestHint, handlePlayCards,
-        isSubmitting
+        isSubmitting, lastPlayerName // [修改] 获取上家名字
     } = useGame();
+
+    // [新增] 确认状态：false=正常, true=待确认(管队友)
+    const [confirmState, setConfirmState] = useState(false);
+
+    // [新增] 当选牌变化或轮次变化时，重置确认状态
+    useEffect(() => {
+        setConfirmState(false);
+    }, [selectedCards, currentTurnId]);
 
     if (winner || roundResult || grandResult) return null;
 
@@ -371,6 +379,36 @@ export const GameActionBar = () => {
     const myTurn = currentTurnId === mySocketId;
     const currentTurnPlayer = players.find(p => p.id === currentTurnId);
     const waitingText = currentTurnPlayer ? `等待 ${currentTurnPlayer.name}...` : '等待中...';
+
+    // [新增] 智能出牌点击处理
+    const handlePlayClick = () => {
+        if (isSubmitting) return;
+        
+        // 1. 如果没选牌，直接透传给原函数处理(原函数会弹Alert)
+        if (selectedCards.length === 0) {
+            handlePlayCards();
+            return;
+        }
+
+        // 2. 队友误伤检测逻辑
+        const lastPlayer = players.find(p => p.name === lastPlayerName);
+        const isTeammate = 
+            myInfo.team !== undefined && myInfo.team !== null && // 我在队伍中
+            lastPlayer && lastPlayer.id !== mySocketId &&        // 上家存在且不是我
+            playersInfo[lastPlayer.id]?.team === myInfo.team;    // 上家是队友
+
+        // 3. 如果是压队友，且还没确认过
+        if (isTeammate && !confirmState) {
+            setConfirmState(true);
+            // 3秒后自动恢复，防止卡住
+            setTimeout(() => setConfirmState(false), 3000);
+            return;
+        }
+
+        // 4. 正常出牌
+        handlePlayCards();
+        setConfirmState(false);
+    };
 
     return (
         <div className={css.actionBar}>
@@ -415,11 +453,19 @@ export const GameActionBar = () => {
                                 <TimerComponent initialSeconds={turnRemaining} totalSeconds={60} position="inline" />
                                 
                                 <button 
-                                    className={css.btnPlay} 
-                                    onClick={handlePlayCards}
+                                    className={confirmState ? css.btnWarning : css.btnPlay} 
+                                    onClick={handlePlayClick}
                                     disabled={isSubmitting}
                                 >
-                                    {isSubmitting ? <Loader2 size={18} className="spin"/> : '出牌'}
+                                    {isSubmitting ? (
+                                        <Loader2 size={18} className="spin"/>
+                                    ) : (
+                                        confirmState ? (
+                                            <>
+                                                <AlertTriangle size={18} /> 确认管队友?
+                                            </>
+                                        ) : '出牌'
+                                    )}
                                 </button>
                             </>
                         ) : (
@@ -525,6 +571,20 @@ FILE PATH: client\src\components\game\GameActionBar.module.css
     background: rgba(0,0,0,0.3);
     padding: 10px 20px;
     border-radius: 30px;
+}
+
+.btnWarning {
+    composes: btnPlay;
+    background: linear-gradient(to bottom, #e74c3c, #c0392b);
+    box-shadow: 0 8px 20px rgba(231, 76, 60, 0.4);
+    animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+@keyframes shake {
+    10%, 90% { transform: translate3d(-1px, 0, 0); }
+    20%, 80% { transform: translate3d(2px, 0, 0); }
+    30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+    40%, 60% { transform: translate3d(4px, 0, 0); }
 }
 
 ================================================================================
@@ -931,26 +991,35 @@ FILE PATH: client\src\components\game\PlayerLayout.jsx
 ================================================================================
 import React from 'react';
 import { Bot, Zap } from 'lucide-react';
-// [修改] 移除 styles.js 引用，因为这里的样式是动态计算的，不依赖全局样式表
 import { PlayerAvatar } from '../BaseUI.jsx';
 import { useGame } from '../../context/GameContext.jsx';
 
 // ==========================================
 // 辅助函数：计算座位布局
 // ==========================================
-const calculateLayout = (totalPlayers) => {
-    if (totalPlayers <= 1) return { countT: 1, countR: 0, countL: 0 };
-    if (totalPlayers === 2) return { countT: 0, countR: 1, countL: 0 }; // 2人对战，对手在右侧
-    if (totalPlayers === 3) return { countT: 1, countR: 1, countL: 0 }; 
-    if (totalPlayers === 4) return { countT: 1, countR: 1, countL: 1 };
-    if (totalPlayers === 5) return { countT: 2, countR: 1, countL: 1 }; // 自己1，右1，上2，左1
-    if (totalPlayers === 6) return { countT: 2, countR: 2, countL: 1 }; // 自己1，右2，上2，左1
+const calculateLayout = (otherPlayersCount) => {
+    // 基础人数的固定布局 (保持原有的舒适布局)
+    if (otherPlayersCount === 0) return { countT: 0, countR: 0, countL: 0 }; // 只有自己
+    if (otherPlayersCount === 1) return { countT: 1, countR: 0, countL: 0 }; // 2人局: 对手在上
+    if (otherPlayersCount === 2) return { countT: 0, countR: 1, countL: 1 }; // 3人局: 左1 右1 (修改：斗地主式布局更经典)
+    if (otherPlayersCount === 3) return { countT: 1, countR: 1, countL: 1 }; // 4人局: 上1 左1 右1
+    if (otherPlayersCount === 4) return { countT: 2, countR: 1, countL: 1 }; // 5人局: 上2 左1 右1
+    if (otherPlayersCount === 5) return { countT: 2, countR: 2, countL: 1 }; // 6人局: 上2 左1 右2
+
+    // [优化] 多人模式 (>6人) 采用三边均衡分配策略
+    // 避免所有人都挤在顶部
+    // 算法：侧边优先承担更多人数，因为纵向空间通常不容易遮挡手牌
+    const sideCount = Math.ceil(otherPlayersCount / 3);
+    const topCount = otherPlayersCount - (sideCount * 2);
     
-    // 默认通用算法
+    // 如果顶部计算出来太少(比如负数或0)，微调一下
+    // 比如 7人(其他6人): side=2, top=2. (R2, L2, T2) -> 完美
+    // 比如 11人(其他10人): side=4, top=2. (R4, L4, T2) -> 侧边4个完全放得下
+    
     return {
-        countR: 2,
-        countL: 2,
-        countT: Math.max(0, totalPlayers - 5) // 减去 自己(1)+右(2)+左(2)
+        countR: sideCount,
+        countL: sideCount,
+        countT: Math.max(0, topCount) 
     };
 };
 
@@ -964,15 +1033,19 @@ export const PlayerLayout = () => {
         roundPoints, roomConfig, turnRemaining, finishedRank, handCounts 
     } = useGame();
 
-    const isCrowded = players.length > 6;
-    const avatarScale = isCrowded ? 0.85 : 1;
-    // 动态内联样式
-    const avatarStyleOverride = isCrowded ? { transform: `scale(${avatarScale})`, margin: -5 } : {};
+    // [优化] 更细致的拥挤判断
+    const totalP = players.length;
+    let avatarScale = 1;
+    if (totalP > 10) avatarScale = 0.70;      // 11-12人：超小
+    else if (totalP > 8) avatarScale = 0.80;  // 9-10人：小
+    else if (totalP > 6) avatarScale = 0.90;  // 7-8人：微缩
+    
+    const avatarStyleOverride = totalP > 6 ? { transform: `scale(${avatarScale})`, margin: -5 } : {};
 
     const myIndex = players.findIndex(p => p.id === mySocketId);
-    if (myIndex === -1 && players.length > 0) return null; // 同步保护
+    if (myIndex === -1 && players.length > 0) return null; 
 
-    // 重新排列数组，让自己在第一个
+    // 重新排列数组，让自己在第一个，形成以我为视角的顺时针数组
     const otherPlayers = [];
     for (let i = 1; i < players.length; i++) {
         const idx = (myIndex + i) % players.length;
@@ -982,53 +1055,66 @@ export const PlayerLayout = () => {
     // 计算布局策略
     const { countT, countR, countL } = calculateLayout(otherPlayers.length);
 
+    // 切割数组：注意顺序是 逆时针 还是 顺时针
+    // 假设 otherPlayers 是 [下家, 下下家, ... 上家]
+    // 布局通常是：右侧(下家) -> 顶部 -> 左侧(上家)
     const rightGroup = otherPlayers.slice(0, countR);
     const topGroup = otherPlayers.slice(countR, countR + countT);
     const leftGroup = otherPlayers.slice(countR + countT);
 
     const layoutItems = [];
 
-    // 右侧布局
+    // --- 右侧布局 (从上往下排，或者从下往上) ---
+    // 为了视觉习惯，离自己近的(下家)应该在右侧偏下位置
     rightGroup.forEach((p, i) => {
         let topPos;
-        if (countR === 1) topPos = '40%';
-        else {
-            const start = 30, end = 60;
-            const step = (end - start) / (countR - 1);
-            topPos = `${start + i * step}%`;
+        if (countR === 1) {
+            topPos = '45%'; // 单人居中偏上一点
+        } else {
+            // 多人均匀分布在 25% - 65% 之间
+            const start = 65; // 离自己最近的位置 (底部)
+            const end = 25;   // 离顶部最近的位置
+            const step = (start - end) / (countR - 1 || 1);
+            topPos = `${start - i * step}%`;
         }
         layoutItems.push({ p, pos: { top: topPos, right: 10, transform: 'translateY(-50%)' }, timerPos: 'left' });
     });
 
-    // 顶部布局
+    // --- 顶部布局 (从右往左排) ---
+    // 衔接右侧，index 0 是紧接右侧的玩家，所以应在右边
     topGroup.forEach((p, i) => {
         let leftPos;
-        if (countT === 1) leftPos = '50%';
-        else {
-            const start = 20, end = 80;
-            const step = (end - start) / (countT - 1);
-            leftPos = `${end - i * step}%`; 
+        if (countT === 1) {
+            leftPos = '50%';
+        } else {
+            // [优化] 扩大顶部可用宽度范围 (15% - 85%)
+            const start = 85; // 靠右
+            const end = 15;   // 靠左
+            const step = (start - end) / (countT - 1 || 1);
+            leftPos = `${start - i * step}%`; 
         }
-        layoutItems.push({ p, pos: { top: 10, left: leftPos, transform: 'translateX(-50%)' }, timerPos: 'bottom' });
+        // [微调] 顶部稍微靠下一点(12%)，避免贴着浏览器边缘
+        layoutItems.push({ p, pos: { top: '12%', left: leftPos, transform: 'translateX(-50%)' }, timerPos: 'bottom' });
     });
 
-    // 左侧布局
+    // --- 左侧布局 (从上往下排) ---
+    // 衔接顶部，index 0 是紧接顶部的玩家，所以应在上边
     leftGroup.forEach((p, i) => {
         let topPos;
         if (countL === 1) {
-            topPos = '40%';
+            topPos = '45%';
         } else {
-            const start = 25;
-            const end = 65; 
-            const step = (end - start) / (countL - 1);
+            const start = 25; // 顶部
+            const end = 65;   // 底部 (离自己上家最近)
+            const step = (end - start) / (countL - 1 || 1);
             topPos = `${start + i * step}%`;
         }
         layoutItems.push({ p, pos: { top: topPos, left: 30, transform: 'translateY(-50%)' }, timerPos: 'right' });
     });
 
-    // 加入自己
+    // 加入自己 (固定位置)
     const me = players[myIndex];
-    if (me) layoutItems.unshift({ p: me, pos: { bottom: 25, left: 20, zIndex: 100 }, hideTimer: true });
+    if (me) layoutItems.unshift({ p: me, pos: { bottom: 35, left: 20, zIndex: 100 }, hideTimer: true });
 
     return (
         <>
@@ -1040,7 +1126,7 @@ export const PlayerLayout = () => {
                 const finishedRankVal = rankIndex !== -1 ? rankIndex + 1 : null;
                 
                 return (
-                    <div key={p.id} style={{...avatarStyleOverride, position: 'absolute', ...pos}}> 
+                    <div key={p.id} style={{...avatarStyleOverride, position: 'absolute', ...pos, transition: 'all 0.5s ease'}}> 
                         <PlayerAvatar 
                             player={p} 
                             isTurn={p.id === currentTurnId} 
@@ -1071,7 +1157,7 @@ export const PlayerLayout = () => {
 FILE PATH: client\src\components\game\RoomSettingsForm.jsx
 ================================================================================
 import React from 'react';
-import { Users, Layers, Target, Clock, Shuffle, Sparkles, Shield, Eye, Award, Sliders } from 'lucide-react'; // 新增 Sliders 图标
+import { Users, Layers, Target, Clock, Shuffle, Sparkles, Shield, Eye, Award, Sliders } from 'lucide-react'; 
 import css from './RoomSettingsForm.module.css';
 
 /**
@@ -1256,14 +1342,15 @@ export const RoomSettingsForm = ({ config, onChange, readOnly = false }) => {
 
             <div className={css.divider}></div>
 
-            {/* 剩余牌数显示 (保持不变) */}
+            {/* 剩余牌数显示 (修改 UI 为 ≤3张) */}
             <div>
                 <div className={css.configLabel} style={{marginBottom: 8}}>
                     <span style={{display:'flex', alignItems:'center', gap:6}}><Eye size={14}/> 剩余牌数显示</span>
                 </div>
                 <div className={css.radioGroup}>
                     <button className={config.showCardCountMode === 0 ? css.radioBtnActive : css.radioBtn} onClick={() => update('showCardCountMode', 0)} disabled={readOnly}>不显示</button>
-                    <button className={config.showCardCountMode === 1 ? css.radioBtnActive : css.radioBtn} onClick={() => update('showCardCountMode', 1)} disabled={readOnly}>≤2张</button>
+                    {/* [修改] 2 改为 3 */}
+                    <button className={config.showCardCountMode === 1 ? css.radioBtnActive : css.radioBtn} onClick={() => update('showCardCountMode', 1)} disabled={readOnly}>≤3张</button>
                     <button className={config.showCardCountMode === 2 ? css.radioBtnActive : css.radioBtn} onClick={() => update('showCardCountMode', 2)} disabled={readOnly}>一直显示</button>
                 </div>
             </div>
@@ -1484,11 +1571,78 @@ FILE PATH: client\src\components\game\RoomSettingsForm.module.css
 ================================================================================
 FILE PATH: client\src\components\game\SettlementModal.jsx
 ================================================================================
-import React from 'react';
-import { Crown, Coins } from 'lucide-react';
-import css from './SettlementModal.module.css'; // 新 CSS
+import React, { useState } from 'react';
+import { Crown, Coins, List, History } from 'lucide-react';
+import css from './SettlementModal.module.css';
 import { ScoreTable } from '../ScoreTable.jsx';
 import { useGame } from '../../context/GameContext.jsx';
+
+/**
+ * [本局详情表格]
+ * 展示：排名、玩家、场内抓分、奖罚(含剩牌)、本局总分
+ */
+const RoundDetailTable = ({ scoreBreakdown, players }) => {
+    if (!scoreBreakdown) return <div style={{padding:20}}>暂无详情数据</div>;
+
+    // 将对象转为数组并按得分排名（或按结束排名？）
+    // 需求说：还有一栏是“这一局总得分的排名”
+    // 我们这里默认按“本局总分”降序排列
+    const rows = Object.values(scoreBreakdown).sort((a, b) => b.final - a.final);
+
+    return (
+        <div className={css.detailTableContainer}>
+            <div className={css.detailHeaderRow}>
+                <div style={{flex:0.8}}>走位</div>
+                <div style={{flex:2, textAlign:'left'}}>玩家</div>
+                <div style={{flex:1.2}}>抓分</div>
+                <div style={{flex:2}}>奖罚(剩牌)</div>
+                <div style={{flex:1.2, color:'#f1c40f'}}>得分</div>
+                <div style={{flex:0.8}}>排名</div>
+            </div>
+            
+            <div className={css.detailBody}>
+                {rows.map((row, index) => {
+                    const isWin = row.final > 0;
+                    const isLose = row.final < 0;
+                    const scoreColor = isWin ? '#e74c3c' : (isLose ? '#2ecc71' : '#ccc');
+                    
+                    // 格式化奖罚栏：例如 "+50 (剩0)" 或 "-30 (剩25)"
+                    const penaltyText = row.penalty > 0 ? `+${row.penalty}` : row.penalty;
+                    const handText = row.handScore > 0 ? `剩${row.handScore}` : '剩0';
+                    
+                    return (
+                        <div key={row.id} className={css.detailRow}>
+                            <div style={{flex:0.8, color:'#999', fontSize:12}}>
+                                {row.finishRank}
+                            </div>
+                            <div style={{flex:2, textAlign:'left', fontWeight:'bold', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+                                {row.team !== undefined && row.team !== null && (
+                                    <span style={{color: row.team===0?'#e74c3c':'#3498db', marginRight:4}}>
+                                        {row.team===0?'[红]':'[蓝]'}
+                                    </span>
+                                )}
+                                {row.name}
+                            </div>
+                            <div style={{flex:1.2, fontWeight:'bold'}}>{row.tablePoints}</div>
+                            <div style={{flex:2, fontSize:12, color:'#7f8c8d'}}>
+                                <span style={{color: row.penalty!==0 ? (row.penalty>0?'#e67e22':'#2ecc71') : '#999', fontWeight:'bold'}}>
+                                    {penaltyText}
+                                </span>
+                                <span style={{marginLeft:4, opacity:0.8}}>({handText})</span>
+                            </div>
+                            <div style={{flex:1.2, fontWeight:'900', color: scoreColor, fontSize:16}}>
+                                {row.final > 0 ? `+${row.final}` : row.final}
+                            </div>
+                            <div style={{flex:0.8, fontSize:12, fontWeight:'bold', color:'#ccc'}}>
+                                {index + 1}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
 
 /**
  * [结算弹窗组件]
@@ -1499,9 +1653,18 @@ export const SettlementModal = () => {
         handleStartGame, handleNextRound, mySocketId 
     } = useGame();
 
+    // 默认显示 'round' (本局详情), 也可以切到 'grand' (总战绩)
+    const [activeTab, setActiveTab] = useState('round');
+
     if (!winner && !roundResult && !grandResult) return null;
 
     const amIHost = players.find(p => p.id === mySocketId)?.isHost;
+    
+    // 如果是终局结算 (Grand Over)，默认可能想看总表，这里还是按需求默认给 Round
+    // 或者你可以根据 grandResult 是否存在来决定默认 Tab
+    const data = grandResult || roundResult;
+    if (!data) return null;
+
     const playersWithTeamInfo = players.map(p => ({
         ...p, team: (playersInfo[p.id] && playersInfo[p.id].team !== undefined) ? playersInfo[p.id].team : p.team
     }));
@@ -1509,46 +1672,83 @@ export const SettlementModal = () => {
     return (
         <div className={css.modalOverlay}>
             <div className={css.modalContent}>
-                {grandResult ? (
-                    <div className={css.resultContainer}>
-                        <Crown size={60} color="#e74c3c" style={{marginBottom: 10}} />
-                        <h2 className={css.winnerTitle}>{grandResult.grandWinner} 夺冠!</h2>
-                        
-                        <div className={css.tableWrapper}>
+                
+                {/* 顶部标题区 */}
+                <div className={css.headerSection}>
+                    {grandResult ? (
+                        <>
+                            <Crown size={40} color="#e74c3c" />
+                            <h2 className={css.title}>{grandResult.grandWinner} 夺冠!</h2>
+                        </>
+                    ) : (
+                        <>
+                            <Coins size={32} color="#f1c40f" />
+                            <h2 className={css.title}>小局结算</h2>
+                        </>
+                    )}
+                </div>
+
+                {/* Tab 切换区 */}
+                <div className={css.tabContainer}>
+                    <button 
+                        className={activeTab === 'round' ? css.tabActive : css.tab}
+                        onClick={() => setActiveTab('round')}
+                    >
+                        <List size={14}/> 本局详情
+                    </button>
+                    <button 
+                        className={activeTab === 'grand' ? css.tabActive : css.tab}
+                        onClick={() => setActiveTab('grand')}
+                    >
+                        <History size={14}/> 总战绩表
+                    </button>
+                </div>
+
+                {/* 内容展示区 */}
+                <div className={css.contentBody}>
+                    {activeTab === 'round' ? (
+                        <div className={css.tabContent}>
+                            {/* 如果有 scoreBreakdown 就显示新表格，否则(旧版兼容)显示提示 */}
+                            {data.scoreBreakdown ? (
+                                <RoundDetailTable 
+                                    scoreBreakdown={data.scoreBreakdown} 
+                                    players={playersWithTeamInfo}
+                                />
+                            ) : (
+                                <div style={{padding:20, color:'#999'}}>服务端未返回详情数据</div>
+                            )}
+                            
+                            {/* 下方保留简略日志，方便查阅 */}
+                            <div className={css.logBox}>
+                                <div style={{fontWeight:'bold', marginBottom:5, fontSize:12, color:'#ccc'}}>结算日志:</div>
+                                {data.detail}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className={css.tabContent}>
                             <ScoreTable 
                                 players={playersWithTeamInfo} 
-                                matchHistory={grandResult.matchHistory} 
-                                currentScores={grandResult.grandScores} 
+                                matchHistory={data.matchHistory} 
+                                currentScores={data.grandScores} 
                                 roomConfig={roomConfig} 
-                                grandResult={grandResult}
                             />
                         </div>
-                        
+                    )}
+                </div>
+
+                {/* 底部按钮区 */}
+                <div className={css.footerSection}>
+                    {grandResult ? (
                         <button className={css.primaryButton} onClick={handleStartGame}>重新开始</button>
-                    </div>
-                ) : roundResult ? (
-                    <div className={css.resultContainer}>
-                        <div className={css.titleRow}>
-                            <Coins size={30} color="#f1c40f" />
-                            <h2 className={css.roundTitle}>小局结算</h2>
-                        </div>
-                        
-                        <div className={css.tableWrapper}>
-                            <ScoreTable 
-                                players={playersWithTeamInfo} 
-                                matchHistory={roundResult.matchHistory} 
-                                currentScores={roundResult.grandScores} 
-                                roomConfig={roomConfig}
-                            />
-                        </div>
-                        
-                        {amIHost ? (
+                    ) : (
+                        amIHost ? (
                             <button className={css.primaryButton} onClick={handleNextRound}>下一局</button>
                         ) : (
                             <div className={css.waitingText}>等待房主...</div>
-                        )}
-                    </div>
-                ) : null}
+                        )
+                    )}
+                </div>
+
             </div>
         </div>
     );
@@ -1571,19 +1771,16 @@ FILE PATH: client\src\components\game\SettlementModal.module.css
 
 .modalContent {
     background: white; 
-    padding: 0; /* 内部 Padding 由子元素控制 */
     border-radius: 24px; 
     text-align: center; 
     box-shadow: 0 30px 80px rgba(0,0,0,0.6); 
     animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     width: 95%;        
-    max-width: 600px;       
+    max-width: 650px;       
     max-height: 85vh;   
-    overflow-y: auto;
-    overflow-x: hidden;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    overflow: hidden; /* 防止圆角被子元素破坏 */
 }
 
 @keyframes popIn {
@@ -1591,44 +1788,133 @@ FILE PATH: client\src\components\game\SettlementModal.module.css
     100% { transform: scale(1); opacity: 1; }
 }
 
-.resultContainer {
-    padding: 20px;
-    width: 100%;
-}
-
-.winnerTitle {
-    font-size: 28px;
-    margin-bottom: 5px;
-    color: #2c3e50;
-    font-weight: bold;
-}
-
-.roundTitle {
-    font-size: 24px;
-    margin: 0;
-    font-weight: bold;
-}
-
-.titleRow {
+/* 顶部标题 */
+.headerSection {
+    padding: 20px 20px 10px 20px;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 10px;
-    margin-bottom: 15px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #eee;
 }
 
-.tableWrapper {
-    margin: 15px 0;
-    width: 100%;
+.title {
+    margin: 0;
+    font-size: 22px;
+    font-weight: bold;
+    color: #2c3e50;
 }
 
-.waitingText {
-    color: #999;
-    margin-top: 10px;
+/* Tab 切换栏 */
+.tabContainer {
+    display: flex;
+    background: #eee;
+    padding: 4px;
+    margin: 15px 20px 5px 20px;
+    border-radius: 12px;
+}
+
+.tab {
+    flex: 1;
+    padding: 8px;
+    border: none;
+    background: transparent;
+    color: #7f8c8d;
+    font-weight: bold;
     font-size: 14px;
+    cursor: pointer;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s;
 }
 
-/* 按钮样式复用，但独立定义 */
+.tabActive {
+    composes: tab;
+    background: white;
+    color: #2c3e50;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+/* 内容区域 */
+.contentBody {
+    flex: 1;
+    overflow-y: auto; /* 允许内部滚动 */
+    padding: 10px 0;
+    background: #fff;
+    min-height: 200px;
+}
+
+.tabContent {
+    width: 100%;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- 本局详情表格样式 --- */
+.detailTableContainer {
+    margin: 0 15px;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.detailHeaderRow {
+    display: flex;
+    background: #2c3e50;
+    color: white;
+    padding: 10px 5px;
+    font-size: 12px;
+    font-weight: bold;
+    align-items: center;
+}
+
+.detailBody {
+    background: white;
+}
+
+.detailRow {
+    display: flex;
+    padding: 12px 5px;
+    border-bottom: 1px solid #f0f0f0;
+    align-items: center;
+    font-size: 13px;
+    color: #34495e;
+}
+
+.detailRow:last-child {
+    border-bottom: none;
+}
+
+/* 简略日志框 */
+.logBox {
+    margin: 15px 20px 0 20px;
+    background: #2c3e50;
+    padding: 10px;
+    border-radius: 8px;
+    color: #ecf0f1;
+    font-size: 12px;
+    text-align: left;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    max-height: 100px;
+    overflow-y: auto;
+}
+
+/* 底部按钮区 */
+.footerSection {
+    padding: 15px 20px 20px 20px;
+    border-top: 1px solid #eee;
+    background: white;
+}
+
 .primaryButton {
     width: 100%;
     height: 50px;
@@ -1641,11 +1927,16 @@ FILE PATH: client\src\components\game\SettlementModal.module.css
     font-size: 16px;
     transition: all 0.2s;
     box-shadow: 0 5px 15px rgba(44, 62, 80, 0.2);
-    margin-top: 10px;
 }
 
 .primaryButton:hover {
     background: #34495e;
+}
+
+.waitingText {
+    color: #999;
+    font-size: 14px;
+    padding: 10px;
 }
 
 ================================================================================
@@ -2281,7 +2572,8 @@ export const PlayerAvatar = ({ player, isTurn, score, roundScore = 0, targetScor
 
     let showBadge = false;
     if (showCardCountMode === 2) showBadge = true;
-    if (showCardCountMode === 1 && cardCount <= 2 && cardCount > 0) showBadge = true;
+    // [修改] 2 改为 3
+    if (showCardCountMode === 1 && cardCount <= 3 && cardCount > 0) showBadge = true;
     if (rank) showBadge = false;
 
     const isTeamMode = team !== undefined && team !== null;
@@ -6758,30 +7050,94 @@ module.exports = CardRules;
 FILE PATH: server\game\Deck.js
 ================================================================================
 // 牌库生成与洗牌 - [增强版] 支持公平不洗牌 & 模拟线下叠牌模式 & 精确控制模式
+// 基于《基于4人4副牌的洗牌算法及扩展到3-8适配的说明》实现
+// [修复] 增加“目标分数补齐机制”，确保多副牌局一定会出现大炸弹
+// [修复] 优化“模拟洗牌”逻辑，增加插洗防止牌序过于整齐导致Bot崩溃，增加废牌容错补齐
 
 const CardRules = require('./CardRules');
 
 class Deck {
-    constructor(deckCount = 1) {
+    constructor(deckCount = 2) {
         this.deck = [];
         this.deckCount = deckCount;
         // 生成多副牌。每副牌是 0-53。
+        // 0-12: 黑桃A-K, 13-25: 红桃, 26-38: 梅花, 39-51: 方片, 52: 小王, 53: 大王
         for (let d = 0; d < deckCount; d++) {
              for (let i = 0; i < 54; i++) {
                 this.deck.push(i + d * 54); 
             }
         }
 
-        // 精确控制模式配置
-        this.preciseConfigs = {
-            'normal': { totalScoreRange: [36, 50], bombProb: 0.15, hugeProb: 0.1 },      // 常规
-            'stimulating': { totalScoreRange: [48, 60], bombProb: 0.30, hugeProb: 0.2 }, // 刺激
-            'thrilling': { totalScoreRange: [60, 80], bombProb: 0.50, hugeProb: 0.3 },   // 惊险
-            'exciting': { totalScoreRange: [72, 100], bombProb: 0.80, hugeProb: 0.5 }    // 爽局
+        // --- 配置参数定义 (基于文档) ---
+        
+        // 1. 模式参数
+        this.modeConfigs = {
+            'normal': { 
+                name: '常规模式',
+                bombProb: 0.15,     // 基础生成概率
+                scoreFactor: 1.0,   // 分数范围系数
+                polarization: 0.2,  // 极化程度
+                limitPerPoint: 1,   // 每个点数最多生成炸弹数
+                dist: { small: 0.50, mid: 0.30, big: 0.15, huge: 0.05 } 
+            },
+            'stimulating': { 
+                name: '刺激模式',
+                bombProb: 0.30,
+                scoreFactor: 1.3, 
+                polarization: 0.5,
+                limitPerPoint: 1,
+                dist: { small: 0.30, mid: 0.35, big: 0.25, huge: 0.10 }
+            },
+            'thrilling': { 
+                name: '惊险模式',
+                bombProb: 0.50,
+                scoreFactor: 1.8, 
+                polarization: 0.7,
+                limitPerPoint: 2,
+                dist: { small: 0.25, mid: 0.30, big: 0.25, huge: 0.20 }
+            },
+            'exciting': { 
+                name: '爽局模式',
+                bombProb: 0.80,
+                scoreFactor: 2.2, 
+                polarization: 0.9,
+                limitPerPoint: 2,
+                dist: { small: 0.15, mid: 0.20, big: 0.30, huge: 0.35 }
+            }
+        };
+
+        // 2. 基础分数范围 (基准: 4人4副牌)
+        this.baseScoreRange = [36, 50]; 
+        
+        // 3. 炸弹分级定义 (分数)
+        this.bombScores = { small: 1, mid: 2, big: 5, huge: 10 };
+    }
+
+    /**
+     * 获取当前人数下的炸弹尺寸阈值
+     */
+    _getBombThresholds(deckCount) {
+        const smallMax = 6; 
+        const midMax = 9;   
+        
+        if (deckCount === 3) {
+            return { small: [4, 6], mid: [7, 9], big: [10, 12], huge: null };
+        }
+
+        const bigMax = 12 + (deckCount - 4) * 2;
+        const totalMax = deckCount * 4;
+
+        return {
+            small: [4, 6],
+            mid: [7, 9],
+            big: [10, bigMax],
+            huge: [bigMax + 1, totalMax]
         };
     }
 
-    // 1. 普通洗牌 (Fisher-Yates) - 彻底打乱
+    /**
+     * 1. 普通洗牌 (Fisher-Yates)
+     */
     shuffle() {
         for (let i = this.deck.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -6789,7 +7145,9 @@ class Deck {
         }
     }
 
-    // 2. [爽局] 公平的“均贫富”策略 (简单版)
+    /**
+     * 2. [均贫富] 简单公平策略
+     */
     shuffleFairNoShuffle(playerCount) {
         const groupMap = {}; 
         const looseCards = []; 
@@ -6801,7 +7159,6 @@ class Deck {
         });
 
         const bombChunks = []; 
-        
         Object.values(groupMap).forEach(cards => {
             if (cards.length < 4) {
                 looseCards.push(...cards);
@@ -6816,21 +7173,17 @@ class Deck {
             if (remaining.length > 0) looseCards.push(...remaining);
         });
 
-        // 打乱炸弹块
         for (let i = bombChunks.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [bombChunks[i], bombChunks[j]] = [bombChunks[j], bombChunks[i]];
         }
 
         const playerBuckets = Array.from({ length: playerCount }, () => []);
-        
-        // 轮询分发炸弹
         bombChunks.forEach((chunk, index) => {
             const playerIndex = index % playerCount;
             playerBuckets[playerIndex].push(...chunk);
         });
 
-        // 随机打乱散牌并分发
         for (let i = looseCards.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [looseCards[i], looseCards[j]] = [looseCards[j], looseCards[i]];
@@ -6840,10 +7193,8 @@ class Deck {
             playerBuckets[playerIndex].push(card);
         });
 
-        // 重组
         this.deck = []; 
         playerBuckets.forEach(bucket => {
-            // 内部微调
             for (let i = bucket.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [bucket[i], bucket[j]] = [bucket[j], bucket[i]];
@@ -6852,134 +7203,264 @@ class Deck {
         });
     }
 
-    // 3. [新模式] 模拟洗牌 (叠牌 + 切牌)
+    /**
+     * 3. [模拟洗牌] 叠牌 + 切牌 + 插洗
+     * [修复] 增加容错性，防止因牌数微小差异导致的回退
+     * [优化] 增加洗牌混乱度，防止牌序过于整齐导致 Bot 计算卡死
+     */
     shuffleSimulation(lastRoundCards) {
-        if (!lastRoundCards || lastRoundCards.length !== this.deck.length) {
-            console.log("[Deck] No valid last round cards, using random shuffle.");
+        // 1. 基础校验与清洗
+        if (!lastRoundCards || !Array.isArray(lastRoundCards)) {
+            console.log("[Deck] Invalid last round cards, using random shuffle.");
             this.shuffle();
             return;
         }
 
-        console.log("[Deck] Using Simulation Shuffle (Stacking + Cutting)");
-        this.deck = [...lastRoundCards];
+        // 过滤非法卡牌 (防止 undefined 导致 crash)
+        const cleanCards = lastRoundCards.filter(c => typeof c === 'number' && !isNaN(c));
+        
+        // 2. 长度校验与补齐
+        // 如果差异过大（超过10%），说明可能上一局数据有问题，回退随机
+        if (Math.abs(cleanCards.length - this.deck.length) > this.deck.length * 0.1) {
+             console.log(`[Deck] Card count mismatch too large (${cleanCards.length} vs ${this.deck.length}), reset to random.`);
+             this.shuffle();
+             return;
+        }
 
-        const cutCount = 1 + Math.floor(Math.random() * 2); 
+        console.log("[Deck] Using Simulation Shuffle (Stacking + Cutting + Riffle)");
+        
+        // 使用上一局的牌
+        this.deck = [...cleanCards];
+
+        // 如果牌少了，补齐 (从原始 deck 里找缺失的)
+        if (this.deck.length < this.deckCount * 54) {
+             const existingSet = new Set(this.deck);
+             const fullDeck = [];
+             for(let d=0; d<this.deckCount; d++) {
+                 for(let i=0; i<54; i++) fullDeck.push(i + d*54);
+             }
+             const missing = fullDeck.filter(c => !existingSet.has(c));
+             // 打乱缺失的牌再补进去
+             for (let i = missing.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [missing[i], missing[j]] = [missing[j], missing[i]];
+            }
+            this.deck.push(...missing);
+            console.log(`[Deck] Filled ${missing.length} missing cards.`);
+        }
+        // 如果牌多了（极罕见），截断
+        if (this.deck.length > this.deckCount * 54) {
+            this.deck.length = this.deckCount * 54;
+        }
+
+        // 3. 模拟切牌 (增加次数到 3-5 次)
+        const cutCount = 3 + Math.floor(Math.random() * 3); 
         for (let k = 0; k < cutCount; k++) {
-            const minCut = Math.floor(this.deck.length * 0.2);
-            const maxCut = Math.floor(this.deck.length * 0.8);
+            const minCut = Math.floor(this.deck.length * 0.3);
+            const maxCut = Math.floor(this.deck.length * 0.7);
             const cutPoint = minCut + Math.floor(Math.random() * (maxCut - minCut));
             
             const topPart = this.deck.slice(0, cutPoint);
             const bottomPart = this.deck.slice(cutPoint);
             this.deck = [...bottomPart, ...topPart];
         }
+
+        // 4. [新增] 模拟插洗 (Riffle Shuffle) - 关键！
+        // 仅切牌会导致牌序依然保留大块连续，插洗能有效打散局部，避免 Bot 拿到太完美的牌
+        const mid = Math.floor(this.deck.length / 2);
+        const left = this.deck.slice(0, mid);
+        const right = this.deck.slice(mid);
+        const riffled = [];
+        
+        while(left.length > 0 || right.length > 0) {
+            // 随机从左或右掉落 1-4 张牌
+            const nLeft = Math.floor(Math.random() * 4) + 1;
+            const nRight = Math.floor(Math.random() * 4) + 1;
+            
+            if (left.length > 0) riffled.push(...left.splice(0, nLeft));
+            if (right.length > 0) riffled.push(...right.splice(0, nRight));
+        }
+        this.deck = riffled;
     }
 
-    // 4. [加入新算法] 精确控制洗牌 (Precise Control)
-    // mode: 'normal' | 'stimulating' | 'thrilling' | 'exciting'
+    /**
+     * 4. [精确控制洗牌] 核心算法实现
+     */
     shufflePrecise(playerCount, mode = 'stimulating') {
-        const config = this.preciseConfigs[mode] || this.preciseConfigs['stimulating'];
-        console.log(`[Deck] Using Precise Shuffle: ${mode}`);
+        const config = this.modeConfigs[mode] || this.modeConfigs['stimulating'];
+        const deckCount = this.deckCount;
+        const thresholds = this._getBombThresholds(deckCount);
 
-        // 1. 归类所有牌
-        const cardsByPoint = {}; // point -> [cardId]
+        console.log(`[Deck] Precise Shuffle | Mode: ${config.name} | Decks: ${deckCount}`);
+
+        // --- Step 1: 归类整理 ---
+        const cardsByPoint = {}; 
         const jokers = [];
         
         this.deck.forEach(card => {
             const pt = CardRules.getPoint(card);
-            if (pt >= 16) {
-                jokers.push(card);
-            } else {
+            if (pt >= 16) jokers.push(card);
+            else {
                 if (!cardsByPoint[pt]) cardsByPoint[pt] = [];
                 cardsByPoint[pt].push(card);
             }
         });
 
-        // 2. 构造炸弹库
-        const bombs = [];
         const availablePoints = Object.keys(cardsByPoint).map(Number);
-        
-        // 简单打乱点数顺序，保证每次不是按 3,4,5... 的顺序生成
         for (let i = availablePoints.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [availablePoints[i], availablePoints[j]] = [availablePoints[j], availablePoints[i]];
         }
 
+        const generatedBombs = []; 
+        let currentTotalScore = 0;
+
+        // --- Step 2: 概率生成 ---
         availablePoints.forEach(pt => {
-            const cards = cardsByPoint[pt];
-            if (!cards || cards.length < 4) return;
+            const pool = cardsByPoint[pt];
+            if (!pool || pool.length < 4) return;
 
-            // 核心概率控制
-            if (Math.random() < config.bombProb) {
-                const maxLen = cards.length;
-                let bombSize = 4;
-                
-                // 决定炸弹大小
-                const rand = Math.random();
-                if (rand < config.hugeProb && maxLen >= 8) {
-                    bombSize = Math.min(8 + Math.floor(Math.random() * 3), maxLen); // 8-10张
-                } else if (rand < 0.5 && maxLen >= 6) {
-                    bombSize = Math.min(6 + Math.floor(Math.random() * 2), maxLen); // 6-7张
-                } else {
-                    bombSize = Math.min(4 + Math.floor(Math.random() * 2), maxLen); // 4-5张
+            for (let i = 0; i < config.limitPerPoint; i++) {
+                if (pool.length < 4) break;
+                if (Math.random() < config.bombProb) {
+                    const bomb = this._generateSingleBomb(pool, config.dist, thresholds);
+                    if (bomb) {
+                        generatedBombs.push(bomb);
+                        currentTotalScore += bomb.score;
+                    }
                 }
-
-                // 提取炸弹
-                const bombCards = cards.splice(0, bombSize);
-                // 简单的分数估算：大小 = 分数权重
-                bombs.push({ cards: bombCards, score: bombSize });
             }
         });
 
-        // 3. 极化分配 (模拟：给分低的或者随机分配好牌)
-        // 简易实现：将炸弹按大小排序，轮流分发，但这里我们加入随机性
-        bombs.sort((a, b) => b.score - a.score); // 大炸弹排前面
-
-        const playerHands = Array.from({ length: playerCount }, () => []);
+        // --- Step 3: 目标分数补齐 ---
+        const baseTargetMin = this.baseScoreRange[0];
+        const targetMinScore = Math.floor(baseTargetMin * config.scoreFactor * (playerCount / 4));
         
-        // 按照“S型”或者“随机权重”分配炸弹，避免一人独吞所有大炸弹
-        bombs.forEach((bomb, i) => {
-            // 简单轮询 + 随机扰动
-            const targetIdx = (i + Math.floor(Math.random() * 2)) % playerCount;
-            playerHands[targetIdx].push(...bomb.cards);
+        console.log(`[Deck] Score Check: Current ${currentTotalScore} / Target ${targetMinScore}`);
+
+        if (currentTotalScore < targetMinScore) {
+            console.log(`[Deck] Score insufficient, force generating bombs...`);
+            availablePoints.sort((a, b) => {
+                const lenA = cardsByPoint[a] ? cardsByPoint[a].length : 0;
+                const lenB = cardsByPoint[b] ? cardsByPoint[b].length : 0;
+                return lenB - lenA; 
+            });
+
+            for (let pt of availablePoints) {
+                if (currentTotalScore >= targetMinScore) break;
+                const pool = cardsByPoint[pt];
+                if (!pool || pool.length < 4) continue;
+
+                const aggressiveDist = { small: 0.1, mid: 0.2, big: 0.4, huge: 0.3 };
+                const bomb = this._generateSingleBomb(pool, aggressiveDist, thresholds);
+                if (bomb) {
+                    generatedBombs.push(bomb);
+                    currentTotalScore += bomb.score;
+                }
+            }
+        }
+
+        // --- Step 4: 极化分配 ---
+        const playerHands = Array.from({ length: playerCount }, () => ({
+            cards: [],
+            bombScore: 0
+        }));
+
+        generatedBombs.sort((a, b) => b.score - a.score);
+
+        generatedBombs.forEach(bomb => {
+            const weights = playerHands.map(p => 100 / (p.bombScore + 5));
+            const finalWeights = weights.map(w => w + (Math.random() * config.polarization * 100));
+
+            let totalW = finalWeights.reduce((a, b) => a + b, 0);
+            let r = Math.random() * totalW;
+            let selectedIdx = 0;
+            for (let i = 0; i < playerCount; i++) {
+                r -= finalWeights[i];
+                if (r <= 0) {
+                    selectedIdx = i;
+                    break;
+                }
+            }
+            playerHands[selectedIdx].cards.push(...bomb.cards);
+            playerHands[selectedIdx].bombScore += bomb.score;
         });
 
-        // 4. 分配剩余散牌和大小王
+        // --- Step 5: 填充剩余牌 ---
         const looseCards = [...jokers];
         Object.values(cardsByPoint).forEach(cards => looseCards.push(...cards));
         
-        // 打乱散牌
         for (let i = looseCards.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [looseCards[i], looseCards[j]] = [looseCards[j], looseCards[i]];
         }
 
-        // 均匀填补
         let pIdx = 0;
         looseCards.forEach(c => {
-            playerHands[pIdx].push(c);
+            playerHands[pIdx].cards.push(c);
             pIdx = (pIdx + 1) % playerCount;
         });
 
-        // 5. 组装回 this.deck (虽然这步对于直接发牌不是必须的，但保持 Deck 状态一致性)
+        // --- Step 6: 组装 ---
         this.deck = [];
-        playerHands.forEach(hand => {
-            // 对每个人的手牌内部再洗一次，防止炸弹和散牌分界太明显
+        playerHands.forEach(ph => {
+            const hand = ph.cards;
             for (let i = hand.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [hand[i], hand[j]] = [hand[j], hand[i]];
             }
             this.deck.push(...hand);
         });
-        
-        // 标记为已构造好，deal 时直接切分
+
         return true; 
     }
 
-    // 发牌入口
-    // strategy: 'CLASSIC' | 'NO_SHUFFLE' | 'SIMULATION' | 'PRECISE'
-    deal(playerCount, strategy = 'CLASSIC', lastRoundCards = null) {
+    /**
+     * 辅助：从牌池中生成一个炸弹
+     */
+    _generateSingleBomb(pool, dist, thresholds) {
+        if (pool.length < 4) return null;
+
+        const rand = Math.random();
+        let type = 'small';
+        let range = thresholds.small;
+
+        if (thresholds.huge && rand < dist.huge) {
+            type = 'huge';
+            range = thresholds.huge;
+        } else if (rand < dist.huge + dist.big) {
+            type = 'big';
+            range = thresholds.big;
+        } else if (rand < dist.huge + dist.big + dist.mid) {
+            type = 'mid';
+            range = thresholds.mid;
+        }
+
+        const minLen = range[0];
+        const maxLen = range[1];
         
+        if (pool.length < minLen) {
+            if (pool.length >= 4) {
+                const count = pool.length;
+                if (thresholds.huge && count >= thresholds.huge[0]) type = 'huge';
+                else if (count >= thresholds.big[0]) type = 'big';
+                else if (count >= thresholds.mid[0]) type = 'mid';
+                else type = 'small';
+                
+                const bombCards = pool.splice(0, count);
+                return { cards: bombCards, type, score: this.bombScores[type] };
+            }
+            return null;
+        }
+
+        let targetLen = minLen + Math.floor(Math.random() * (maxLen - minLen + 1));
+        targetLen = Math.min(targetLen, pool.length);
+
+        const bombCards = pool.splice(0, targetLen);
+        return { cards: bombCards, type, score: this.bombScores[type] };
+    }
+
+    deal(playerCount, strategy = 'CLASSIC', lastRoundCards = null, preciseMode = 'stimulating') {
         if (strategy === 'NO_SHUFFLE') {
             this.shuffleFairNoShuffle(playerCount);
             return this._dealSequential(playerCount);
@@ -6987,18 +7468,14 @@ class Deck {
             this.shuffleSimulation(lastRoundCards);
             return this._dealBlock(playerCount);
         } else if (strategy === 'PRECISE') {
-            // 默认使用刺激模式，你也可以扩展 roomConfig 传参进来
-            this.shufflePrecise(playerCount, 'stimulating');
+            this.shufflePrecise(playerCount, preciseMode);
             return this._dealSequential(playerCount);
         } else {
-            // 默认：全随机
             this.shuffle();
             return this._dealSequential(playerCount);
         }
     }
 
-    // 普通顺序发牌 (一人一张轮流)
-    // 适用于：全随机模式、已经构造好顺序的均贫富模式
     _dealSequential(playerCount) {
         const hands = {};
         const totalCards = this.deck.length;
@@ -7006,37 +7483,38 @@ class Deck {
         
         for (let i = 0; i < playerCount; i++) {
             hands[i] = this.deck.slice(i * cardsPerPlayer, (i + 1) * cardsPerPlayer);
-            // 补齐余数给最后一个人
-            if (i === playerCount - 1) {
+            if (i === playerCount - 1 && (i + 1) * cardsPerPlayer < totalCards) {
                  hands[i] = this.deck.slice(i * cardsPerPlayer);
             }
         }
         return hands;
     }
 
-    // 块状发牌 (一人一次拿多张)
-    // 适用于：模拟洗牌模式 (防止把叠好的牌拆散)
+    // 增加死循环保护
     _dealBlock(playerCount) {
         const hands = {};
         for(let i=0; i<playerCount; i++) hands[i] = [];
-
-        // 块大小：比如每次拿 4 张
         const blockSize = 4; 
         let currentCardIdx = 0;
         let turn = 0;
+        
+        let safetyCounter = 0;
+        const maxLoops = this.deck.length * 2; // 安全阈值
 
         while (currentCardIdx < this.deck.length) {
+            safetyCounter++;
+            if (safetyCounter > maxLoops) {
+                console.error("[Deck] Critical: _dealBlock infinite loop detected!");
+                break;
+            }
+
             const playerIdx = turn % playerCount;
-            
             const actualSize = Math.min(blockSize, this.deck.length - currentCardIdx);
             const chunk = this.deck.slice(currentCardIdx, currentCardIdx + actualSize);
-            
             hands[playerIdx].push(...chunk);
-            
             currentCardIdx += actualSize;
             turn++;
         }
-
         return hands;
     }
 }
@@ -7049,7 +7527,6 @@ FILE PATH: server\game\GameManager.js
 const CardRules = require('./CardRules');
 const Deck = require('./Deck');
 const BotLogic = require('./BotLogic');
-// [新增] 引入 BotManager
 const BotManager = require('./BotManager');
 
 class GameManager {
@@ -7071,11 +7548,9 @@ class GameManager {
 
         this.collectedCards = [];
 
-        // [新增] 初始化 BotManager
         this.botManager = new BotManager(this);
     }
 
-    // [修改] 使用新的 getSortedHints 获取智能排序后的提示
     getHint(playerId) {
         try {
             if (!this.gameState) return [];
@@ -7084,7 +7559,6 @@ class GameManager {
 
             const lastPlayed = this.gameState.lastPlayedCards;
             
-            // 替换原有的 findAllSolutions，使用 getSortedHints
             const results = BotLogic.getSortedHints(hand, lastPlayed, this.config.deckCount);
             
             return results || [];
@@ -7109,13 +7583,10 @@ class GameManager {
         const deck = new Deck(this.config.deckCount);
         
         let strategy = this.config.shuffleStrategy || (this.config.isNoShuffleMode ? 'NO_SHUFFLE' : 'CLASSIC');
-        
-        // [新增] 获取精确控制模式的参数
         let preciseMode = this.config.preciseMode || 'stimulating';
         
         console.log(`[Game] Round started. Strategy: ${strategy}, Mode: ${preciseMode}, Previous Collected: ${this.collectedCards.length}`);
 
-        // [修改] 将 preciseMode 传给 deal
         const hands = deck.deal(this.players.length, strategy, this.collectedCards, preciseMode);
         
         this.collectedCards = [];
@@ -7153,8 +7624,6 @@ class GameManager {
         });
 
         this._resetTimer();
-        
-        // [修改] 委托 BotManager 检查是否需要机器人行动
         this.botManager.checkAndRun();
 
         return {
@@ -7179,7 +7648,8 @@ class GameManager {
             detail: rInfo.detail,       
             matchHistory: this.matchHistory, 
             grandScores: rInfo.grandScores,
-            roundIndex: this.matchHistory.length
+            roundIndex: this.matchHistory.length,
+            scoreBreakdown: rInfo.scoreBreakdown // [新增] 传递详细得分构成
         };
 
         if (rInfo.isGrandOver) {
@@ -7302,7 +7772,6 @@ class GameManager {
         this._advanceTurn(); 
 
         const activeCount = this._getActivePlayerCount(); 
-        
         const winnerId = this.gameState.roundWinnerId;
         const winnerHand = this.gameState.hands[winnerId];
         const winnerIsActive = winnerHand && winnerHand.length > 0;
@@ -7322,6 +7791,7 @@ class GameManager {
                      const wIdx = this.players.findIndex(p => p.id === wId);
                      this.gameState.currentTurnIndex = wIdx;
                 } else {
+                    // 接风逻辑
                     const winnerPlayer = this.players.find(p => p.id === wId);
                     const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
                     
@@ -7526,8 +7996,6 @@ class GameManager {
     }
 
     reconnectPlayer(oldId, newId) {
-        console.log(`[GameManager] Moving data from ${oldId} to ${newId}`);
-
         if (this.grandScores[oldId] !== undefined) {
             this.grandScores[newId] = this.grandScores[oldId];
             delete this.grandScores[oldId];
@@ -7545,7 +8013,6 @@ class GameManager {
                 this.gameState.hands[newId] = this.gameState.hands[oldId];
                 delete this.gameState.hands[oldId];
             } else if (this.gameState.hands) {
-                console.warn(`[Warning] Old hand not found for ${oldId}, resetting ${newId} to empty.`);
                 this.gameState.hands[newId] = [];
             }
 
@@ -7593,10 +8060,6 @@ class GameManager {
     }
 
     _concludeRound() {
-        // [修复逻辑] 结束时，把所有还没出完牌的人的牌回收
-        // 但通常 510K 里，这些分不一定算分，或者算作输家的分归赢家
-        // 这里简化：只记录结束状态
-        
         const lastPlayer = this.players.find(p => this.gameState.hands[p.id] && this.gameState.hands[p.id].length > 0);
         
         const wId = this.gameState.roundWinnerId;
@@ -7605,6 +8068,7 @@ class GameManager {
              this.gameState.pendingTablePoints = 0;
         }
 
+        // 默认逻辑：不重新排序未完成的玩家
         const fullRankIds = [...this.gameState.finishedRank];
         this.players.forEach(p => {
             if (!fullRankIds.includes(p.id)) fullRankIds.push(p.id);
@@ -7616,27 +8080,52 @@ class GameManager {
         let logLines = []; 
         let penaltyDetails = []; 
 
-        let totalCardPenalty = 0;
         let currentRoundScores = {};
         this.players.forEach(p => {
             currentRoundScores[p.id] = (this.gameState.roundPoints[p.id] || 0);
         });
 
+        // [新增] 准备得分构成详情数据 (scoreBreakdown)
+        const scoreBreakdown = {};
+        this.players.forEach(p => {
+             scoreBreakdown[p.id] = {
+                 id: p.id,
+                 name: p.name,
+                 team: p.team,
+                 tablePoints: this.gameState.roundPoints[p.id] || 0, // 场内抓分
+                 handCount: (this.gameState.hands[p.id] || []).length,
+                 handScore: CardRules.calculateTotalScore(this.gameState.hands[p.id] || []), // 手里没打出的分
+                 penalty: 0, // 奖罚/进贡
+                 final: 0,   // 最终得分
+                 finishRank: fullRankIds.indexOf(p.id) + 1 // 跑得快排名
+             };
+        });
+
+        // 1. 手牌罚分
+        let totalCardPenalty = 0;
+        let penaltySources = [];
+        
         this.players.forEach(p => {
             const h = this.gameState.hands[p.id] || [];
             const handPts = CardRules.calculateTotalScore(h);
             if (handPts > 0) {
                 totalCardPenalty += handPts;
+                penaltySources.push(`${p.name}(${handPts})`);
             }
         });
 
         if (firstWinnerId && totalCardPenalty > 0) {
             currentRoundScores[firstWinnerId] += totalCardPenalty;
+            
+            // [新增] 记录赢家获得的额外手牌分
+            scoreBreakdown[firstWinnerId].penalty += totalCardPenalty;
+
             const winnerName = this.players.find(p=>p.id===firstWinnerId)?.name;
-            logLines.push(`[手牌罚分] 输家共计 ${totalCardPenalty} 分，归第一名 ${winnerName}。`);
-            penaltyDetails.push(`第一名 ${winnerName} 获得剩余手牌分 ${totalCardPenalty}`);
+            logLines.push(`[手牌罚分] 输家剩余手牌分 (${penaltySources.join(', ')}) 共 ${totalCardPenalty} 分，归头游 ${winnerName}。`);
+            penaltyDetails.push(`头游 ${winnerName} 收取手牌分 ${totalCardPenalty}`);
         }
 
+        // 2. 排名赏罚
         if (this.config.enableRankPenalty && this.config.rankPenaltyScores && this.config.rankPenaltyScores.length > 0) {
             const penaltyConfig = this.config.rankPenaltyScores;
             const playerCount = fullRankIds.length;
@@ -7659,16 +8148,23 @@ class GameManager {
                         } else {
                             currentRoundScores[winnerId] += score;
                             currentRoundScores[loserId] -= score;
+                            
+                            // [新增] 更新构成表
+                            scoreBreakdown[winnerId].penalty += score;
+                            scoreBreakdown[loserId].penalty -= score;
+
                             logLines.push(`[排名赏罚] 第${winnerIndex+1}名 ${winner.name} 收取 倒数第${index+1}名 ${loser.name} ${score} 分。`);
-                            penaltyDetails.push(`${loser.name} 进贡 ${winner.name} ${score} 分`);
+                            penaltyDetails.push(`${loser.name} 排名进贡 ${winner.name} ${score} 分`);
                         }
                     }
                 }
             });
         }
 
+        // [新增] 计算最终得分并回填 breakdown
         this.players.forEach(p => {
             this.grandScores[p.id] += currentRoundScores[p.id];
+            scoreBreakdown[p.id].final = currentRoundScores[p.id];
         });
 
         this.matchHistory.push({
@@ -7687,7 +8183,8 @@ class GameManager {
             pointsEarned: totalPointsEarned, 
             detail: logLines.join('\n') || '完美结束，未设置额外罚分', 
             grandScores: this.grandScores,
-            isGrandOver
+            isGrandOver,
+            scoreBreakdown // [新增]
         };
     }
     

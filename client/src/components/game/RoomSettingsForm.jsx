@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Layers, Target, Clock, Shuffle, Sparkles, Shield, Eye, Award, Sliders } from 'lucide-react'; // 新增 Sliders 图标
+import { Users, Layers, Target, Clock, Shuffle, Sparkles, Shield, Eye, Award, Sliders } from 'lucide-react'; 
 import css from './RoomSettingsForm.module.css';
 
 /**
@@ -184,14 +184,15 @@ export const RoomSettingsForm = ({ config, onChange, readOnly = false }) => {
 
             <div className={css.divider}></div>
 
-            {/* 剩余牌数显示 (保持不变) */}
+            {/* 剩余牌数显示 (修改 UI 为 ≤3张) */}
             <div>
                 <div className={css.configLabel} style={{marginBottom: 8}}>
                     <span style={{display:'flex', alignItems:'center', gap:6}}><Eye size={14}/> 剩余牌数显示</span>
                 </div>
                 <div className={css.radioGroup}>
                     <button className={config.showCardCountMode === 0 ? css.radioBtnActive : css.radioBtn} onClick={() => update('showCardCountMode', 0)} disabled={readOnly}>不显示</button>
-                    <button className={config.showCardCountMode === 1 ? css.radioBtnActive : css.radioBtn} onClick={() => update('showCardCountMode', 1)} disabled={readOnly}>≤2张</button>
+                    {/* [修改] 2 改为 3 */}
+                    <button className={config.showCardCountMode === 1 ? css.radioBtnActive : css.radioBtn} onClick={() => update('showCardCountMode', 1)} disabled={readOnly}>≤3张</button>
                     <button className={config.showCardCountMode === 2 ? css.radioBtnActive : css.radioBtn} onClick={() => update('showCardCountMode', 2)} disabled={readOnly}>一直显示</button>
                 </div>
             </div>

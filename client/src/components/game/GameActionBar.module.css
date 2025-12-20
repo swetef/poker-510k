@@ -87,3 +87,17 @@
     padding: 10px 20px;
     border-radius: 30px;
 }
+
+.btnWarning {
+    composes: btnPlay;
+    background: linear-gradient(to bottom, #e74c3c, #c0392b);
+    box-shadow: 0 8px 20px rgba(231, 76, 60, 0.4);
+    animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+@keyframes shake {
+    10%, 90% { transform: translate3d(-1px, 0, 0); }
+    20%, 80% { transform: translate3d(2px, 0, 0); }
+    30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+    40%, 60% { transform: translate3d(4px, 0, 0); }
+}

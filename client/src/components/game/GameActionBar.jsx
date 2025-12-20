@@ -1,6 +1,6 @@
-import React from 'react';
-import { RotateCcw, Zap, Lightbulb, Clock, Loader2 } from 'lucide-react';
-import css from './GameActionBar.module.css'; // 新 CSS
+import React, { useState, useEffect } from 'react';
+import { RotateCcw, Zap, Lightbulb, Clock, Loader2, AlertTriangle } from 'lucide-react';
+import css from './GameActionBar.module.css';
 import { useGame } from '../../context/GameContext.jsx';
 import TimerComponent from '../CountDownTimer.jsx';
 
@@ -9,8 +9,16 @@ export const GameActionBar = () => {
         winner, roundResult, grandResult, selectedCards, 
         playersInfo, mySocketId, currentTurnId, players, turnRemaining,
         handleClearSelection, handleToggleAutoPlay, handlePass, handleRequestHint, handlePlayCards,
-        isSubmitting
+        isSubmitting, lastPlayerName // [修改] 获取上家名字
     } = useGame();
+
+    // [新增] 确认状态：false=正常, true=待确认(管队友)
+    const [confirmState, setConfirmState] = useState(false);
+
+    // [新增] 当选牌变化或轮次变化时，重置确认状态
+    useEffect(() => {
+        setConfirmState(false);
+    }, [selectedCards, currentTurnId]);
 
     if (winner || roundResult || grandResult) return null;
 
@@ -20,6 +28,36 @@ export const GameActionBar = () => {
     const myTurn = currentTurnId === mySocketId;
     const currentTurnPlayer = players.find(p => p.id === currentTurnId);
     const waitingText = currentTurnPlayer ? `等待 ${currentTurnPlayer.name}...` : '等待中...';
+
+    // [新增] 智能出牌点击处理
+    const handlePlayClick = () => {
+        if (isSubmitting) return;
+        
+        // 1. 如果没选牌，直接透传给原函数处理(原函数会弹Alert)
+        if (selectedCards.length === 0) {
+            handlePlayCards();
+            return;
+        }
+
+        // 2. 队友误伤检测逻辑
+        const lastPlayer = players.find(p => p.name === lastPlayerName);
+        const isTeammate = 
+            myInfo.team !== undefined && myInfo.team !== null && // 我在队伍中
+            lastPlayer && lastPlayer.id !== mySocketId &&        // 上家存在且不是我
+            playersInfo[lastPlayer.id]?.team === myInfo.team;    // 上家是队友
+
+        // 3. 如果是压队友，且还没确认过
+        if (isTeammate && !confirmState) {
+            setConfirmState(true);
+            // 3秒后自动恢复，防止卡住
+            setTimeout(() => setConfirmState(false), 3000);
+            return;
+        }
+
+        // 4. 正常出牌
+        handlePlayCards();
+        setConfirmState(false);
+    };
 
     return (
         <div className={css.actionBar}>
@@ -64,11 +102,19 @@ export const GameActionBar = () => {
                                 <TimerComponent initialSeconds={turnRemaining} totalSeconds={60} position="inline" />
                                 
                                 <button 
-                                    className={css.btnPlay} 
-                                    onClick={handlePlayCards}
+                                    className={confirmState ? css.btnWarning : css.btnPlay} 
+                                    onClick={handlePlayClick}
                                     disabled={isSubmitting}
                                 >
-                                    {isSubmitting ? <Loader2 size={18} className="spin"/> : '出牌'}
+                                    {isSubmitting ? (
+                                        <Loader2 size={18} className="spin"/>
+                                    ) : (
+                                        confirmState ? (
+                                            <>
+                                                <AlertTriangle size={18} /> 确认管队友?
+                                            </>
+                                        ) : '出牌'
+                                    )}
                                 </button>
                             </>
                         ) : (
