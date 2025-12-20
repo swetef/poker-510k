@@ -3,6 +3,8 @@ import { RotateCcw, Zap, Lightbulb, Clock, Loader2, AlertTriangle } from 'lucide
 import css from './GameActionBar.module.css';
 import { useGame } from '../../context/GameContext.jsx';
 import TimerComponent from '../CountDownTimer.jsx';
+// [新增] 引入 isBomb 工具函数
+import { isBomb } from '../../utils/cardLogic.js';
 
 export const GameActionBar = () => {
     const { 
@@ -46,8 +48,11 @@ export const GameActionBar = () => {
             lastPlayer && lastPlayer.id !== mySocketId &&        // 上家存在且不是我
             playersInfo[lastPlayer.id]?.team === myInfo.team;    // 上家是队友
 
-        // 3. 如果是压队友，且还没确认过
-        if (isTeammate && !confirmState) {
+        // [修改] 增加 isBomb 判断：只有用炸弹管队友才弹窗
+        const playingBomb = isBomb(selectedCards);
+
+        // 3. 如果是炸弹压队友，且还没确认过
+        if (isTeammate && playingBomb && !confirmState) {
             setConfirmState(true);
             // 3秒后自动恢复，防止卡住
             setTimeout(() => setConfirmState(false), 3000);
@@ -111,7 +116,7 @@ export const GameActionBar = () => {
                                     ) : (
                                         confirmState ? (
                                             <>
-                                                <AlertTriangle size={18} /> 确认管队友?
+                                                <AlertTriangle size={18} /> 确认炸队友?
                                             </>
                                         ) : '出牌'
                                     )}

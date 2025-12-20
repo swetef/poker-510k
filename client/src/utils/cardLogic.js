@@ -176,3 +176,25 @@ export const getCardIndexFromTouch = (touchX, containerLeft, spacing, count) => 
     
     return index;
 };
+
+// [新增] 简易炸弹检测 (用于前端交互提示)
+export const isBomb = (cards) => {
+    if (!cards || cards.length < 2) return false;
+    
+    const points = cards.map(getSortValue).sort((a, b) => a - b);
+    const len = points.length;
+    const uniquePoints = [...new Set(points)];
+
+    // 1. 普通炸弹: 点数全一样，且 >= 4张
+    if (uniquePoints.length === 1 && len >= 4) return true;
+
+    // 2. 510K: 长度3，且点数是 5, 10, 13(K)
+    if (len === 3) {
+        if (points[0] === 5 && points[1] === 10 && points[2] === 13) return true;
+    }
+
+    // 3. 王炸: 全是王 (>= 2张)
+    if (points.every(p => p >= 16)) return true;
+
+    return false;
+};
