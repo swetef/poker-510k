@@ -3,7 +3,6 @@ import { User, Monitor, RefreshCw, Plus, LogIn, Maximize, Minimize, Wifi, WifiOf
 import { useGame } from '../context/GameContext.jsx';
 import { RoomSettingsForm } from '../components/game/RoomSettingsForm.jsx';
 
-// [修改] 引入 CSS Modules，不再使用 styles.js
 import css from './LoginScreen.module.css';
 
 export const LoginScreen = () => {
