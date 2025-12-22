@@ -7,9 +7,14 @@ export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacin
     
     const handlePointerDown = (e) => {
         if (e.pointerType === 'touch') return;
-        if (e.button !== 0 && e.pointerType === 'mouse') return;
+        
+        // [修改] PC 端鼠标点击也交由父组件手势 Hook 统一处理
+        // 屏蔽此处的 onClick，避免与 useHandGesture 的 mousedown 逻辑冲突（导致点一次触发两次）
+        
+        /* if (e.button !== 0 && e.pointerType === 'mouse') return;
         e.stopPropagation();
-        onClick(cardVal);
+        onClick(cardVal); 
+        */
     };
 
     const containerClasses = [
@@ -23,6 +28,7 @@ export const Card = ({ cardVal, index, isSelected, onClick, onMouseEnter, spacin
             className={containerClasses}
             onPointerDown={handlePointerDown}
             onMouseEnter={(e) => {
+                // 这个事件主要保留给旧逻辑，但有了 useHandGesture 后其实不再依赖它
                 if (e.pointerType === 'mouse') {
                      onMouseEnter(cardVal);
                 }

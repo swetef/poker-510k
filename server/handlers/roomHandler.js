@@ -177,7 +177,21 @@ module.exports = (io, socket, rooms) => {
         if (room.players.length >= room.config.maxPlayers) return socket.emit('error_msg', '房间已满');
         
         const botId = `bot_${Date.now()}_${Math.floor(Math.random()*1000)}`;
-        const botName = `Robot ${Math.floor(Math.random()*100)}`;
+        
+        // [修复] 防止机器人重名
+        // 尝试生成名字，如果重复则重试，最多尝试 10 次
+        let botName = '';
+        let attempts = 0;
+        do {
+            const randomNum = Math.floor(Math.random() * 1000); // 范围扩大到 0-999
+            botName = `Robot ${randomNum}`;
+            attempts++;
+        } while (room.players.some(p => p.name === botName) && attempts < 10);
+
+        // 如果重试 10 次还重复，强制加时间戳后缀
+        if (room.players.some(p => p.name === botName)) {
+            botName = `Bot_${Date.now().toString().slice(-4)}`;
+        }
         
         room.players.push({ 
             id: botId, 

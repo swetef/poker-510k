@@ -53,7 +53,7 @@ const CardRules = {
             case 'TRIPLE': return `三张 ${pt}`;
             case 'LIANDUI': return `${analysisResult.len/2}连对 (${pt}起)`;
             case 'AIRPLANE': return `飞机 (${pt}起)`;
-            case '510K_MIXED': return '杂色 510K'; // [新增]
+            case '510K_MIXED': return '杂色 510K'; 
             case '510K_PURE': 
                 const suitNames = ['黑桃', '红桃', '梅花', '方片'];
                 const suitIndex = 4 - analysisResult.val; 
@@ -163,7 +163,7 @@ const CardRules = {
                     else if (suit === 3) suitVal = 1; // 方
                     return { type: '510K_PURE', val: suitVal, level: 2 }; 
                 } else {
-                    // [修复] 恢复杂色 510K (Level 1)
+                    // 杂色 510K (Level 1)
                     return { type: '510K_MIXED', val: 1, level: 1 };
                 }
             }
@@ -172,7 +172,8 @@ const CardRules = {
         // Level 3: 普通炸弹
         if (uniquePoints.length === 1 && len >= 4) {
             if (len === deckCount * 4) {
-                 return { type: 'BOMB_MAX', val: points[0], level: 5 };
+                 // [修复] 补全 len 字段
+                 return { type: 'BOMB_MAX', val: points[0], len: len, level: 5 };
             }
             return { type: 'BOMB_STD', val: points[0], len: len, level: 3 };
         }
@@ -216,8 +217,7 @@ const CardRules = {
                 return newHand.val > lastHand.val;
             }
             
-            // [新增] 杂色510K 互管逻辑 (通常杂色不分大小，或者不能互管)
-            // 这里设定为：不能互管 (返回false)
+            // 杂色510K 不能互管
             if (newHand.type === '510K_MIXED') return false;
 
             if (newHand.type === 'BOMB_MAX') return newHand.val > lastHand.val;
