@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Sparkles, Award } from 'lucide-react';
-// [修改] 彻底移除 styles.js 引用
 import css from './LobbyScreen.module.css'; 
 import { useGame } from '../context/GameContext.jsx';
 import { RoomSettingsForm } from '../components/game/RoomSettingsForm.jsx';
@@ -15,7 +14,9 @@ export const LobbyScreen = () => {
         handleKickPlayer
     } = useGame();
     
-    const amIHost = players.find(p => p.id === mySocketId)?.isHost;
+    // [修复] 统一获取当前玩家是否为房主，并赋予默认值 false 防止 undefined 导致 UI 闪烁
+    const amIHost = players.find(p => p.id === mySocketId)?.isHost || false;
+    
     const isTeamMode = roomConfig.isTeamMode && roomConfig.maxPlayers % 2 === 0;
     const [showSettings, setShowSettings] = useState(false);
     
@@ -54,7 +55,6 @@ export const LobbyScreen = () => {
     );
 
     return (
-    // [修改] 使用 css.lobbyContainer
     <div className={css.lobbyContainer}>
       {showSettings && renderSettingsModal()}
 
@@ -231,8 +231,9 @@ export const LobbyScreen = () => {
                 ))}
             </div>
 
-            <div className={`${css.lobbyFooter} mobile-lobby-footer`}>
-                {players.find(p=>p.id===mySocketId)?.isHost ? (
+            {/* [修复] 使用 amIHost 变量判断，并增加 flexShrink: 0 防止被玩家列表挤压到不可见 */}
+            <div className={`${css.lobbyFooter} mobile-lobby-footer`} style={{flexShrink: 0}}>
+                {amIHost ? (
                     <div style={{display:'flex', gap: 15, justifyContent: 'center'}}>
                         <button 
                             className={css.primaryButton}

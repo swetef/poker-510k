@@ -48,6 +48,12 @@ export const useSocketConnection = () => {
             console.log("Socket 连接成功!");
             setIsConnected(true);
             
+            // [核心修复] 连接成功时，立即获取 socket.id 作为我的 ID
+            // 这样不需要服务器专门发送 'your_id' 事件也能识别身份
+            if (newSocket.id) {
+                setMySocketId(newSocket.id);
+            }
+            
             pingInterval = setInterval(() => {
                 const start = Date.now();
                 // 确保 socket 有效
@@ -70,6 +76,7 @@ export const useSocketConnection = () => {
             console.warn("连接错误 (详细):", err.message);
         };
 
+        // 保留这个监听作为兼容，但主要依赖 onConnect 中的赋值
         const onYourId = (id) => {
             setMySocketId(id);
         };
