@@ -40,7 +40,6 @@ if (PERMANENT_ROOMS) {
 io.on('connection', (socket) => {
     console.log(`User Connected: ${socket.id}`);
 
-    // [关键修复] 注册 510K 游戏的逻辑处理器
     // 将 socket 和 rooms 传递给分模块的 handler 处理
     registerRoomHandlers(io, socket, rooms);
     registerGameHandlers(io, socket, rooms);
