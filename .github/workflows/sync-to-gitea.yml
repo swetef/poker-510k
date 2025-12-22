@@ -1,0 +1,28 @@
+name: Mirror Sync to Gitea
+
+# 触发条件：当有代码 push 或者创建/删除分支时触发
+on:
+  push:
+    branches: [ "**" ]  # 所有分支
+  delete:               # 删除分支时也触发
+
+jobs:
+  mirror_job:
+    runs-on: ubuntu-latest
+    name: Mirroring to Gitea
+    steps:
+      # 1. 检出代码 (必须获取完整历史，否则无法镜像)
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      # 2. 推送到 Gitea
+      - name: Mirror to Gitea
+        uses: yesolutions/mirror-action@master
+        with:
+          # 你的 Gitea 仓库完整地址 (我根据你截图填好了)
+          REMOTE: 'https://git.web.677476.xyz/bloodstream/510k.git'
+          # 使用我们在第二步设置的 Secret
+          GIT_USERNAME: ${{ secrets.GITEA_USERNAME }}
+          GIT_PASSWORD: ${{ secrets.GITEA_TOKEN }}
