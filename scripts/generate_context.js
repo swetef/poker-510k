@@ -59,9 +59,8 @@ function mergeFiles() {
     let fileCount = 0;
 
     SEARCH_DIRS.forEach(dir => {
-        // 这里的 .. 代表回到根目录，然后进入 client 或 server
         const rootPath = path.join(__dirname, '..', dir); 
-        
+
         if (!fs.existsSync(rootPath)) {
             console.warn(`Warning: Directory ${dir} not found at ${rootPath}`);
             return;
