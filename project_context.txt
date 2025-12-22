@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/22 16:04:17
+Project Context Generated at 2025/12/22 17:38:33
 
 
 ================================================================================
@@ -7734,7 +7734,7 @@ class GameManager {
 
     playCards(playerId, cards) {
         if (!this.gameState) return { success: false, error: '游戏未开始' };
-
+        
         const currPlayer = this.players[this.gameState.currentTurnIndex];
         if (currPlayer.id !== playerId) return { success: false, error: '还没轮到你' };
 
@@ -7752,7 +7752,6 @@ class GameManager {
 
         this._removeCardsFromHand(playerId, cards);
         this.collectedCards.push(...cards);
-
         this.gameState.pendingTablePoints += CardRules.calculateTotalScore(cards);
 
         const analysis = CardRules.analyze(cards, this.config.deckCount);
@@ -7771,12 +7770,13 @@ class GameManager {
                 this.gameState.finishedRank.push(playerId);
             }
         }
-        
+
         const cardDesc = CardRules.getAnalysisText(analysis);
         let logText = `${currPlayer.name}: ${cardDesc}`;
         if (analysis.type === 'BOMB_KING') logText += ` (+${this.config.deckCount * 100}分)`;
         if (isFinished) logText += ` (牌出完了!)`;
 
+        // --- 结束判断逻辑修改 ---
         const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
         let shouldEndGame = false;
 
@@ -7797,32 +7797,41 @@ class GameManager {
         }
 
         if (shouldEndGame) {
-            this.gameState.roundPoints[playerId] = (this.gameState.roundPoints[playerId] || 0) + this.gameState.pendingTablePoints;
-            this.gameState.pendingTablePoints = 0;
+            // [修复] 增加 "最后一手" (Last Shot) 逻辑
+            const activeCount = this._getActivePlayerCount();
 
-            this._clearTimer();
-            const roundResult = this._concludeRound();
-            return { 
-                success: true, 
-                isRoundOver: true,
-                roundResult,
-                cardsPlayed: cards,
-                pendingPoints: 0,
-                logText: logText + " - 游戏结束"
-            };
+            // 情况1: 场上已经没有其他人有牌了 (真正结束)
+            if (activeCount === 0) {
+                this.gameState.roundPoints[playerId] = (this.gameState.roundPoints[playerId] || 0) + this.gameState.pendingTablePoints;
+                this.gameState.pendingTablePoints = 0;
+                this._clearTimer();
+                const roundResult = this._concludeRound();
+                return { success: true, isRoundOver: true, roundResult, cardsPlayed: cards, pendingPoints: 0, logText: logText + " - 游戏结束" };
+            }
+
+            // 情况2: 处于 Last Shot Phase，且有人打出了牌 (有人接了最后一手) -> 立即结束
+            // 规则: "当第一个人要了... 才结束"
+            if (this.gameState.lastShotPhase) {
+                this.gameState.roundPoints[playerId] = (this.gameState.roundPoints[playerId] || 0) + this.gameState.pendingTablePoints;
+                this.gameState.pendingTablePoints = 0;
+                this._clearTimer();
+                const roundResult = this._concludeRound();
+                return { success: true, isRoundOver: true, roundResult, cardsPlayed: cards, pendingPoints: 0, logText: logText + " - 最后一手结束" };
+            }
+
+            // 情况3: 首次触发结束条件，进入 Last Shot Phase (给其他人一次机会)
+            this.gameState.lastShotPhase = true;
+            this._advanceTurn();
+            this._resetTimer();
+            this.botManager.checkAndRun();
+            return { success: true, isRoundOver: false, cardsPlayed: cards, pendingPoints: this.gameState.pendingTablePoints, logText: logText + " (最后一手)" };
         }
 
         this._advanceTurn();
         this._resetTimer();
         this.botManager.checkAndRun();
 
-        return { 
-            success: true, 
-            isRoundOver: false,
-            cardsPlayed: cards,
-            pendingPoints: this.gameState.pendingTablePoints,
-            logText
-        };
+        return { success: true, isRoundOver: false, cardsPlayed: cards, pendingPoints: this.gameState.pendingTablePoints, logText };
     }
 
     passTurn(playerId) {
@@ -7836,13 +7845,14 @@ class GameManager {
         }
 
         this.gameState.consecutivePasses++;
-        this._advanceTurn(); 
+        this._advanceTurn();
 
-        const activeCount = this._getActivePlayerCount(); 
+        const activeCount = this._getActivePlayerCount();
         const winnerId = this.gameState.roundWinnerId;
         const winnerHand = this.gameState.hands[winnerId];
         const winnerIsActive = winnerHand && winnerHand.length > 0;
         
+        // 如果上一轮赢家还有牌，只需 activeCount - 1 人不要即可；否则需要所有人不要
         const passesNeeded = winnerIsActive ? (activeCount - 1) : activeCount;
 
         let turnCleared = false;
@@ -7851,18 +7861,21 @@ class GameManager {
         if (this.gameState.consecutivePasses >= passesNeeded) {
             const wId = this.gameState.roundWinnerId;
             if (wId) {
+                // 结算桌面积分给上一轮赢家
                 this.gameState.roundPoints[wId] = (this.gameState.roundPoints[wId] || 0) + this.gameState.pendingTablePoints;
                 this.gameState.pendingTablePoints = 0;
-                
+
                 if (this.gameState.hands[wId] && this.gameState.hands[wId].length > 0) {
+                     // 赢家还在场，赢家继续出牌
                      const wIdx = this.players.findIndex(p => p.id === wId);
                      this.gameState.currentTurnIndex = wIdx;
                 } else {
-                    // 接风逻辑
+                    // --- 接风逻辑 ---
                     const winnerPlayer = this.players.find(p => p.id === wId);
                     const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
                     
                     if (isTeamMode && winnerPlayer && winnerPlayer.team !== undefined && winnerPlayer.team !== null) {
+                        // 组队模式：找队友接风
                         const wIdx = this.players.findIndex(p => p.id === wId);
                         const pCount = this.players.length;
                         
@@ -7882,10 +7895,12 @@ class GameManager {
                                 break;
                             }
                         }
+                        // 没找到队友（队友也没牌了），下家出牌
                         if (!foundTeammate) {
                              this._advanceTurn(); 
                         }
                     } else {
+                        // 个人模式或无法接风：下家接风
                         const wIdx = this.players.findIndex(p => p.id === wId);
                         let nextActiveIdx = wIdx;
                         let found = false;
@@ -7907,9 +7922,22 @@ class GameManager {
                 }
             }
             
+            // [Check] Last Shot Phase 下，如果一圈没人要 -> 结束
+            turnCleared = true;
+            if (this.gameState.lastShotPhase) {
+                const roundResult = this._concludeRound();
+                // 注意：这里返回的格式需要符合逻辑预期
+                return { 
+                    success: true, 
+                    isRoundOver: true, // 标记回合结束
+                    roundResult, 
+                    turnCleared: true, 
+                    logText: infoMessage + " - 无人接风，结束" 
+                };
+            }
+
             this.gameState.lastPlayedCards = [];
             this.gameState.consecutivePasses = 0;
-            turnCleared = true;
         }
 
         this._resetTimer(); 
@@ -7969,19 +7997,19 @@ class GameManager {
                 this._broadcastUpdate(logText);
 
                 if (result.isRoundOver) {
-                     setTimeout(() => {
-                        this._handleWin(result, currPlayer.id);
-                     }, 3000);
+                      setTimeout(() => {
+                         this._handleWin(result, currPlayer.id);
+                      }, 3000);
                 }
             }
         } else {
             const result = this.passTurn(currPlayer.id);
             if (result.success) {
                 if (result.isRoundOver) {
-                     this._broadcastUpdate(`${currPlayer.name}: 超时过牌`);
-                     setTimeout(() => {
-                        this._handleWin(result, currPlayer.id);
-                     }, 3000);
+                      this._broadcastUpdate(`${currPlayer.name}: 超时过牌`);
+                      setTimeout(() => {
+                         this._handleWin(result, currPlayer.id);
+                      }, 3000);
                 } else {
                     this._broadcastUpdate(`${currPlayer.name}: 超时过牌`);
                 }
@@ -8070,7 +8098,13 @@ class GameManager {
 
         if (this.lastWinnerId === oldId) this.lastWinnerId = newId;
 
-        const player = this.players.find(p => p.id === newId);
+        // [修复] 优先查找新ID，如果找不到则查找旧ID并更新，确保内存数据一致
+        let player = this.players.find(p => p.id === newId);
+        if (!player) {
+            player = this.players.find(p => p.id === oldId);
+            if (player) player.id = newId;
+        }
+
         if (player) {
              player.isAutoPlay = false; 
         }
