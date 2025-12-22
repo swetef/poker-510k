@@ -4,10 +4,7 @@ import css from './TableCenterArea.module.css'; // 新 CSS
 import { MiniCard } from '../BaseUI.jsx';
 import { useGame } from '../../context/GameContext.jsx';
 
-/**
- * [中间区域组件]
- * 负责显示：最后打出的牌、待结算分数、系统消息
- */
+
 export const TableCenterArea = () => {
     const { 
         lastPlayed, lastPlayerName, pendingPoints, 
