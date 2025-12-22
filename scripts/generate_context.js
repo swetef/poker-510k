@@ -9,6 +9,8 @@ const SEARCH_DIRS = ['client', 'server'];
 
 // 输出文件名
 const OUTPUT_FILE = 'project_context.txt';
+// const OUTPUT_FILE = '11.22.txt';
+
 
 // 忽略的文件或文件夹
 const IGNORE_PATTERNS = [
@@ -21,7 +23,7 @@ const IGNORE_PATTERNS = [
     'build',
     'images', 
     'generate_context.js',
-    'public', // (可选) 如果public里只有图标，可以忽略；如果有逻辑代码请保留
+    'public', 
     '.vscode'
 ];
 // 只读取这些后缀的文件
