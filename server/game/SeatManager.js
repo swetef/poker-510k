@@ -2,7 +2,6 @@ const CardRules = require('./CardRules');
 const Deck = require('./Deck');
 
 class SeatManager {
-    // 构造函数接收 isTeamMode 参数
     constructor(io, roomId, players, isTeamMode) {
         this.io = io;
         this.roomId = roomId;
@@ -42,7 +41,6 @@ class SeatManager {
         this.pendingIndices = this.availableCards.map((_, i) => i);
     }
 
-    // [新增] 专门处理玩家重连后的 ID 变更
     reconnectPlayer(oldId, newId) {
         if (this.drawResults[oldId] !== undefined) {
             this.drawResults[newId] = this.drawResults[oldId];
@@ -51,7 +49,6 @@ class SeatManager {
         }
     }
 
-    // 玩家请求抽一张牌
     playerDraw(playerId, cardIndex) {
         if (this.drawResults[playerId] !== undefined) return { success: false, msg: '你已经抽过牌了' };
 
@@ -73,13 +70,11 @@ class SeatManager {
         };
     }
 
-    // 核心：计算最终座次和分组
     finalizeSeats() {
-        // 1. 基础组装与排序
         const results = this.players.map(p => {
             const card = this.drawResults[p.id];
             
-            // [安全保护] 如果玩家数据异常，防止服务器再次崩溃
+            // [安全保护] 如果玩家数据异常，提供默认值防止崩溃
             if (card === undefined) {
                 console.error(`[SeatManager] Critical Error: Player ${p.name} (${p.id}) missing draw card!`);
                 return { ...p, drawCard: 0, sortVal: 0 };
@@ -88,19 +83,15 @@ class SeatManager {
             return {
                 ...p,
                 drawCard: card,
-                // 这里调用 CardRules.getSortValue
                 sortVal: CardRules.getSortValue(card) 
             };
         });
 
-        // 从大到小排 (点数大的在前 -> 1号位)
         results.sort((a, b) => {
             if (b.sortVal !== a.sortVal) return b.sortVal - a.sortVal;
-            // 如果点数实在一样（虽然我们尽量避免了），再比花色
             return CardRules.getSuitSortValue(b.drawCard) - CardRules.getSuitSortValue(a.drawCard);
         });
 
-        // 2. 根据模式决定座位顺序
         let newOrder = [];
 
         if (this.isTeamMode) {

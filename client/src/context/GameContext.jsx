@@ -1,7 +1,6 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useEffect, useRef } from 'react';
 
-// 引入拆分后的 Hooks
-import { useSocketCore } from '../hooks/game/useSocketCore.js';
+import { useSocketConnection } from '../hooks/useSocketConnection.js';
 import { useRoomLogic } from '../hooks/game/useRoomLogic.js';
 import { useGameData } from '../hooks/game/useGameData.js';
 import { useBattleLogic } from '../hooks/game/useBattleLogic.js';
@@ -10,38 +9,54 @@ const GameContext = createContext(null);
 
 export const GameProvider = ({ children }) => {
   // Step A: 基础连接
-  const socketCore = useSocketCore(null, null); 
-  const { socket, isConnected, mySocketId, ping } = socketCore;
+  const { socket, isConnected, mySocketId, ping } = useSocketConnection();
 
-  // Step B: 房间交互 (登录/配置)
+  // Step B: 房间交互
   const roomLogic = useRoomLogic(socket, isConnected);
   const { 
       username, roomId, inputConfig, isLoading, setIsLoading,
       handleRoomAction, handleUpdateConfig
   } = roomLogic;
 
-  // 闭包刷新 Hack
-  useSocketCore(username, roomId); 
+  // 自动重连逻辑
+  const usernameRef = useRef(username);
+  const roomIdRef = useRef(roomId);
 
-  // Step C: 全局游戏数据 (大厅/抽签/状态流转)
+  useEffect(() => { usernameRef.current = username; }, [username]);
+  useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
+
+  useEffect(() => {
+      if (isConnected && socket && roomIdRef.current && usernameRef.current) {
+          console.log(`[Auto-Rejoin] 自动恢复身份: ${usernameRef.current} @ Room ${roomIdRef.current}`);
+          socket.emit('join_room', { 
+              roomId: roomIdRef.current, 
+              username: usernameRef.current 
+          });
+      }
+  }, [isConnected, socket]);
+
+  // Step C: 全局游戏数据
   const gameData = useGameData(socket, setIsLoading);
   const { 
       gameState, players, syncedConfig, 
-      handleStartGame, handleNextRound, // [修复] 获取 handleNextRound
+      handleStartGame, handleNextRound,
       handleAddBot, handleSwitchSeat, handleDrawCard, handleKickPlayer
   } = gameData;
 
-  // Step D: 战斗逻辑 (局内)
-  const battleLogic = useBattleLogic(socket, username, mySocketId, roomId);
-
-  // Step E: 聚合数据
+  // 计算当前生效的配置
   const activeRoomConfig = (gameState === 'LOGIN') ? inputConfig : (syncedConfig || inputConfig);
 
+  // Step D: 战斗逻辑 (局内)
+  // [修改] 将 deckCount 传入，用于本地提示计算
+  const deckCount = activeRoomConfig ? activeRoomConfig.deckCount : 2;
+  const battleLogic = useBattleLogic(socket, username, mySocketId, roomId, deckCount);
+
+  // Step E: 聚合数据
   const wrappedActions = {
       handleRoomAction,
       handleUpdateConfig: (cfg) => handleUpdateConfig(roomId, cfg),
       handleStartGame: () => handleStartGame(roomId),
-      handleNextRound: () => handleNextRound(roomId), // [修复] 包装
+      handleNextRound: () => handleNextRound(roomId),
       handleAddBot: () => handleAddBot(roomId),
       handleSwitchSeat: (i1, i2) => handleSwitchSeat(roomId, i1, i2),
       handleDrawCard: (idx) => handleDrawCard(roomId, idx),

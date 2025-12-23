@@ -28,9 +28,24 @@ const BotLogic = {
             const analysis = CardRules.analyze(sol, deckCount);
             let cost = 0;
             
-            // --- A. 基础分：点数越小越好 ---
-            // val 范围大约 3-17。乘以 1 作为基准。
-            cost += analysis.val;
+            // --- A. [修复] 基础分：优化炸弹与普通牌的排序 ---
+            // 之前的逻辑只加 val，导致长炸弹(7个3)比短炸弹(4个8) Cost低，Bot会先扔大炸弹
+            if (analysis.level > 0) {
+                // 炸弹：Level 权重 > Length 权重 > Value 权重
+                cost += analysis.level * 100000;
+                
+                // 510K 的 level 比较低 (1或2)，会被普通炸弹(level 3)压制，符合逻辑
+                
+                // 普通炸弹 (Level 3) 或 至尊炸弹 (Level 5)
+                if (analysis.type === 'BOMB_STD' || analysis.type === 'BOMB_MAX') {
+                    cost += analysis.len * 1000;
+                }
+                
+                cost += analysis.val;
+            } else {
+                // 普通牌：点数越小越好
+                cost += analysis.val;
+            }
 
             // --- B. 拆炸弹判断 ---
             const isMoveBomb = analysis.level > 0;
@@ -38,14 +53,16 @@ const BotLogic = {
                 // 如果出的不是炸弹，检查是否用了炸弹里的牌
                 const breaksBomb = sol.some(c => bombCardsSet.has(c));
                 if (breaksBomb) {
-                    cost += 2000; // 极大的惩罚：非必要不拆炸弹
+                    cost += 2000000; // [修改] 极大的惩罚：Bot 绝不应拆炸弹，除非是最后没办法
                 }
             }
 
             // --- C. 炸弹压制判断 (避免大材小用) ---
             if (isMoveBomb && !lastIsBomb && lastAnalysis) {
                 // 上家不是炸弹，我用炸弹管 -> 亏，除非这是为了赢
-                cost += 1000; 
+                // 但如果这手牌打完就赢了，则无视 Cost
+                if (hand.length === sol.length) cost = -9999999;
+                else cost += 1000; 
             }
 
             // --- D. 自由出牌 (首出) 偏好 ---
@@ -55,10 +72,13 @@ const BotLogic = {
                 else if (analysis.type === 'LIANDUI') cost -= 150;
                 else if (analysis.type === 'TRIPLE') cost -= 100;
                 else if (analysis.type === 'PAIR') cost -= 50;
-                // 单张 cost 不变 (0)
                 
                 // 炸弹尽量留到最后出，除非它是为了冲刺
-                if (isMoveBomb) cost += 500;
+                if (isMoveBomb) {
+                    // 如果只剩炸弹了，那就赶紧出
+                    if (hand.length === sol.length) cost = -9999999;
+                    else cost += 8000; // [修改] Bot 也不要起手扔炸弹
+                }
             }
 
             return { sol, cost };
@@ -70,80 +90,25 @@ const BotLogic = {
         return scoredSolutions.map(item => item.sol);
     },
 
-    // [智能决策入口] - 保持不变，但因为结构问题需要完整输出
+    // [智能决策入口]
     decideMove: (hand, lastPlayedCards, deckCount) => {
         try {
-            const solutions = BotLogic.findAllSolutions(hand, lastPlayedCards, deckCount);
+            // 如果只剩一手牌，直接梭哈
+            const analysis = CardRules.analyze(hand, deckCount);
+            if (analysis.type !== 'INVALID') {
+                if (!lastPlayedCards || lastPlayedCards.length === 0) return hand;
+                if (CardRules.canPlay(hand, lastPlayedCards, deckCount)) return hand;
+            }
+
+            const solutions = BotLogic.getSortedHints(hand, lastPlayedCards, deckCount);
             if (solutions.length === 0) return null;
 
-            if (!lastPlayedCards || lastPlayedCards.length === 0) {
-                return BotLogic.decideFreePlay(solutions, hand, deckCount);
-            } else {
-                return BotLogic.decideFollowPlay(solutions, hand, lastPlayedCards, deckCount);
-            }
+            // getSortedHints 已经排好序了，直接取第一个最优解
+            // 简单的贪婪策略：取 Cost 最低的
+            return solutions[0];
         } catch (e) {
             console.error("BotLogic decideMove error:", e);
-            return BotLogic.findAllSolutions(hand, lastPlayedCards, deckCount)[0] || null;
-        }
-    },
-
-    // 决策：自由出牌 - 保持不变
-    decideFreePlay: (solutions, hand, deckCount) => {
-        const sortedSolutions = solutions.map(sol => {
-            const analysis = CardRules.analyze(sol, deckCount);
-            let cost = 0;
-
-            if (analysis.type === 'AIRPLANE') cost -= 50;
-            else if (analysis.type === 'LIANDUI') cost -= 30;
-            else if (analysis.type === 'TRIPLE') cost -= 10;
-            else if (analysis.type === 'PAIR') cost -= 5;
-            
-            if (analysis.level > 0) {
-                cost += 100; 
-                if (hand.length === sol.length) cost -= 200; 
-            }
-            cost += analysis.val;
-            return { sol, cost };
-        }).sort((a, b) => a.cost - b.cost);
-
-        return sortedSolutions[0].sol;
-    },
-
-    // 决策：跟牌 - 保持不变
-    decideFollowPlay: (solutions, hand, lastPlayedCards, deckCount) => {
-        const lastAnalysis = CardRules.analyze(lastPlayedCards, deckCount);
-        const lastIsBomb = lastAnalysis.level > 0;
-        const myBombs = BotLogic.findAllBombsInHand(hand, deckCount);
-        const bombCards = new Set();
-        myBombs.forEach(b => b.cards.forEach(c => bombCards.add(c)));
-
-        const validMoves = solutions.map(sol => {
-            const analysis = CardRules.analyze(sol, deckCount);
-            let cost = 0;
-
-            const isMoveBomb = analysis.level > 0;
-            if (!isMoveBomb) {
-                const breaksBomb = sol.some(c => bombCards.has(c));
-                if (breaksBomb) cost += 500; 
-            }
-
-            if (isMoveBomb) {
-                if (!lastIsBomb) {
-                    cost += 200; 
-                    if (hand.length <= 10) cost -= 150;
-                }
-            }
-            cost += analysis.val;
-            return { sol, cost };
-        });
-
-        const reasonableMoves = validMoves.filter(m => m.cost < 400);
-
-        if (reasonableMoves.length > 0) {
-            reasonableMoves.sort((a, b) => a.cost - b.cost);
-            return reasonableMoves[0].sol;
-        } else {
-            return null; 
+            return null;
         }
     },
 
@@ -243,23 +208,47 @@ const BotLogic = {
                 for (let p of uniquePoints) {
                     if (grouped[p].length >= 2) {
                         solutions.push(grouped[p].slice(0, 2));
-                        break; 
+                        // [优化] 不再 break，允许找大一点的对子，虽然通常出最小的，但留给Cost函数决定
                     }
                 }
                 // 3. 三张
                 for (let p of uniquePoints) {
                     if (grouped[p].length >= 3) {
                         solutions.push(grouped[p].slice(0, 3));
-                        break;
                     }
                 }
-                // [新增] 连对和飞机检测 (简单版: 只要有就加进方案)
-                // 这里为了性能暂不穷举所有连对，仅依赖 getSortedHints 的后续排序优化
                 
-                // 4. 炸弹
+                // [优化] 4. 连对 (查找所有可能的2连对)
+                for(let i=0; i<uniquePoints.length-1; i++) {
+                    const p1 = uniquePoints[i];
+                    const p2 = uniquePoints[i+1];
+                    // 必须连续，且不能超过A(14)，因为2不能连
+                    if (p2 === p1 + 1 && p2 < 15 && grouped[p1].length >= 2 && grouped[p2].length >= 2) {
+                         solutions.push([...grouped[p1].slice(0,2), ...grouped[p2].slice(0,2)]);
+                         // [重要提升] 不再 break，这样 Bot 能发现中间段的连对
+                    }
+                }
+
+                // [优化] 5. 飞机 (查找所有可能的2连三张)
+                for(let i=0; i<uniquePoints.length-1; i++) {
+                    const p1 = uniquePoints[i];
+                    const p2 = uniquePoints[i+1];
+                    if (p2 === p1 + 1 && p2 < 15 && grouped[p1].length >= 3 && grouped[p2].length >= 3) {
+                         solutions.push([...grouped[p1].slice(0,3), ...grouped[p2].slice(0,3)]);
+                    }
+                }
+
+                // 6. 炸弹 (调用核心逻辑)
                 const bombs = findAllBombs(-1, -1);
                 bombs.forEach(b => solutions.push(b.cards));
                 
+                // 兜底：如果没找到啥牌，就把前几个单张都加进去备选
+                if (solutions.length < 3) {
+                    for(let i=0; i<Math.min(uniquePoints.length, 3); i++) {
+                        solutions.push([grouped[uniquePoints[i]][0]]);
+                    }
+                }
+
                 return solutions;
             }
 
@@ -277,15 +266,16 @@ const BotLogic = {
                 }
             }
             
-            // [新增] 连对压制 (简化逻辑)
+            // 连对压制
             if (lastState.type === 'LIANDUI') {
                 const len = lastState.len;
-                const startVal = lastState.val + 1; // 必须更大
-                // 简单的连对检测
+                const pairCount = len / 2;
+                const startVal = lastState.val + 1; 
+                
                 for(let v = startVal; v <= 14; v++) { // A(14)封顶
                     let hasSequence = true;
                     let tempSol = [];
-                    for(let k=0; k<len/2; k++) {
+                    for(let k=0; k<pairCount; k++) {
                         const checkP = v + k;
                         if (!grouped[checkP] || grouped[checkP].length < 2) {
                             hasSequence = false;
@@ -295,6 +285,27 @@ const BotLogic = {
                     }
                     if (hasSequence) solutions.push(tempSol);
                 }
+            }
+
+            // 飞机压制
+            if (lastState.type === 'AIRPLANE') {
+                 const len = lastState.len;
+                 const tripleCount = len / 3;
+                 const startVal = lastState.val + 1;
+                 
+                 for(let v = startVal; v <= 14; v++) {
+                    let hasSequence = true;
+                    let tempSol = [];
+                    for(let k=0; k<tripleCount; k++) {
+                        const checkP = v + k;
+                        if (!grouped[checkP] || grouped[checkP].length < 3) {
+                            hasSequence = false;
+                            break;
+                        }
+                        tempSol.push(...grouped[checkP].slice(0, 3));
+                    }
+                    if (hasSequence) solutions.push(tempSol);
+                 }
             }
 
             // 策略 C: 炸弹压制

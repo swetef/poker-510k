@@ -1,10 +1,10 @@
 .modalOverlay {
     position: fixed; 
-    top:0; left:0; right:0; bottom:0; 
+    top: 0; left: 0; right: 0; bottom: 0; 
     background: rgba(0,0,0,0.85); 
-    display:flex; 
-    justify-content:center; 
-    align-items:center; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
     z-index: 99; 
     backdrop-filter: blur(8px);
     pointer-events: auto;
@@ -17,8 +17,11 @@
     box-shadow: 0 30px 80px rgba(0,0,0,0.6); 
     animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     width: 95%;        
-    max-width: 650px;       
-    max-height: 85vh;   
+    max-width: 650px;
+    
+    /* [修改] 限制最大高度，留出边距，适配横屏 */
+    max-height: 92dvh;
+    
     display: flex;
     flex-direction: column;
     overflow: hidden; /* 防止圆角被子元素破坏 */
@@ -31,6 +34,8 @@
 
 /* 顶部标题 */
 .headerSection {
+    /* [修改] 防止被压缩 */
+    flex-shrink: 0;
     padding: 20px 20px 10px 20px;
     display: flex;
     align-items: center;
@@ -38,6 +43,13 @@
     gap: 10px;
     background: #f8f9fa;
     border-bottom: 1px solid #eee;
+}
+
+/* 横屏下稍微减小 Header 的 padding，腾出空间 */
+@media (max-height: 500px) {
+    .headerSection {
+        padding: 10px 20px 5px 20px;
+    }
 }
 
 .title {
@@ -49,6 +61,8 @@
 
 /* Tab 切换栏 */
 .tabContainer {
+    /* [修改] 防止被压缩 */
+    flex-shrink: 0;
     display: flex;
     background: #eee;
     padding: 4px;
@@ -82,11 +96,16 @@
 
 /* 内容区域 */
 .contentBody {
+    /* [修改] 核心：占据剩余空间，且允许滚动 */
     flex: 1;
-    overflow-y: auto; /* 允许内部滚动 */
+    overflow-y: auto; 
+    min-height: 0; /* Flexbox 滚动修复 trick */
     padding: 10px 0;
     background: #fff;
-    min-height: 200px;
+    
+    /* 优化移动端滚动体验 */
+    -webkit-overflow-scrolling: touch; 
+    overscroll-behavior: contain;
 }
 
 .tabContent {
@@ -145,15 +164,23 @@
     text-align: left;
     line-height: 1.5;
     white-space: pre-wrap;
-    max-height: 100px;
-    overflow-y: auto;
+    /* [修改] 移除 max-height，让其在 contentBody 里自然滚动，或者保留限制但允许内部滚 */
+    /* 这里建议移除限制，让用户在 contentBody 这个大容器里滑比较顺手 */
+    max-height: none; 
 }
 
 /* 底部按钮区 */
 .footerSection {
+    /* [修改] 强制不收缩，并增加底部安全距离 */
+    flex-shrink: 0;
     padding: 15px 20px 20px 20px;
+    
+    /* 适配 iPhone 横条 */
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+    
     border-top: 1px solid #eee;
     background: white;
+    z-index: 10;
 }
 
 .primaryButton {

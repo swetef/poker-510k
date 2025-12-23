@@ -12,7 +12,7 @@ module.exports = (io, socket, rooms) => {
         io.to(roomId).emit('game_state_update', publicState);
     };
 
-    // 辅助函数：开始游戏逻辑 (这是核心逻辑，需要复用)
+    // 辅助函数：开始游戏逻辑
     const handleGameStart = (roomId, isNextRound) => {
         const room = rooms[roomId];
         if (!room) return;
@@ -67,7 +67,6 @@ module.exports = (io, socket, rooms) => {
         const bots = room.players.filter(p => p.isBot);
         bots.forEach((bot, i) => {
             setTimeout(() => {
-                // [关键修复] 在定时器回调中重新检查房间是否依然存在
                 if (!rooms[roomId]) return; 
 
                 if(room.seatManager) {
@@ -83,7 +82,7 @@ module.exports = (io, socket, rooms) => {
                             });
                             if (res.isFinished) {
                                 setTimeout(() => {
-                                    if (!rooms[roomId]) return; // 双重检查
+                                    if (!rooms[roomId]) return;
                                     const { newPlayers } = room.seatManager.finalizeSeats();
                                     room.players = newPlayers;
                                     room.seatManager = null;
@@ -116,7 +115,7 @@ module.exports = (io, socket, rooms) => {
 
         if (result.isFinished) {
             setTimeout(() => {
-                if (!rooms[roomId]) return; // 安全检查
+                if (!rooms[roomId]) return; 
 
                 const { newPlayers, drawDetails } = room.seatManager.finalizeSeats();
                 room.players = newPlayers;
@@ -148,36 +147,26 @@ module.exports = (io, socket, rooms) => {
         io.to(socket.id).emit('hand_update', currentHand);
 
         if (result.isRoundOver) { 
-            // [修复] 增加 3秒 延迟后再发送结算信息
-            const rInfo = result.roundResult;
-            
-            // 先广播最后一步出牌 (如果 Game Over 前有出牌动作)
+            // 1. 如果有出牌动作（不是直接结束），先广播出牌动画
             if (result.cardsPlayed && result.cardsPlayed.length > 0) {
                  broadcastGameState(roomId, room, result.logText);
             }
 
+            // 2. 延迟 3秒 后触发结算
             setTimeout(() => {
                 // 双重检查防止房间被销毁
                 if (!rooms[roomId]) return;
                 
-                if (rInfo.isGrandOver) {
-                    io.to(roomId).emit('grand_game_over', { 
-                        grandWinner: rInfo.roundWinnerName, 
-                        grandScores: rInfo.grandScores,
-                        matchHistory: rInfo.matchHistory,
-                        detail: rInfo.detail
-                    });
+                // [核心修复] 
+                // 不再手动 emit round_over，而是调用 GameManager._handleWin 
+                // 这样能确保与 Bot 获胜时的逻辑完全一致，包含 scoreBreakdown 和 matchHistory
+                room.gameManager._handleWin(result, socket.id);
+
+                // 如果是大局结束，清理 GameManager 引用
+                if (result.roundResult.isGrandOver) {
                     room.gameManager = null; 
-                } else {
-                    io.to(roomId).emit('round_over', {
-                        roundWinner: rInfo.roundWinnerName,
-                        pointsEarned: rInfo.pointsEarned,
-                        detail: rInfo.detail,
-                        grandScores: rInfo.grandScores,
-                        matchHistory: rInfo.matchHistory
-                    });
                 }
-            }, 3000); // 3000ms 延迟
+            }, 3000); 
         } else {
             broadcastGameState(roomId, room, result.logText);
         }
@@ -193,18 +182,18 @@ module.exports = (io, socket, rooms) => {
 
         // 如果过牌导致游戏结束 (如最后一手都没人要)
         if (result.isRoundOver) {
-            const rInfo = result.roundResult;
             broadcastGameState(roomId, room, result.logText);
             
             setTimeout(() => {
                 if (!rooms[roomId]) return;
-                io.to(roomId).emit('round_over', {
-                    roundWinner: rInfo.roundWinnerName,
-                    pointsEarned: rInfo.pointsEarned,
-                    detail: rInfo.detail,
-                    grandScores: rInfo.grandScores,
-                    matchHistory: rInfo.matchHistory
-                });
+                
+                // [核心修复] 同样调用 _handleWin 统一结算逻辑
+                room.gameManager._handleWin(result, socket.id);
+                
+                // 这里的 result.roundResult 依然包含 isGrandOver 等信息
+                if (result.roundResult && result.roundResult.isGrandOver) {
+                    room.gameManager = null;
+                }
             }, 3000);
         } else {
             broadcastGameState(roomId, room, result.logText || "PASS");

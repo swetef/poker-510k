@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export const useRoomLogic = (socket, isConnected) => {
     // 基础表单状态
-    const [username, setUsername] = useState('');
-    const [roomId, setRoomId] = useState('');
+    // [修改] 初始值优先从 localStorage 读取，防止刷新丢失
+    const [username, setUsername] = useState(localStorage.getItem('poker_username') || '');
+    const [roomId, setRoomId] = useState(localStorage.getItem('poker_roomid') || '');
+    
     const [isCreatorMode, setIsCreatorMode] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     
@@ -13,12 +15,26 @@ export const useRoomLogic = (socket, isConnected) => {
         maxPlayers: 4,         
         targetScore: 1000,     
         turnTimeout: 60000,
-        enableRankPenalty: true, // [修改] 默认开启排名赏罚
+        enableRankPenalty: true, 
         rankPenaltyScores: [30, 15],
         showCardCountMode: 1, 
         isTeamMode: false,
         shuffleStrategy: 'CLASSIC'
     });
+
+    // [新增] 监听 username 变化并自动保存到 localStorage
+    useEffect(() => {
+        if (username) {
+            localStorage.setItem('poker_username', username);
+        }
+    }, [username]);
+
+    // [新增] 监听 roomId 变化并自动保存到 localStorage
+    useEffect(() => {
+        if (roomId) {
+            localStorage.setItem('poker_roomid', roomId);
+        }
+    }, [roomId]);
 
     // 动作：创建或加入房间
     const handleRoomAction = () => {

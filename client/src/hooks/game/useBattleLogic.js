@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { sortHand } from '../../utils/cardLogic.js';
 import SoundManager from '../../utils/SoundManager.js';
+import SmartHint from '../../utils/smartHint.js'; // 引入本地智能提示
 
-export const useBattleLogic = (socket, username, mySocketId, roomId) => {
+export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount = 2) => {
     // --- 局内状态 ---
     const [myHand, setMyHand] = useState([]);       
     const [selectedCards, setSelectedCards] = useState([]); 
@@ -29,8 +30,7 @@ export const useBattleLogic = (socket, username, mySocketId, roomId) => {
     // 提示功能状态
     const [availableHints, setAvailableHints] = useState([]); 
     const [hintIndex, setHintIndex] = useState(0);            
-    const lastHintRef = useRef({ turnId: null, lastPlayed: [] }); 
-
+    
     // [新增] 提交防抖状态
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -60,6 +60,21 @@ export const useBattleLogic = (socket, username, mySocketId, roomId) => {
         return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
     }, []);
 
+    // --- 自动计算提示 (当轮到我出牌时) ---
+    useEffect(() => {
+        if (currentTurnId === mySocketId && myHand.length > 0) {
+            // 本地计算，实时性更高
+            // 注意：lastPlayed 需要是最新的
+            const hints = SmartHint.getSortedHints(myHand, lastPlayed, deckCount);
+            setAvailableHints(hints);
+            setHintIndex(0);
+        } else {
+            setAvailableHints([]);
+            setHintIndex(0);
+        }
+    }, [currentTurnId, mySocketId, myHand, lastPlayed, deckCount]);
+
+
     // --- Socket 监听 ---
     useEffect(() => {
         if (!socket) return;
@@ -76,13 +91,11 @@ export const useBattleLogic = (socket, username, mySocketId, roomId) => {
             if (data.grandScores) setPlayerScores(data.grandScores);
             setRoundPoints({});
 
-            setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: '🏁 新一局开始！' }]); 
+            setGameLogs([{ time: new Date().toLocaleTimeString(), text: '🏁 新一局开始！' }]); 
             setTurnRemaining(60);
             setPlayersInfo({});
             if (data.handCounts) setHandCounts(data.handCounts);
             
-            setAvailableHints([]);
-            setHintIndex(0);
             backupHandRef.current = []; 
         };
 
@@ -91,44 +104,23 @@ export const useBattleLogic = (socket, username, mySocketId, roomId) => {
             
             if (data.turnRemaining !== undefined) setTurnRemaining(data.turnRemaining);
 
-            // 音效逻辑：别人出牌时播放
             if (data.lastPlayed && data.lastPlayed.length > 0) {
                 if (data.lastPlayerName !== username) {
                     SoundManager.play('play'); 
                 }
             }
-            // 轮到自己时播放提示音
             if (data.currentTurnId === mySocketId) {
                 SoundManager.play('alert');
             }
 
-            // [新增] 收到新的状态更新（说明出牌成功或别人出牌了），解除锁定
-            // 如果 lastPlayerName 是我，说明我的出牌被确认了
             if (data.lastPlayerName === username) {
                  setIsSubmitting(false); 
             }
 
-            // 提示缓存失效检测
-            if (data.lastPlayed) {
-                const newPlayedStr = JSON.stringify(data.lastPlayed);
-                const oldPlayedStr = JSON.stringify(lastHintRef.current.lastPlayed);
-                if (newPlayedStr !== oldPlayedStr) {
-                    setAvailableHints([]);
-                    setHintIndex(0);
-                }
-            } else if (data.lastPlayed === null || (Array.isArray(data.lastPlayed) && data.lastPlayed.length === 0)) {
-                if (lastHintRef.current.lastPlayed.length > 0) {
-                    setAvailableHints([]);
-                    setHintIndex(0);
-                }
-            }
-
-            // 更新状态
             if (data.lastPlayed) setLastPlayed(sortHand(data.lastPlayed, sortModeRef.current));
             setLastPlayerName(data.lastPlayerName || '');
             
             if (data.infoText) {
-                // [新增] 检测“不要”并播放音效
                 if (data.infoText.includes('不要')) {
                     SoundManager.play('pass');
                 }
@@ -150,18 +142,15 @@ export const useBattleLogic = (socket, username, mySocketId, roomId) => {
         const onHandUpdate = (newHand) => {
             setMyHand(sortHand(newHand, sortModeRef.current)); 
             setSelectedCards([]);
-            setAvailableHints([]);
-            setHintIndex(0);
             backupHandRef.current = [];
         };
 
         const onPlayError = (msg) => { 
-            setIsSubmitting(false); // [新增] 出错解除锁定
+            setIsSubmitting(false); 
             setInfoMessage(msg); 
             setTimeout(()=>setInfoMessage(''), 2000); 
             SoundManager.play('lose'); 
             
-            // 乐观更新失败，回滚
             if (backupHandRef.current.length > 0) {
                 setMyHand(backupHandRef.current);
                 backupHandRef.current = [];
@@ -185,28 +174,12 @@ export const useBattleLogic = (socket, username, mySocketId, roomId) => {
              }, 1000);
         };
 
-        const onHintResponse = (hints) => {
-            if (hints && hints.length > 0) {
-                setAvailableHints(hints);
-                setHintIndex(0);
-                setSelectedCards(hints[0]);
-                lastHintRef.current = {
-                    turnId: mySocketId, 
-                    lastPlayed: [...lastPlayed] 
-                };
-            } else {
-                setInfoMessage('没有打得过的牌');
-                setTimeout(()=>setInfoMessage(''), 1000);
-            }
-        };
-
         socket.on('game_started', onGameStarted);
         socket.on('game_state_update', onGameStateUpdate);
         socket.on('hand_update', onHandUpdate);
         socket.on('play_error', onPlayError);
         socket.on('round_over', onRoundOver);
         socket.on('grand_game_over', onGrandGameOver);
-        socket.on('hint_response', onHintResponse);
 
         return () => {
             socket.off('game_started', onGameStarted);
@@ -215,13 +188,11 @@ export const useBattleLogic = (socket, username, mySocketId, roomId) => {
             socket.off('play_error', onPlayError);
             socket.off('round_over', onRoundOver);
             socket.off('grand_game_over', onGrandGameOver);
-            socket.off('hint_response', onHintResponse);
         };
-    }, [socket, username, mySocketId, lastPlayed]); 
+    }, [socket, username, mySocketId]); 
 
     // --- 交互 Actions ---
 
-    // [修改] 排序模式切换逻辑：点数 -> 理牌(提) -> 理牌(合) -> 点数
     const toggleSort = () => setSortMode(prev => {
         if (prev === 'POINT') return 'ARRANGE';
         if (prev === 'ARRANGE') return 'ARRANGE_MERGED';
@@ -230,8 +201,13 @@ export const useBattleLogic = (socket, username, mySocketId, roomId) => {
     
     const handleToggleAutoPlay = (roomId) => socket.emit('toggle_auto_play', { roomId });
     const handlePass = (roomId) => {
+        if (isSubmitting) return; 
+        setIsSubmitting(true);    
+
         socket.emit('pass_turn', { roomId });
         setSelectedCards([]);
+
+        setTimeout(() => setIsSubmitting(false), 500); 
     };
     
     const updateSelection = (cardVal, forceSelect = null) => {
@@ -258,19 +234,17 @@ export const useBattleLogic = (socket, username, mySocketId, roomId) => {
     };
 
     const handlePlayCards = (roomId) => {
-        if (isSubmitting) return; // [新增] 防抖拦截
+        if (isSubmitting) return; 
         if (selectedCards.length === 0) return alert("请先选牌");
         
-        setIsSubmitting(true); // [新增] 锁定状态
+        setIsSubmitting(true); 
         
         const cardsToPlay = [...selectedCards];
         
-        // 乐观更新：先扣手牌
         backupHandRef.current = [...myHand];
         const nextHand = myHand.filter(c => !cardsToPlay.includes(c));
         setMyHand(nextHand);
         
-        // 更新本地展示的“最后一手”
         setLastPlayed(sortHand(cardsToPlay, sortModeRef.current));
         setLastPlayerName(username); 
         setSelectedCards([]); 
@@ -278,23 +252,22 @@ export const useBattleLogic = (socket, username, mySocketId, roomId) => {
         SoundManager.play('play');
         socket.emit('play_cards', { roomId, cards: cardsToPlay });
 
-        // [新增] 安全兜底：3秒后自动解锁，防止服务器无响应导致卡死
         setTimeout(() => setIsSubmitting(false), 3000);
     };
 
+    // [修改] 提示按钮点击逻辑：循环切换候选牌型
     const handleRequestHint = (roomId) => {
-        const isCacheValid = 
-            availableHints.length > 0 && 
-            currentTurnId === mySocketId &&
-            JSON.stringify(lastPlayed) === JSON.stringify(lastHintRef.current.lastPlayed);
-
-        if (isCacheValid) {
-            const nextIndex = (hintIndex + 1) % availableHints.length;
-            setHintIndex(nextIndex);
-            setSelectedCards(availableHints[nextIndex]);
+        if (availableHints.length > 0) {
+            // 当前选中的提示索引
+            const targetHint = availableHints[hintIndex]; 
+            setSelectedCards(targetHint);
+            
+            // 移动指针到下一个，为下次点击做准备
+            setHintIndex((hintIndex + 1) % availableHints.length);
         } else {
-            setAvailableHints([]);
-            socket.emit('request_hint', { roomId });
+            setInfoMessage('没有打得过的牌');
+            setTimeout(()=>setInfoMessage(''), 1000);
+            SoundManager.play('pass'); 
         }
     };
 
@@ -305,7 +278,7 @@ export const useBattleLogic = (socket, username, mySocketId, roomId) => {
         roundResult, grandResult, playerScores, roundPoints,
         playersInfo, finishedRank, pendingPoints, gameLogs,
         sortMode, turnRemaining, handCounts,
-        isSubmitting, // [新增] 导出防抖状态
+        isSubmitting, 
 
         // Actions
         toggleSort, 

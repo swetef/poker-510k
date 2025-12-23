@@ -12,6 +12,7 @@ export const getSortValue = (cardVal) => {
 };
 
 // 花色排序权重
+// [保留] 虽然不提供花色排序模式，但理牌(arrangeHand)时的同分排序仍需依赖此函数
 export const getSuitSortValue = (cardVal) => {
     if (cardVal >= 52) return cardVal * 100;
     const suit = Math.floor(cardVal / 13) % 4; 
@@ -128,9 +129,7 @@ export const arrangeHand = (cards, extractScore = true) => {
 
 // 手牌排序入口
 export const sortHand = (cards, mode = 'POINT') => {
-    if (mode === 'SUIT') {
-        return [...cards].sort((a, b) => getSuitSortValue(b) - getSuitSortValue(a));
-    }
+    // [修改] 移除了 mode === 'SUIT' 的分支逻辑
     if (mode === 'ARRANGE') {
         return arrangeHand(cards, true);
     }
