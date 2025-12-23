@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/23 14:57:09
+Project Context Generated at 2025/12/23 15:43:15
 
 
 ================================================================================
@@ -596,7 +596,7 @@ FILE PATH: client\src\components\game\GameActionBar.module.css
 FILE PATH: client\src\components\game\GameHeader.jsx
 ================================================================================
 import React, { useState } from 'react';
-import { Zap, Minimize, Maximize, Layers, Shield, ChevronDown, ChevronUp, Wifi, WifiOff } from 'lucide-react';
+import { Zap, Minimize, Maximize, Layers, Shield, ChevronDown, ChevronUp, Wifi, WifiOff, LogOut } from 'lucide-react';
 import css from './GameHeader.module.css'; // 新 CSS
 import { useGame } from '../../context/GameContext.jsx';
 
@@ -654,7 +654,7 @@ const TeamScoreBoard = () => {
  * [Header组件]
  */
 export const GameHeader = () => {
-    const { roomId, playersInfo, mySocketId, toggleSort, sortMode, handleToggleAutoPlay, ping, isConnected } = useGame();
+    const { roomId, playersInfo, mySocketId, toggleSort, sortMode, handleToggleAutoPlay, ping, isConnected, handleLeaveRoom } = useGame();
     const [isFullScreen, setIsFullScreen] = useState(false);
     
     const myInfo = playersInfo[mySocketId] || {};
@@ -690,6 +690,16 @@ export const GameHeader = () => {
     return (
         <div className={css.header}>
             <div className={css.roomBadgeContainer}>
+                {/* [新增] 退出按钮 */}
+                <button 
+                    className={css.iconBtn} 
+                    onClick={handleLeaveRoom}
+                    style={{padding: '4px 8px', border:'none', background:'transparent'}}
+                    title="退出房间"
+                >
+                    <LogOut size={16} />
+                </button>
+
                 <div className={css.roomBadge}>Room {roomId}</div>
                 
                 <div className={css.pingBadge} style={{ color: getPingColor(ping) }}>
@@ -2841,27 +2851,6 @@ export const GameProvider = ({ children }) => {
       handleRoomAction, handleUpdateConfig
   } = roomLogic;
 
-  // 自动重连逻辑
-  const usernameRef = useRef(username);
-  const roomIdRef = useRef(roomId);
-
-  useEffect(() => { usernameRef.current = username; }, [username]);
-  useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
-
-  useEffect(() => {
-      if (isConnected && socket && roomIdRef.current && usernameRef.current) {
-          console.log(`[Auto-Rejoin] 自动恢复身份: ${usernameRef.current} @ Room ${roomIdRef.current}`);
-          
-          // [新增] 自动重连时，让 UI 进入加载状态，提升体验
-          if (setIsLoading) setIsLoading(true);
-
-          socket.emit('join_room', { 
-              roomId: roomIdRef.current, 
-              username: usernameRef.current 
-          });
-      }
-  }, [isConnected, socket]);
-
   // Step C: 全局游戏数据
   const gameData = useGameData(socket, setIsLoading);
   const { 
@@ -2874,7 +2863,6 @@ export const GameProvider = ({ children }) => {
   const activeRoomConfig = (gameState === 'LOGIN') ? inputConfig : (syncedConfig || inputConfig);
 
   // Step D: 战斗逻辑 (局内)
-  // [修改] 将 deckCount 传入，用于本地提示计算
   const deckCount = activeRoomConfig ? activeRoomConfig.deckCount : 2;
   const battleLogic = useBattleLogic(socket, username, mySocketId, roomId, deckCount);
 
@@ -2893,6 +2881,46 @@ export const GameProvider = ({ children }) => {
       handlePass: () => battleLogic.handlePass(roomId),
       handlePlayCards: () => battleLogic.handlePlayCards(roomId),
       handleRequestHint: () => battleLogic.handleRequestHint(roomId),
+
+      // [新增] 快速重连 (用于首页一键回房)
+      handleQuickReconnect: () => {
+          const lastRid = localStorage.getItem('poker_roomid');
+          const lastName = localStorage.getItem('poker_username');
+          
+          if (!lastRid || !lastName) {
+              return alert("没有找到最近的房间记录，无法重连");
+          }
+          if (!isConnected) return alert("网络连接未就绪，请稍候");
+
+          // 1. 同步 UI 状态 (让输入框变回原来的值，提升视觉反馈)
+          roomLogic.setRoomId(lastRid);
+          roomLogic.setUsername(lastName);
+          roomLogic.setIsCreatorMode(false);
+          
+          // 2. 发起连接
+          if (setIsLoading) setIsLoading(true);
+          console.log(`[QuickReconnect] 尝试重回房间: ${lastRid} as ${lastName}`);
+          
+          // 确保 socket 是连接状态
+          if (socket && socket.connected) {
+              socket.emit('join_room', { roomId: lastRid, username: lastName });
+          } else {
+              setIsLoading(false);
+              alert("连接断开，请刷新页面重试");
+          }
+      },
+
+      // 离开房间/返回首页
+      handleLeaveRoom: () => {
+          if (window.confirm("确定要退出房间返回首页吗？")) {
+              // [关键修改]
+              // 不再清除 localStorage，这样如果是“手误”退出，
+              // 回到首页后依然可以看到“一键重连”按钮，随时可以回去。
+              // localStorage.removeItem('poker_roomid'); // 已注释
+              
+              window.location.reload();
+          }
+      }
   };
 
   const contextValue = {
@@ -4554,7 +4582,7 @@ FILE PATH: client\src\screens\GameScreen.module.css
 FILE PATH: client\src\screens\LobbyScreen.jsx
 ================================================================================
 import React, { useState } from 'react';
-import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Sparkles, Award } from 'lucide-react';
+import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Sparkles, Award, LogOut } from 'lucide-react';
 import css from './LobbyScreen.module.css'; 
 import { useGame } from '../context/GameContext.jsx';
 import { RoomSettingsForm } from '../components/game/RoomSettingsForm.jsx';
@@ -4566,7 +4594,8 @@ export const LobbyScreen = () => {
         handleAddBot,
         handleSwitchSeat,
         handleUpdateConfig,
-        handleKickPlayer
+        handleKickPlayer,
+        handleLeaveRoom // [新增]
     } = useGame();
     
     // [修复] 统一获取当前玩家是否为房主，并赋予默认值 false 防止 undefined 导致 UI 闪烁
@@ -4619,6 +4648,19 @@ export const LobbyScreen = () => {
             
             <div className={css.lobbyHeader}>
                 <div style={{display:'flex', alignItems:'center', gap: 10, flexWrap: 'wrap'}}>
+                    {/* [新增] 返回首页按钮 (复用 Setting 按钮样式) */}
+                    <button 
+                        onClick={handleLeaveRoom}
+                        style={{
+                            background: '#f1f2f6', border: '1px solid #ccc', borderRadius: '50%', 
+                            width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: 'pointer', transition: 'all 0.2s', color: '#e74c3c'
+                        }}
+                        title="退出房间"
+                    >
+                        <LogOut size={18} style={{marginLeft: 2}}/> 
+                    </button>
+
                     <h2 style={{margin:0, fontSize: 24}}>房间: <span style={{fontFamily:'monospace', color:'#27ae60'}}>{roomId}</span></h2>
                     
                     {roomConfig.shuffleStrategy === 'NO_SHUFFLE' && (
@@ -5086,8 +5128,8 @@ FILE PATH: client\src\screens\LobbyScreen.module.css
 ================================================================================
 FILE PATH: client\src\screens\LoginScreen.jsx
 ================================================================================
-import React, { useState } from 'react'; 
-import { User, Monitor, RefreshCw, Plus, LogIn, Maximize, Minimize, Wifi, WifiOff } from 'lucide-react'; 
+import React, { useState, useEffect } from 'react'; 
+import { User, Monitor, RefreshCw, Plus, LogIn, Maximize, Minimize, Wifi, WifiOff, History } from 'lucide-react'; 
 import { useGame } from '../context/GameContext.jsx';
 import { RoomSettingsForm } from '../components/game/RoomSettingsForm.jsx';
 
@@ -5101,12 +5143,25 @@ export const LoginScreen = () => {
         roomConfig, setRoomConfig, 
         isCreatorMode, setIsCreatorMode, 
         handleRoomAction, 
+        handleQuickReconnect, // [新增]
         isLoading,
         isConnected,
         ping 
     } = useGame();
 
     const [isFullScreen, setIsFullScreen] = useState(false);
+    
+    // [新增] 检测是否有断线记录
+    const [lastSession, setLastSession] = useState(null);
+
+    useEffect(() => {
+        const rid = localStorage.getItem('poker_roomid');
+        const uid = localStorage.getItem('poker_username');
+        // 只有当两个都有值，才显示重连按钮
+        if (rid && uid) {
+            setLastSession({ roomId: rid, username: uid });
+        }
+    }, []);
 
     const toggleFullScreen = () => {
         if (!document.fullscreenElement) {
@@ -5144,6 +5199,12 @@ export const LoginScreen = () => {
         tryEnterFullScreen(); 
         handleRoomAction();   
     };
+    
+    // [新增] 点击重连按钮
+    const onReconnectClick = () => {
+        tryEnterFullScreen();
+        handleQuickReconnect();
+    };
 
     const handleConfigChange = (key, value) => {
         setRoomConfig(prev => ({ ...prev, [key]: value }));
@@ -5156,7 +5217,6 @@ export const LoginScreen = () => {
         return '#e74c3c';
     };
 
-    // 动态计算 Ping Badge 样式
     const pingStyle = {
         background: isConnected ? (ping < 150 ? '#eafaf1' : '#fef9e7') : '#fdedec',
         color: getPingColor(ping),
@@ -5165,10 +5225,6 @@ export const LoginScreen = () => {
 
     return (
         <div className={css.container}>
-            {/* [关键说明] 
-               这里同时使用了 css.loginCard (模块化样式) 和 mobile-layout-column (全局 index.css 样式)。
-               这样既享受了 CSS Module 的整洁，又保留了你在 index.css 里写的移动端强制适配规则。
-            */}
             <div className={`${css.loginCard} mobile-layout-column`}>
                 
                 {/* 左侧品牌区 */}
@@ -5251,6 +5307,21 @@ export const LoginScreen = () => {
                         )}
 
                         <div style={{flex: 1}}></div>
+
+                        {/* [新增] 重连按钮：只在有记录时显示 */}
+                        {lastSession && !isCreatorMode && (
+                             <button 
+                                className={css.reconnectBtn}
+                                onClick={onReconnectClick}
+                                disabled={isLoading || !isConnected}
+                             >
+                                <History size={18} />
+                                <div style={{display:'flex', flexDirection:'column', alignItems:'flex-start', lineHeight:1.2}}>
+                                    <span style={{fontSize: 14, fontWeight:'bold'}}>一键重连回房间</span>
+                                    <span style={{fontSize: 11, opacity: 0.8}}>Room: {lastSession.roomId} ({lastSession.username})</span>
+                                </div>
+                             </button>
+                        )}
 
                         <button 
                             className={css.primaryButton}
@@ -5506,6 +5577,40 @@ FILE PATH: client\src\screens\LoginScreen.module.css
     opacity: 0.7;
     cursor: not-allowed;
     background: #95a5a6 !important; /* 强制覆盖 */
+}
+
+/* [新增] 重连按钮样式 */
+.reconnectBtn {
+    width: 100%;
+    height: 60px;
+    background: #eafaf1; /* 浅绿色背景 */
+    color: #27ae60;      /* 深绿色文字 */
+    border: 1px solid #27ae60;
+    border-radius: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    font-size: 16px;
+    transition: all 0.2s;
+    margin-bottom: 0px; /* 紧贴主按钮上方 */
+}
+
+.reconnectBtn:hover {
+    background: #d5f5e3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(39, 174, 96, 0.2);
+}
+
+.reconnectBtn:active {
+    transform: translateY(0);
+}
+
+.reconnectBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 /* 首次加载提示 */

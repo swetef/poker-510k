@@ -1,5 +1,5 @@
-import React, { useState } from 'react'; 
-import { User, Monitor, RefreshCw, Plus, LogIn, Maximize, Minimize, Wifi, WifiOff } from 'lucide-react'; 
+import React, { useState, useEffect } from 'react'; 
+import { User, Monitor, RefreshCw, Plus, LogIn, Maximize, Minimize, Wifi, WifiOff, History } from 'lucide-react'; 
 import { useGame } from '../context/GameContext.jsx';
 import { RoomSettingsForm } from '../components/game/RoomSettingsForm.jsx';
 
@@ -13,12 +13,25 @@ export const LoginScreen = () => {
         roomConfig, setRoomConfig, 
         isCreatorMode, setIsCreatorMode, 
         handleRoomAction, 
+        handleQuickReconnect, // [新增]
         isLoading,
         isConnected,
         ping 
     } = useGame();
 
     const [isFullScreen, setIsFullScreen] = useState(false);
+    
+    // [新增] 检测是否有断线记录
+    const [lastSession, setLastSession] = useState(null);
+
+    useEffect(() => {
+        const rid = localStorage.getItem('poker_roomid');
+        const uid = localStorage.getItem('poker_username');
+        // 只有当两个都有值，才显示重连按钮
+        if (rid && uid) {
+            setLastSession({ roomId: rid, username: uid });
+        }
+    }, []);
 
     const toggleFullScreen = () => {
         if (!document.fullscreenElement) {
@@ -56,6 +69,12 @@ export const LoginScreen = () => {
         tryEnterFullScreen(); 
         handleRoomAction();   
     };
+    
+    // [新增] 点击重连按钮
+    const onReconnectClick = () => {
+        tryEnterFullScreen();
+        handleQuickReconnect();
+    };
 
     const handleConfigChange = (key, value) => {
         setRoomConfig(prev => ({ ...prev, [key]: value }));
@@ -68,7 +87,6 @@ export const LoginScreen = () => {
         return '#e74c3c';
     };
 
-    // 动态计算 Ping Badge 样式
     const pingStyle = {
         background: isConnected ? (ping < 150 ? '#eafaf1' : '#fef9e7') : '#fdedec',
         color: getPingColor(ping),
@@ -77,10 +95,6 @@ export const LoginScreen = () => {
 
     return (
         <div className={css.container}>
-            {/* [关键说明] 
-               这里同时使用了 css.loginCard (模块化样式) 和 mobile-layout-column (全局 index.css 样式)。
-               这样既享受了 CSS Module 的整洁，又保留了你在 index.css 里写的移动端强制适配规则。
-            */}
             <div className={`${css.loginCard} mobile-layout-column`}>
                 
                 {/* 左侧品牌区 */}
@@ -163,6 +177,21 @@ export const LoginScreen = () => {
                         )}
 
                         <div style={{flex: 1}}></div>
+
+                        {/* [新增] 重连按钮：只在有记录时显示 */}
+                        {lastSession && !isCreatorMode && (
+                             <button 
+                                className={css.reconnectBtn}
+                                onClick={onReconnectClick}
+                                disabled={isLoading || !isConnected}
+                             >
+                                <History size={18} />
+                                <div style={{display:'flex', flexDirection:'column', alignItems:'flex-start', lineHeight:1.2}}>
+                                    <span style={{fontSize: 14, fontWeight:'bold'}}>一键重连回房间</span>
+                                    <span style={{fontSize: 11, opacity: 0.8}}>Room: {lastSession.roomId} ({lastSession.username})</span>
+                                </div>
+                             </button>
+                        )}
 
                         <button 
                             className={css.primaryButton}

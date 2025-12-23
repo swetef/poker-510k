@@ -18,27 +18,6 @@ export const GameProvider = ({ children }) => {
       handleRoomAction, handleUpdateConfig
   } = roomLogic;
 
-  // 自动重连逻辑
-  const usernameRef = useRef(username);
-  const roomIdRef = useRef(roomId);
-
-  useEffect(() => { usernameRef.current = username; }, [username]);
-  useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
-
-  useEffect(() => {
-      if (isConnected && socket && roomIdRef.current && usernameRef.current) {
-          console.log(`[Auto-Rejoin] 自动恢复身份: ${usernameRef.current} @ Room ${roomIdRef.current}`);
-          
-          // [新增] 自动重连时，让 UI 进入加载状态，提升体验
-          if (setIsLoading) setIsLoading(true);
-
-          socket.emit('join_room', { 
-              roomId: roomIdRef.current, 
-              username: usernameRef.current 
-          });
-      }
-  }, [isConnected, socket]);
-
   // Step C: 全局游戏数据
   const gameData = useGameData(socket, setIsLoading);
   const { 
@@ -51,7 +30,6 @@ export const GameProvider = ({ children }) => {
   const activeRoomConfig = (gameState === 'LOGIN') ? inputConfig : (syncedConfig || inputConfig);
 
   // Step D: 战斗逻辑 (局内)
-  // [修改] 将 deckCount 传入，用于本地提示计算
   const deckCount = activeRoomConfig ? activeRoomConfig.deckCount : 2;
   const battleLogic = useBattleLogic(socket, username, mySocketId, roomId, deckCount);
 
@@ -71,9 +49,42 @@ export const GameProvider = ({ children }) => {
       handlePlayCards: () => battleLogic.handlePlayCards(roomId),
       handleRequestHint: () => battleLogic.handleRequestHint(roomId),
 
-      // [新增] 离开房间/返回首页 (通过刷新页面重置所有状态)
+      // [新增] 快速重连 (用于首页一键回房)
+      handleQuickReconnect: () => {
+          const lastRid = localStorage.getItem('poker_roomid');
+          const lastName = localStorage.getItem('poker_username');
+          
+          if (!lastRid || !lastName) {
+              return alert("没有找到最近的房间记录，无法重连");
+          }
+          if (!isConnected) return alert("网络连接未就绪，请稍候");
+
+          // 1. 同步 UI 状态 (让输入框变回原来的值，提升视觉反馈)
+          roomLogic.setRoomId(lastRid);
+          roomLogic.setUsername(lastName);
+          roomLogic.setIsCreatorMode(false);
+          
+          // 2. 发起连接
+          if (setIsLoading) setIsLoading(true);
+          console.log(`[QuickReconnect] 尝试重回房间: ${lastRid} as ${lastName}`);
+          
+          // 确保 socket 是连接状态
+          if (socket && socket.connected) {
+              socket.emit('join_room', { roomId: lastRid, username: lastName });
+          } else {
+              setIsLoading(false);
+              alert("连接断开，请刷新页面重试");
+          }
+      },
+
+      // 离开房间/返回首页
       handleLeaveRoom: () => {
           if (window.confirm("确定要退出房间返回首页吗？")) {
+              // [关键修改]
+              // 不再清除 localStorage，这样如果是“手误”退出，
+              // 回到首页后依然可以看到“一键重连”按钮，随时可以回去。
+              // localStorage.removeItem('poker_roomid'); // 已注释
+              
               window.location.reload();
           }
       }
