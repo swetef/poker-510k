@@ -45,11 +45,28 @@ module.exports = (io, socket, rooms) => {
     // ==========================================
 
     socket.on('create_room', ({ roomId, username, config }) => {
+        // [修改] 智能房间覆盖逻辑
         if (rooms[roomId]) {
-            if (rooms[roomId].isPermanent) {
+            const room = rooms[roomId];
+            
+            if (room.isPermanent) {
                  return socket.emit('error_msg', '常驻房间已存在，请直接加入');
             }
-            return socket.emit('error_msg', '房间已存在');
+
+            // 检查是否有真人在线 (排除 Bot)
+            const hasOnlineRealPlayers = room.players.some(p => !p.isBot && p.online);
+
+            // 如果房间存在，但没有真人在线（所有人已离开或断线），视为“僵尸房间”，允许直接覆盖
+            if (!hasOnlineRealPlayers) {
+                console.log(`[Room] Overwriting empty zombie room ${roomId}`);
+                // 清理旧定时器
+                if (room.destroyTimer) clearTimeout(room.destroyTimer);
+                // 删除旧房间数据，后续代码会重新创建
+                delete rooms[roomId];
+            } else {
+                // 如果还有人在线，才报“已存在”
+                return socket.emit('error_msg', '房间已存在且有人在线，请更换房间号');
+            }
         }
         
         const cleanName = String(username || '').trim();
@@ -289,13 +306,16 @@ module.exports = (io, socket, rooms) => {
                     const onlineRealPlayers = realPlayers.filter(p => p.online);
 
                     if (onlineRealPlayers.length === 0) {
-                        // 设置销毁定时器 (1小时后销毁，保留一段时间给玩家重连)
+                        // 设置销毁定时器 (保留一段时间给玩家重连)
                         if (!room.isPermanent) {
                              if (room.destroyTimer) clearTimeout(room.destroyTimer);
+                             
+                             // [修改] 将超时时间从 1小时 (3600000) 缩短为 5分钟 (300000)
+                             // 同时，配合 create_room 的覆盖逻辑，用户可以随时“顶替”掉这个倒计时中的房间
                              room.destroyTimer = setTimeout(() => {
                                  console.log(`[Room] Destroying empty room ${roomId}`);
                                  delete rooms[roomId];
-                             }, 3600000); 
+                             }, 300000); 
                         }
                     }
                 }

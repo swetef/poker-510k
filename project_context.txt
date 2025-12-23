@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/23 18:54:54
+Project Context Generated at 2025/12/23 18:58:16
 
 
 ================================================================================
@@ -152,17 +152,16 @@ FILE PATH: client\src\App.css
 FILE PATH: client\src\App.jsx
 ================================================================================
 import React from 'react';
-import { RefreshCw, AlertCircle } from 'lucide-react'; 
-// [修改] 引入 useGame
-import { useGame } from './context/GameContext.jsx';
+import { RefreshCw, AlertCircle, WifiOff } from 'lucide-react'; 
+// [修复] 修正导入路径，确保在 client/src/App.jsx 位置能正确引用
+import { useGame } from './context/GameContext'; // Vite 通常可以自动解析 .jsx，也可以显式写
 
-import { LoginScreen } from './screens/LoginScreen.jsx';
-import { LobbyScreen } from './screens/LobbyScreen.jsx';
-import { GameScreen } from './screens/GameScreen.jsx';
-import { DrawSeatScreen } from './screens/DrawSeatScreen.jsx';
+import { LoginScreen } from './screens/LoginScreen';
+import { LobbyScreen } from './screens/LobbyScreen';
+import { GameScreen } from './screens/GameScreen';
+import { DrawSeatScreen } from './screens/DrawSeatScreen';
 
 export default function App() {
-  // [修改] 直接从 Context 获取需要的状态
   const { gameState, isConnected } = useGame();
 
   const renderLandscapeHint = () => (
@@ -182,26 +181,32 @@ export default function App() {
       </div>
   );
 
+  // [修改] 优化后的断线重连提示
   const renderDisconnectAlert = () => (
       !isConnected && (
           <div style={{
               position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
-              background: '#e74c3c', color: 'white', padding: '10px',
+              background: 'rgba(231, 76, 60, 0.95)', color: 'white', padding: '8px',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-              boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
+              boxShadow: '0 2px 10px rgba(0,0,0,0.2)', backdropFilter: 'blur(5px)',
+              fontSize: 13, fontWeight: '500'
           }}>
-              <AlertCircle size={20} />
-              <span style={{fontWeight: 'bold'}}>连接已断开，正在尝试重连...</span>
+              <WifiOff size={16} className="pulse-icon" />
+              <span>网络连接已断开，正在尝试自动恢复...</span>
+              
+              {/* 如果自动重连太久没反应，给个手动按钮 */}
               <button 
                 onClick={() => window.location.reload()} 
                 style={{
                     background: 'white', color: '#e74c3c', border: 'none', 
                     borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 'bold',
-                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                    marginLeft: 10
                 }}
               >
-                  <RefreshCw size={12} /> 刷新重连
+                  <RefreshCw size={12} /> 立即刷新
               </button>
+              <style>{`.pulse-icon { animation: pulse 1.5s infinite; } @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }`}</style>
           </div>
       )
   );
@@ -211,7 +216,6 @@ export default function App() {
       {renderDisconnectAlert()}
       {renderLandscapeHint()}
       
-      {/* [修改] 子组件不再需要传参，它们会自己去 Context 里拿数据 */}
       {gameState === 'LOGIN' && <LoginScreen />}
       
       {gameState === 'LOBBY' && <LobbyScreen />}
@@ -3923,7 +3927,7 @@ export const useHandGesture = ({
 ================================================================================
 FILE PATH: client\src\hooks\useSocketConnection.js
 ================================================================================
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 
 const getSocketUrl = () => {
@@ -3950,58 +3954,63 @@ export const useSocketConnection = () => {
     const [socket, setSocket] = useState(null);
     const [isConnected, setIsConnected] = useState(false);
     const [mySocketId, setMySocketId] = useState(null);
-    
     const [ping, setPing] = useState(0);
+    
+    const socketRef = useRef(null); // 使用 Ref 保持 socket 引用，方便在事件回调中使用
 
     useEffect(() => {
         console.log(`正在连接服务器: ${SOCKET_URL}`);
         
         const newSocket = io(SOCKET_URL, { 
-            reconnectionAttempts: 20,   
-            reconnectionDelay: 2000,    
+            reconnectionAttempts: Infinity, // 无限重试，确保网络恢复后能连上
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
             timeout: 20000,
             autoConnect: true,
-            // [新增] 显式指定 transport，防止 Nginx 代理时轮询失败
             transports: ['websocket', 'polling'] 
         });
         
         setSocket(newSocket);
+        socketRef.current = newSocket;
 
         let pingInterval;
 
         const onConnect = () => {
             console.log("Socket 连接成功!");
             setIsConnected(true);
-            
-            // [核心修复] 连接成功时，立即获取 socket.id 作为我的 ID
-            // 这样不需要服务器专门发送 'your_id' 事件也能识别身份
             if (newSocket.id) {
                 setMySocketId(newSocket.id);
             }
             
+            // 连接成功后立即发一个 ping 测活
+            newSocket.emit('ping');
+
             pingInterval = setInterval(() => {
                 const start = Date.now();
-                // 确保 socket 有效
                 if (newSocket.connected) {
                     newSocket.emit('ping', () => {
                         const latency = Date.now() - start;
                         setPing(latency);
                     });
                 }
-            }, 2000); 
+            }, 3000); 
         };
 
-        const onDisconnect = () => {
-            console.log("Socket 断开连接");
+        const onDisconnect = (reason) => {
+            console.log(`Socket 断开连接: ${reason}`);
             setIsConnected(false);
             if (pingInterval) clearInterval(pingInterval);
+            
+            // 如果是服务端断开或传输关闭，尝试自动重连
+            if (reason === "io server disconnect" || reason === "transport close") {
+                newSocket.connect();
+            }
         };
 
         const onConnectError = (err) => {
-            console.warn("连接错误 (详细):", err.message);
+            console.warn("连接错误:", err.message);
         };
 
-        // 保留这个监听作为兼容，但主要依赖 onConnect 中的赋值
         const onYourId = (id) => {
             setMySocketId(id);
         };
@@ -4011,13 +4020,34 @@ export const useSocketConnection = () => {
         newSocket.on('connect_error', onConnectError);
         newSocket.on('your_id', onYourId);
 
+        // --- [新增] 核心：切屏/后台恢复检测 ---
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                console.log("[App] 切回前台，检查连接状态...");
+                
+                // 1. 如果 Socket 断开了，立即重连
+                if (!newSocket.connected) {
+                    console.log("[App] 发现连接已断开，正在强制重连...");
+                    newSocket.connect();
+                } else {
+                    // 2. 即使 connected 为 true，也可能是假死，发一个包激活一下
+                    newSocket.emit('ping', () => {
+                        console.log("[App] 连接活性检查通过");
+                    });
+                }
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
         return () => {
             if (pingInterval) clearInterval(pingInterval);
             newSocket.off('connect', onConnect);
             newSocket.off('disconnect', onDisconnect);
             newSocket.off('connect_error', onConnectError);
             newSocket.off('your_id', onYourId);
-            newSocket.close(); // [建议] 组件卸载时关闭连接，防止多重连接
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            newSocket.close();
         };
     }, []);
 
