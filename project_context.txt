@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/23 15:43:15
+Project Context Generated at 2025/12/23 16:54:57
 
 
 ================================================================================
@@ -350,25 +350,23 @@ export default CountDownTimer;
 FILE PATH: client\src\components\game\GameActionBar.jsx
 ================================================================================
 import React, { useState, useEffect } from 'react';
-import { RotateCcw, Zap, Lightbulb, Clock, Loader2, AlertTriangle } from 'lucide-react';
+import { RotateCcw, Zap, Lightbulb, Clock, Loader2, AlertTriangle, Repeat, Shield, Coins, Coffee } from 'lucide-react';
 import css from './GameActionBar.module.css';
 import { useGame } from '../../context/GameContext.jsx';
 import TimerComponent from '../CountDownTimer.jsx';
-// [新增] 引入 isBomb 工具函数
 import { isBomb } from '../../utils/cardLogic.js';
 
 export const GameActionBar = () => {
     const { 
         winner, roundResult, grandResult, selectedCards, 
         playersInfo, mySocketId, currentTurnId, players, turnRemaining,
-        handleClearSelection, handleToggleAutoPlay, handlePass, handleRequestHint, handlePlayCards,
-        isSubmitting, lastPlayerName // [修改] 获取上家名字
+        handleClearSelection, handleToggleAutoPlay, handleSwitchAutoPlayMode,
+        handlePass, handleRequestHint, handlePlayCards,
+        isSubmitting, lastPlayerName 
     } = useGame();
 
-    // [新增] 确认状态：false=正常, true=待确认(管队友)
     const [confirmState, setConfirmState] = useState(false);
 
-    // [新增] 当选牌变化或轮次变化时，重置确认状态
     useEffect(() => {
         setConfirmState(false);
     }, [selectedCards, currentTurnId]);
@@ -377,43 +375,56 @@ export const GameActionBar = () => {
 
     const myInfo = playersInfo[mySocketId] || {};
     const amIAutoPlay = myInfo.isAutoPlay;
+    const currentMode = myInfo.autoPlayMode || 'SMART';
     
     const myTurn = currentTurnId === mySocketId;
     const currentTurnPlayer = players.find(p => p.id === currentTurnId);
     const waitingText = currentTurnPlayer ? `等待 ${currentTurnPlayer.name}...` : '等待中...';
 
-    // [新增] 智能出牌点击处理
     const handlePlayClick = () => {
         if (isSubmitting) return;
         
-        // 1. 如果没选牌，直接透传给原函数处理(原函数会弹Alert)
         if (selectedCards.length === 0) {
             handlePlayCards();
             return;
         }
 
-        // 2. 队友误伤检测逻辑
         const lastPlayer = players.find(p => p.name === lastPlayerName);
         const isTeammate = 
-            myInfo.team !== undefined && myInfo.team !== null && // 我在队伍中
-            lastPlayer && lastPlayer.id !== mySocketId &&        // 上家存在且不是我
-            playersInfo[lastPlayer.id]?.team === myInfo.team;    // 上家是队友
+            myInfo.team !== undefined && myInfo.team !== null && 
+            lastPlayer && lastPlayer.id !== mySocketId && 
+            playersInfo[lastPlayer.id]?.team === myInfo.team;
 
-        // [修改] 增加 isBomb 判断：只有用炸弹管队友才弹窗
         const playingBomb = isBomb(selectedCards);
 
-        // 3. 如果是炸弹压队友，且还没确认过
         if (isTeammate && playingBomb && !confirmState) {
             setConfirmState(true);
-            // 3秒后自动恢复，防止卡住
             setTimeout(() => setConfirmState(false), 3000);
             return;
         }
 
-        // 4. 正常出牌
         handlePlayCards();
         setConfirmState(false);
     };
+
+    // 模式切换循环
+    const cycleMode = () => {
+        const modes = ['SMART', 'THRIFTY', 'AFK'];
+        const currentIdx = modes.indexOf(currentMode);
+        const nextMode = modes[(currentIdx + 1) % modes.length];
+        handleSwitchAutoPlayMode(nextMode);
+    };
+
+    const getModeLabel = (mode) => {
+        switch(mode) {
+            case 'SMART': return { text: '智能(保队友)', icon: <Shield size={14} />, color: '#2ecc71' };
+            case 'THRIFTY': return { text: '省钱(无分不炸)', icon: <Coins size={14} />, color: '#f1c40f' };
+            case 'AFK': return { text: '躺平(全不要)', icon: <Coffee size={14} />, color: '#95a5a6' };
+            default: return { text: '智能', icon: <Shield size={14} />, color: '#2ecc71' };
+        }
+    };
+
+    const modeInfo = getModeLabel(currentMode);
 
     return (
         <div className={css.actionBar}>
@@ -429,12 +440,23 @@ export const GameActionBar = () => {
                 )}
                 
                 {amIAutoPlay ? (
-                    <button 
-                        className={css.btnCancelAuto}
-                        onClick={handleToggleAutoPlay}
-                    >
-                        <Zap size={18} /> 取消托管
-                    </button>
+                    <div className={css.autoPlayGroup}>
+                         {/* [新增] 模式切换按钮 */}
+                        <button 
+                            className={css.btnModeSwitch}
+                            onClick={cycleMode}
+                            style={{borderColor: modeInfo.color, color: modeInfo.color}}
+                        >
+                            {modeInfo.icon} {modeInfo.text} <Repeat size={12} style={{opacity:0.6}}/>
+                        </button>
+
+                        <button 
+                            className={css.btnCancelAuto}
+                            onClick={handleToggleAutoPlay}
+                        >
+                            <Zap size={18} /> 取消托管
+                        </button>
+                    </div>
                 ) : (
                     <>
                         {myTurn ? (
@@ -507,6 +529,36 @@ FILE PATH: client\src\components\game\GameActionBar.module.css
     pointer-events: auto; /* 按钮可点 */
 }
 
+/* 托管模式组合容器 */
+.autoPlayGroup {
+    display: flex;
+    gap: 10px;
+    background: rgba(0,0,0,0.6);
+    padding: 10px;
+    border-radius: 40px;
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+/* 模式切换按钮 */
+.btnModeSwitch {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid #ccc;
+    color: white;
+    padding: 8px 15px;
+    border-radius: 30px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s;
+}
+
+.btnModeSwitch:active {
+    transform: scale(0.95);
+}
+
 /* 基础按钮样式 */
 .btn {
     border: none;
@@ -562,8 +614,10 @@ FILE PATH: client\src\components\game\GameActionBar.module.css
 .btnCancelAuto {
     composes: btnPlay;
     background: #e74c3c;
-    width: 180px;
+    width: auto;
+    padding: 8px 20px;
     box-shadow: 0 8px 20px rgba(231, 76, 60, 0.4);
+    font-size: 14px;
 }
 
 /* 等待提示 */
@@ -596,14 +650,16 @@ FILE PATH: client\src\components\game\GameActionBar.module.css
 FILE PATH: client\src\components\game\GameHeader.jsx
 ================================================================================
 import React, { useState } from 'react';
-import { Zap, Minimize, Maximize, Layers, Shield, ChevronDown, ChevronUp, Wifi, WifiOff, LogOut } from 'lucide-react';
-import css from './GameHeader.module.css'; // 新 CSS
+// [修改] 引入 Info 图标
+import { Zap, Minimize, Maximize, Layers, Shield, ChevronDown, ChevronUp, Wifi, WifiOff, LogOut, Info } from 'lucide-react';
+import css from './GameHeader.module.css'; 
 import { useGame } from '../../context/GameContext.jsx';
 
 /**
  * [比分板组件] 红蓝队分数 (内部使用)
  */
 const TeamScoreBoard = () => {
+    // ... (保持 TeamScoreBoard 代码不变，省略以节省空间) ...
     const { players, playersInfo, playerScores, roomConfig } = useGame();
     const [isCollapsed, setIsCollapsed] = useState(true);
 
@@ -654,8 +710,11 @@ const TeamScoreBoard = () => {
  * [Header组件]
  */
 export const GameHeader = () => {
-    const { roomId, playersInfo, mySocketId, toggleSort, sortMode, handleToggleAutoPlay, ping, isConnected, handleLeaveRoom } = useGame();
+    // [修改] 解构 roomConfig
+    const { roomId, playersInfo, mySocketId, toggleSort, sortMode, handleToggleAutoPlay, ping, isConnected, handleLeaveRoom, roomConfig } = useGame();
     const [isFullScreen, setIsFullScreen] = useState(false);
+    // [新增] 控制房间详情显示
+    const [showRoomInfo, setShowRoomInfo] = useState(false);
     
     const myInfo = playersInfo[mySocketId] || {};
     const amIAutoPlay = myInfo.isAutoPlay;
@@ -679,18 +738,30 @@ export const GameHeader = () => {
         return '#e74c3c';
     };
 
-    // [修改] 增加理牌文案映射
     const getSortButtonText = () => {
         if (sortMode === 'POINT') return '点数';
-        if (sortMode === 'ARRANGE') return '理牌(提)'; // 提=提取510K
-        if (sortMode === 'ARRANGE_MERGED') return '理牌(合)'; // 合=融合510K
+        if (sortMode === 'ARRANGE') return '理牌(提)'; 
+        if (sortMode === 'ARRANGE_MERGED') return '理牌(合)'; 
         return '未知';
+    };
+
+    // [新增] 策略名称转换 helper
+    const getStrategyName = () => {
+        if (!roomConfig) return '加载中';
+        const s = roomConfig.shuffleStrategy;
+        const p = roomConfig.preciseMode;
+        if (s === 'NO_SHUFFLE') return '均贫富(不洗牌)';
+        if (s === 'SIMULATION') return '模拟手洗';
+        if (s === 'PRECISE') {
+            const modes = { normal: '常规', stimulating: '刺激', thrilling: '惊险', exciting: '爽局' };
+            return `智能控牌(${modes[p] || '刺激'})`;
+        }
+        return '随机洗牌';
     };
 
     return (
         <div className={css.header}>
             <div className={css.roomBadgeContainer}>
-                {/* [新增] 退出按钮 */}
                 <button 
                     className={css.iconBtn} 
                     onClick={handleLeaveRoom}
@@ -700,7 +771,46 @@ export const GameHeader = () => {
                     <LogOut size={16} />
                 </button>
 
-                <div className={css.roomBadge}>Room {roomId}</div>
+                {/* [修改] 房间号区域，包裹一个相对定位的 div 以便定位弹窗 */}
+                <div style={{position: 'relative'}}>
+                    <div className={css.roomBadgeGroup}>
+                        <div className={css.roomBadge}>Room {roomId}</div>
+                        {/* [新增] 详情缩放按钮 */}
+                        <button 
+                            className={css.infoBtn} 
+                            onClick={() => setShowRoomInfo(!showRoomInfo)}
+                        >
+                            <Info size={12} />
+                        </button>
+                    </div>
+
+                    {/* [新增] 房间详情弹窗 */}
+                    {showRoomInfo && roomConfig && (
+                        <div className={css.roomInfoDropdown}>
+                            <div className={css.infoTitle}>房间规则</div>
+                            <div className={css.infoRow}>
+                                <span>洗牌策略:</span>
+                                <span className={css.infoVal}>{getStrategyName()}</span>
+                            </div>
+                            <div className={css.infoRow}>
+                                <span>目标分数:</span>
+                                <span className={css.infoVal}>{roomConfig.targetScore}</span>
+                            </div>
+                            <div className={css.infoRow}>
+                                <span>排名赏罚:</span>
+                                <span className={css.infoVal}>
+                                    {roomConfig.enableRankPenalty 
+                                        ? `${roomConfig.rankPenaltyScores[0]} / ${roomConfig.rankPenaltyScores[1]}` 
+                                        : '关闭'}
+                                </span>
+                            </div>
+                            <div className={css.infoRow}>
+                                <span>牌库/人数:</span>
+                                <span className={css.infoVal}>{roomConfig.deckCount}副 / {roomConfig.maxPlayers}人</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
                 
                 <div className={css.pingBadge} style={{ color: getPingColor(ping) }}>
                     {isConnected ? <Wifi size={10}/> : <WifiOff size={10}/>}
@@ -755,15 +865,82 @@ FILE PATH: client\src\components\game\GameHeader.module.css
     pointer-events: auto;
 }
 
-.roomBadge {
+/* [新增] 房间号与按钮的组合容器 */
+.roomBadgeGroup {
+    display: flex;
+    align-items: center;
     background: rgba(0,0,0,0.3);
+    border-radius: 15px;
+    border: 1px solid rgba(255,255,255,0.1);
+    overflow: hidden;
+}
+
+/* [修改] Room Badge 样式微调，移除独立边框 */
+.roomBadge {
     color: white;
     padding: 4px 8px;
-    border-radius: 15px;
     font-size: 11px;
-    border: 1px solid rgba(255,255,255,0.1);
     font-weight: bold;
     white-space: nowrap;
+}
+
+/* [新增] 信息按钮样式 */
+.infoBtn {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    border-left: 1px solid rgba(255,255,255,0.1);
+    color: #ecf0f1;
+    cursor: pointer;
+    padding: 4px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    height: 100%;
+}
+
+.infoBtn:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+/* [新增] 房间详情下拉框 */
+.roomInfoDropdown {
+    position: absolute;
+    top: 115%;
+    left: 0;
+    width: 160px;
+    background: rgba(30, 40, 50, 0.95);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 10px;
+    color: white;
+    font-size: 11px;
+    backdrop-filter: blur(5px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    z-index: 100;
+    animation: fadeIn 0.2s ease;
+    text-align: left;
+}
+
+.infoTitle {
+    font-weight: bold;
+    color: #f1c40f;
+    margin-bottom: 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding-bottom: 4px;
+    text-align: center;
+}
+
+.infoRow {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    color: #bdc3c7;
+}
+
+.infoVal {
+    color: white;
+    font-weight: bold;
 }
 
 /* Ping 值徽章 */
@@ -1985,49 +2162,64 @@ FILE PATH: client\src\components\game\SettlementModal.module.css
 FILE PATH: client\src\components\game\TableCenterArea.jsx
 ================================================================================
 import React from 'react';
-import { Coins } from 'lucide-react';
-import css from './TableCenterArea.module.css'; // 新 CSS
-import { MiniCard } from '../BaseUI.jsx';
 import { useGame } from '../../context/GameContext.jsx';
-
+import { Coins } from 'lucide-react';
+// [修复] 修正 Card 导入路径
+import { Card } from '../ui/Card.jsx';
+import css from './TableCenterArea.module.css';
 
 export const TableCenterArea = () => {
     const { 
-        lastPlayed, lastPlayerName, pendingPoints, 
-        infoMessage: serverInfoMessage 
+        lastPlayed, 
+        lastPlayerName, 
+        infoMessage, 
+        pendingPoints
     } = useGame();
-
-    const displayMessage = serverInfoMessage;
 
     return (
         <>
-            <div className={css.scoreBoard}>
-                <div className={css.scoreLabel}>POINTS</div>
-                <div className={css.scoreValue}>
-                    <Coins size={20} /> {pendingPoints}
-                </div>
-            </div>
-
-            {displayMessage && (
-                <div className={css.infoMessage} key={Date.now()}>
-                    {displayMessage}
+            {/* 底分面板 - 极简纯净版 */}
+            {pendingPoints > 0 && (
+                <div className={css.scoreBoard}>
+                    <div className={css.scoreValue}>
+                        <Coins size={24} fill="#f1c40f" stroke="#e67e22" strokeWidth={2} />
+                        <span style={{marginLeft: 6}}>{pendingPoints}</span>
+                    </div>
                 </div>
             )}
 
-            <div className={css.tableCenter}>
-                {lastPlayed.length > 0 && (
+            {/* 系统消息 (全屏大字) */}
+            {infoMessage && (
+                <div className={css.infoMessage}>
+                    {infoMessage}
+                </div>
+            )}
+
+            {/* 桌面出牌展示区 */}
+            {lastPlayed && lastPlayed.length > 0 && (
+                <div className={css.tableCenter}>
                     <div className={css.playedContainer}>
                         <div className={css.playerNameTag}>{lastPlayerName}</div>
-                        <div className={css.playedRow}> 
+                        
+                        <div className={css.playedRow}>
                             {lastPlayed.map((c, i) => (
-                                <div key={i} className={css.miniCardWrapper}>
-                                    <MiniCard cardVal={c} index={i} />
+                                <div key={`${c}-${i}`} className={css.miniCardWrapper}>
+                                    {/* [修复] 使用正确的 Card 属性: cardVal */}
+                                    {/* index=0 spacing=0 确保它在 wrapper 内部居中/靠左，由 wrapper 负责布局 */}
+                                    <Card 
+                                        cardVal={c} 
+                                        index={0} 
+                                        isSelected={false} 
+                                        onClick={()=>{}} 
+                                        onMouseEnter={()=>{}} 
+                                        spacing={0} 
+                                    />
                                 </div>
                             ))}
                         </div>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
         </>
     );
 };
@@ -2035,40 +2227,51 @@ export const TableCenterArea = () => {
 ================================================================================
 FILE PATH: client\src\components\game\TableCenterArea.module.css
 ================================================================================
-/* 底分面板 */
+/* 底分面板 - 极简纯净版 */
 .scoreBoard {
     position: absolute;
-    top: 40%;
+    /* 稍微偏上(42%)，给下面的出牌留空间 */
+    top: 42%;
     left: 50%;
-    transform: translate(-50%, -100%) scale(0.8);
-    background: rgba(0,0,0,0.6);
-    padding: 5px 20px;
-    borderRadius: 20px;
-    text-align: center;
-    color: white;
-    border: 1px solid rgba(255,255,255,0.2);
-    backdrop-filter: blur(5px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    transform: translate(-50%, -50%);
+    
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    
+    padding: 0;
     z-index: 5;
+    pointer-events: none;
+    
+    animation: fadeIn 0.3s ease;
 }
 
-.scoreLabel {
-    font-size: 10px;
-    opacity: 0.8;
-    text-transform: uppercase;
+@keyframes fadeIn {
+    from { opacity: 0; transform: translate(-50%, -40%); }
+    to { opacity: 1; transform: translate(-50%, -50%); }
 }
 
 .scoreValue {
-    font-size: 24px;
-    font-weight: bold;
+    font-size: 28px;
+    font-weight: 900;
     color: #f1c40f;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
+    
+    text-shadow: 
+        0 2px 0 #b9770e,
+        0 4px 4px rgba(0,0,0,0.5),
+        -1px -1px 0 #000,  
+         1px -1px 0 #000,
+        -1px  1px 0 #000,
+         1px  1px 0 #000;
+    
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));
 }
 
-/* 系统消息 (全屏大字) */
+/* 系统消息 */
 .infoMessage {
     position: absolute;
     top: 25%;
@@ -2081,13 +2284,13 @@ FILE PATH: client\src\components\game\TableCenterArea.module.css
     pointer-events: none;
     z-index: 50;
     letter-spacing: 2px;
-    animation: fadeInOut 2s forwards;
+    animation: fadeInOut 3.5s forwards;
 }
 
 @keyframes fadeInOut {
     0% { opacity: 0; transform: translateY(10px); }
     10% { opacity: 1; transform: translateY(0); }
-    90% { opacity: 1; transform: translateY(0); }
+    80% { opacity: 1; transform: translateY(0); }
     100% { opacity: 0; transform: translateY(-10px); }
 }
 
@@ -2103,9 +2306,11 @@ FILE PATH: client\src\components\game\TableCenterArea.module.css
     z-index: 1;
 }
 
-/* 弹出动画容器 */
 .playedContainer {
     animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 @keyframes popIn {
@@ -2113,7 +2318,6 @@ FILE PATH: client\src\components\game\TableCenterArea.module.css
     100% { transform: scale(1); opacity: 1; }
 }
 
-/* 出牌者名字标签 */
 .playerNameTag {
     color: white;
     text-align: center;
@@ -2130,15 +2334,25 @@ FILE PATH: client\src\components\game\TableCenterArea.module.css
 /* 牌型行 */
 .playedRow {
     display: flex;
-    /* 负间距让牌叠在一起 */
-    gap: -10px; 
+    justify-content: center;
+    /* [修复] gap 不支持负值，改用 margin 实现叠牌 */
     filter: drop-shadow(0 10px 20px rgba(0,0,0,0.3));
+    /* 整体缩小一点点，看起来更精致 */
+    transform: scale(0.9);
 }
 
-/* 特殊修正：MiniCard 的负 margin 需要配合 CSS */
+/* * [重要] Card组件内部是 absolute 定位
+ * 这里 wrapper 需要相对定位并指定宽高，才能撑开 flex 布局 
+ * 55px x 70px 是 Card.module.css 定义的尺寸
+ */
 .miniCardWrapper {
-    margin-right: -10px;
+    width: 55px;
+    height: 70px;
+    position: relative;
+    /* 负 margin 实现叠牌效果 */
+    margin-right: -25px; 
 }
+
 .miniCardWrapper:last-child {
     margin-right: 0;
 }
@@ -3099,7 +3313,10 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
                 }
                 
                 if (data.infoText !== 'PASS') {
-                    setInfoMessage(data.infoText); setTimeout(()=>setInfoMessage(''), 2000);
+                    // [修改] 延长停留时间至 3.5s，配合 CSS 动画
+                    setInfoMessage(data.infoText); 
+                    setTimeout(() => setInfoMessage(''), 3500);
+                    
                     setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: data.infoText }]);
                 }
             }
@@ -3121,7 +3338,7 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
         const onPlayError = (msg) => { 
             setIsSubmitting(false); 
             setInfoMessage(msg); 
-            setTimeout(()=>setInfoMessage(''), 2000); 
+            setTimeout(()=>setInfoMessage(''), 3500); 
             SoundManager.play('lose'); 
             
             if (backupHandRef.current.length > 0) {
@@ -3173,6 +3390,10 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
     });
     
     const handleToggleAutoPlay = (roomId) => socket.emit('toggle_auto_play', { roomId });
+
+    // [新增] 切换托管模式
+    const handleSwitchAutoPlayMode = (roomId, mode) => socket.emit('switch_autoplay_mode', { roomId, mode });
+
     const handlePass = (roomId) => {
         if (isSubmitting) return; 
         setIsSubmitting(true);    
@@ -3255,7 +3476,8 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
 
         // Actions
         toggleSort, 
-        handleToggleAutoPlay, 
+        handleToggleAutoPlay,
+        handleSwitchAutoPlayMode, // [新增] 导出该方法
         handlePass, 
         handlePlayCards,
         handleRequestHint,
@@ -4421,6 +4643,8 @@ import React from 'react';
 import css from './GameScreen.module.css'; 
 import { GameLogPanel } from '../components/BaseUI.jsx';
 import { useGame } from '../context/GameContext.jsx';
+// [新增] 引入刷新图标
+import { RefreshCw, AlertCircle } from 'lucide-react';
 
 import { GameHeader } from '../components/game/GameHeader.jsx';
 import { TableCenterArea } from '../components/game/TableCenterArea.jsx';
@@ -4437,11 +4661,46 @@ export const GameScreen = () => {
 
     // 身份同步保护
     const myPlayerExists = players.some(p => p.id === mySocketId);
+    
+    // [关键修改] 如果卡在同步界面，显示更详细的提示和手动刷新按钮
     if (!myPlayerExists && players.length > 0) {
-        // Loading 态使用简单的内联样式即可，无需依赖 styles.js
         return (
-            <div className={css.gameTable} style={{color:'white', display:'flex', justifyContent:'center', alignItems:'center'}}>
-                正在同步数据...
+            <div className={css.gameTable} style={{
+                color:'white', 
+                display:'flex', 
+                flexDirection: 'column', 
+                justifyContent:'center', 
+                alignItems:'center',
+                gap: 20,
+                textAlign: 'center'
+            }}>
+                <AlertCircle size={40} color="#f1c40f" />
+                
+                <div>
+                    <div style={{fontSize: 20, fontWeight: 'bold', marginBottom: 5}}>正在同步数据...</div>
+                    <div style={{fontSize: 14, opacity: 0.7}}>如果是从后台切回，可能需要重新连接</div>
+                </div>
+
+                {/* 手动刷新按钮：解决卡死问题的“逃生门” */}
+                <button 
+                    onClick={() => window.location.reload()}
+                    style={{
+                        background: 'rgba(255,255,255,0.2)',
+                        border: '1px solid rgba(255,255,255,0.5)',
+                        color: 'white',
+                        padding: '10px 25px',
+                        borderRadius: 30,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        cursor: 'pointer',
+                        fontSize: 16,
+                        fontWeight: 'bold',
+                        marginTop: 10
+                    }}
+                >
+                    <RefreshCw size={18} /> 刷新页面
+                </button>
             </div>
         );
     }
@@ -4450,16 +4709,16 @@ export const GameScreen = () => {
         <div className={css.gameTable}>
             <div className={css.gameSafeArea}>
                 
-                {/* 1. 左上角日志 (直接渲染，组件内部已包含 absolute 定位) */}
+                {/* 1. 左上角日志 */}
                 <GameLogPanel logs={gameLogs} />
 
-                {/* 2. 顶部 Header (包含比分板、全屏按钮等) */}
+                {/* 2. 顶部 Header */}
                 <GameHeader />
 
-                {/* 3. 桌面中间区域 (底分、消息、出牌展示) */}
+                {/* 3. 桌面中间区域 */}
                 <TableCenterArea />
 
-                {/* 4. 结算弹窗 (如果有) */}
+                {/* 4. 结算弹窗 */}
                 <SettlementModal />
 
                 {/* 5. 玩家头像布局 */}
@@ -4582,7 +4841,7 @@ FILE PATH: client\src\screens\GameScreen.module.css
 FILE PATH: client\src\screens\LobbyScreen.jsx
 ================================================================================
 import React, { useState } from 'react';
-import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Sparkles, Award, LogOut } from 'lucide-react';
+import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Sparkles, Award, ChevronLeft } from 'lucide-react';
 import css from './LobbyScreen.module.css'; 
 import { useGame } from '../context/GameContext.jsx';
 import { RoomSettingsForm } from '../components/game/RoomSettingsForm.jsx';
@@ -4595,10 +4854,10 @@ export const LobbyScreen = () => {
         handleSwitchSeat,
         handleUpdateConfig,
         handleKickPlayer,
-        handleLeaveRoom // [新增]
+        handleLeaveRoom 
     } = useGame();
     
-    // [修复] 统一获取当前玩家是否为房主，并赋予默认值 false 防止 undefined 导致 UI 闪烁
+    // 统一获取当前玩家是否为房主
     const amIHost = players.find(p => p.id === mySocketId)?.isHost || false;
     
     const isTeamMode = roomConfig.isTeamMode && roomConfig.maxPlayers % 2 === 0;
@@ -4648,17 +4907,26 @@ export const LobbyScreen = () => {
             
             <div className={css.lobbyHeader}>
                 <div style={{display:'flex', alignItems:'center', gap: 10, flexWrap: 'wrap'}}>
-                    {/* [新增] 返回首页按钮 (复用 Setting 按钮样式) */}
+                    
+                    {/* [修改] 退出按钮：改为向左的返回箭头，更加简洁 */}
                     <button 
                         onClick={handleLeaveRoom}
                         style={{
-                            background: '#f1f2f6', border: '1px solid #ccc', borderRadius: '50%', 
-                            width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: 'pointer', transition: 'all 0.2s', color: '#e74c3c'
+                            background: 'transparent',
+                            border: '1px solid #e1e4e8', 
+                            borderRadius: '8px', 
+                            padding: '6px 12px 6px 8px', // 左侧稍微少一点padding因为有箭头
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            gap: 2,
+                            cursor: 'pointer', 
+                            color: '#7f8c8d', 
+                            fontWeight: 'bold',
+                            fontSize: 14,
+                            transition: 'all 0.2s'
                         }}
-                        title="退出房间"
+                        title="返回首页"
                     >
-                        <LogOut size={18} style={{marginLeft: 2}}/> 
+                        <ChevronLeft size={20} /> 返回
                     </button>
 
                     <h2 style={{margin:0, fontSize: 24}}>房间: <span style={{fontFamily:'monospace', color:'#27ae60'}}>{roomId}</span></h2>
@@ -4700,16 +4968,23 @@ export const LobbyScreen = () => {
                     </div>
 
                     {amIHost && (
+                        /* [修改] 设置按钮：纯齿轮图标，无背景，悬停旋转效果 */
                         <button 
                             onClick={() => setShowSettings(true)}
                             style={{
-                                background: '#f1f2f6', border: '1px solid #ccc', borderRadius: '50%', 
-                                width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                cursor: 'pointer', transition: 'all 0.2s', color: '#2c3e50'
+                                background: 'transparent', 
+                                border: 'none', 
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer', 
+                                color: '#34495e', // 深色图标
+                                padding: 8,
+                                transition: 'transform 0.3s ease'
                             }}
                             title="修改房间规则"
+                            onMouseEnter={(e) => e.currentTarget.style.transform = 'rotate(45deg)'}
+                            onMouseLeave={(e) => e.currentTarget.style.transform = 'rotate(0deg)'}
                         >
-                            <Settings size={20} />
+                            <Settings size={24} />
                         </button>
                     )}
                 </div>
@@ -4828,7 +5103,6 @@ export const LobbyScreen = () => {
                 ))}
             </div>
 
-            {/* [修复] 使用 amIHost 变量判断，并增加 flexShrink: 0 防止被玩家列表挤压到不可见 */}
             <div className={`${css.lobbyFooter} mobile-lobby-footer`} style={{flexShrink: 0}}>
                 {amIHost ? (
                     <div style={{display:'flex', gap: 15, justifyContent: 'center'}}>
@@ -6045,6 +6319,9 @@ FILE PATH: client\src\utils\smartHint.js
 /**
  * 智能提示逻辑
  * 根据手牌和上家牌型，计算所有可行解，并按优劣排序
+ * * [修改记录]
+ * 1. 过滤掉了 510K 牌型，提示不再推荐 510K。
+ * 2. 优化自由出牌逻辑：优先出“真正的单张废牌”，不再优先拆对子出单张。
  */
 import GameRules from './gameRules.js';
 
@@ -6059,11 +6336,18 @@ const SmartHint = {
      */
     getSortedHints: (hand, lastPlayedCards, deckCount = 2) => {
         // 1. 获取所有合法解
-        const solutions = SmartHint.findAllSolutions(hand, lastPlayedCards, deckCount);
+        let solutions = SmartHint.findAllSolutions(hand, lastPlayedCards, deckCount);
         if (!solutions || solutions.length === 0) return [];
 
+        // [修改] 过滤掉 510K 牌型 (提示和托管不会自动出 510K)
+        solutions = solutions.filter(sol => {
+            const type = GameRules.analyze(sol, deckCount).type;
+            return type !== '510K_PURE' && type !== '510K_MIXED';
+        });
+
+        if (solutions.length === 0) return [];
+
         // 2. 预分析手牌中的炸弹（用于判断出牌是否拆了炸弹）
-        // [优化] 这里现在只调用轻量级的炸弹查找，不再进行全量牌型计算
         const myBombs = SmartHint.findAllBombsInHand(hand, deckCount);
         const bombCardsSet = new Set();
         myBombs.forEach(b => b.cards.forEach(c => bombCardsSet.add(c)));
@@ -6074,20 +6358,21 @@ const SmartHint = {
             : null;
         const lastIsBomb = lastAnalysis ? lastAnalysis.level > 0 : false;
 
+        // [新增] 统计手牌中每个点数的数量，用于识别“废牌”
+        const handCounts = {};
+        hand.forEach(c => {
+            const p = GameRules.getPoint(c);
+            handCounts[p] = (handCounts[p] || 0) + 1;
+        });
+
         // 4. 对每个方案计算 Cost (代价越低越优先)
         const scoredSolutions = solutions.map(sol => {
             const analysis = GameRules.analyze(sol, deckCount);
             let cost = 0;
             
-            // --- A. [修复] 基础分计算优化 ---
-            // 之前的逻辑只看点数，导致 7个3(Val=3) 比 4个8(Val=8) Cost更低，从而被误判为更小的牌
-            // 新逻辑：炸弹优先看 Level(级别) 和 Length(张数)，普通牌看 Val(点数)
-            
+            // --- A. 基础分计算 ---
             if (analysis.level > 0) {
-                // 是炸弹：Level 权重最大 (100000)，其次是张数 (1000)，最后是点数
-                // 这样 4个8 (Level 3, Len 4) Cost ≈ 304008
-                // 而 7个3 (Level 3, Len 7) Cost ≈ 307003
-                // 结果：4个8 会排在 7个3 前面 (符合“提示更小的炸弹”的逻辑)
+                // 是炸弹：Level 权重最大，其次是张数，最后是点数
                 cost += analysis.level * 100000;
                 
                 // 普通炸弹和至尊炸弹，张数权重很高
@@ -6107,29 +6392,44 @@ const SmartHint = {
                 // 如果出的不是炸弹，检查是否用了炸弹里的牌
                 const breaksBomb = sol.some(c => bombCardsSet.has(c));
                 if (breaksBomb) {
-                    cost += 2000000; // [修改] 大幅增加拆弹惩罚，防止为了出小牌拆散大炸弹
+                    cost += 2000000; // 严禁拆炸弹
                 }
             }
 
             // --- C. 炸弹压制判断 (避免大材小用) ---
             if (isMoveBomb && !lastIsBomb && lastAnalysis) {
-                // 上家不是炸弹，我用炸弹管 -> 略亏，除非这是最后一手或者没有其他牌
-                // 但提示机制里，我们还是应该列出来，只是排在后面
+                // 上家不是炸弹，我用炸弹管 -> 略亏，除非这是最后一手
                 cost += 500; 
             }
 
-            // --- D. 优先出包含更多手牌的组合 (比如连对优于对子) ---
+            // --- D. 自由出牌 (首出) 策略优化 ---
             if (!lastAnalysis) {
                 if (analysis.type === 'AIRPLANE') cost -= 200;
                 else if (analysis.type === 'LIANDUI') cost -= 150;
                 else if (analysis.type === 'TRIPLE') cost -= 100;
-                else if (analysis.type === 'PAIR') cost -= 50;
+                else if (analysis.type === 'PAIR') cost -= 50; // 对子优惠 50
                 
-                // 首出时，尽量不先出炸弹，除非它是为了冲刺
+                // [关键修改] 单张逻辑细化
+                else if (analysis.type === 'SINGLE') {
+                    const countInHand = handCounts[analysis.val] || 0;
+                    
+                    if (countInHand === 1) {
+                        // 真正的废牌（手里只有这一张）：给予极高优先级
+                        // 设定为 -80，比对子的 -50 更小，所以会优先出单张废牌
+                        cost -= 80; 
+                    } else {
+                        // 如果 countInHand > 1，说明是拆了对子或三张打的单牌
+                        // 不给予减分优惠，Cost = val (正数)
+                        // 这样 Cost(-80) < Cost(Pair -50) < Cost(Single positive)
+                        // 顺序变成：废牌 > 对子 > 拆开的单牌
+                    }
+                }
+                
+                // 首出炸弹惩罚
                 if (isMoveBomb) {
                     // 如果这手牌出完就跑了，那就无视 Cost 优先出
                     if (hand.length === sol.length) cost = -9999999;
-                    else cost += 8000; // [修改] 增加首出炸弹的惩罚，避免开局就扔炸弹
+                    else cost += 8000; // 避免起手扔炸弹
                 }
             }
 
@@ -6249,14 +6549,13 @@ const SmartHint = {
                 for (let p of uniquePoints) {
                     if (grouped[p].length >= 2) {
                         solutions.push(grouped[p].slice(0, 2));
-                        break; 
+                        // 不 break，允许找大一点的对子，让 Cost 函数决定
                     }
                 }
                 // 3. 三张
                 for (let p of uniquePoints) {
                     if (grouped[p].length >= 3) {
                         solutions.push(grouped[p].slice(0, 3));
-                        break;
                     }
                 }
                 // 4. 连对 (简单检测)
@@ -6265,7 +6564,6 @@ const SmartHint = {
                     const p2 = uniquePoints[i+1];
                     if (p2 === p1 + 1 && p2 < 15 && grouped[p1].length >=2 && grouped[p2].length >= 2) {
                          solutions.push([...grouped[p1].slice(0,2), ...grouped[p2].slice(0,2)]);
-                         break;
                     }
                 }
 
@@ -6344,9 +6642,6 @@ const SmartHint = {
             const currentVal = lastState.val || 0;
             
             // 调用核心逻辑
-            // [修复] 对于炸弹压制，这里必须传入 Level 以过滤掉打不过的炸弹
-            // 但注意：同 Level 的炸弹还需要比长度或点数，coreFindBombs 只是简单的筛选
-            // 所以后面必须配合 GameRules.canPlay 进行二次校验
             const bombs = SmartHint.coreFindBombs(hand, grouped, uniquePoints, deckCount, 0, 0);
             
             bombs.forEach(b => {
@@ -6530,11 +6825,55 @@ const BotLogic = {
         PLAY_TRASH_BONUS: 10,    // 出废牌奖励(Bot决策用)
     },
 
-    // [新增/核心] 获取经过智能排序的提示列表
-    getSortedHints: (hand, lastPlayedCards, deckCount) => {
+    /**
+     * [新增/核心] 获取经过智能排序的提示列表
+     * @param {Array} hand 手牌
+     * @param {Array} lastPlayedCards 上家出的牌
+     * @param {Number} deckCount 牌副数
+     * @param {Object} context 策略上下文 { mode: 'SMART'|'THRIFTY'|'AFK', isTeammate: boolean, pendingScore: number }
+     */
+    getSortedHints: (hand, lastPlayedCards, deckCount, context = {}) => {
+        const { mode = 'SMART', isTeammate = false, pendingScore = 0 } = context;
+
+        // --- 策略前置拦截 (躺平模式) ---
+        // 如果是 AFK 模式，且不是首出（即需要管别人的牌），直接返回空数组（Pass）
+        if (mode === 'AFK' && lastPlayedCards && lastPlayedCards.length > 0) {
+            return [];
+        }
+
         // 1. 获取所有合法解
-        const solutions = BotLogic.findAllSolutions(hand, lastPlayedCards, deckCount);
+        let solutions = BotLogic.findAllSolutions(hand, lastPlayedCards, deckCount);
         if (!solutions || solutions.length === 0) return [];
+
+        // [修改] 过滤掉 510K (托管/Bot 不自动打出 510K)
+        solutions = solutions.filter(sol => {
+            const type = CardRules.analyze(sol, deckCount).type;
+            return type !== '510K_PURE' && type !== '510K_MIXED';
+        });
+
+        // --- 策略过滤 (SMART & THRIFTY) ---
+        solutions = solutions.filter(sol => {
+            const analysis = CardRules.analyze(sol, deckCount);
+            const isBomb = analysis.level > 0;
+
+            // 模式1: 智能模式 (默认) - 队友出的牌，不用炸弹管
+            if (mode === 'SMART' && isTeammate && isBomb) {
+                return false; 
+            }
+
+            // 模式2: 省钱模式 - 场上没分，不用炸弹管
+            if (mode === 'THRIFTY' && pendingScore === 0 && isBomb) {
+                // 注意：如果是首出(lastPlayedCards为空)，通常pendingScore也是0，但首出可以用炸弹
+                // 所以限定为管牌阶段 (lastPlayedCards 不为空)
+                if (lastPlayedCards && lastPlayedCards.length > 0) {
+                    return false;
+                }
+            }
+
+            return true;
+        });
+
+        if (solutions.length === 0) return [];
 
         // 2. 分析手牌中的炸弹（用于判断是否拆了炸弹）
         const myBombs = BotLogic.findAllBombsInHand(hand, deckCount);
@@ -6547,20 +6886,23 @@ const BotLogic = {
             : null;
         const lastIsBomb = lastAnalysis ? lastAnalysis.level > 0 : false;
 
+        // [新增] 统计手牌中每个点数的数量，用于识别“废牌”
+        const handCounts = {};
+        hand.forEach(c => {
+            const p = CardRules.getPoint(c);
+            handCounts[p] = (handCounts[p] || 0) + 1;
+        });
+
         // 4. 对每个方案计算 Cost (代价越低越优先)
         const scoredSolutions = solutions.map(sol => {
             const analysis = CardRules.analyze(sol, deckCount);
             let cost = 0;
             
-            // --- A. [修复] 基础分：优化炸弹与普通牌的排序 ---
-            // 之前的逻辑只加 val，导致长炸弹(7个3)比短炸弹(4个8) Cost低，Bot会先扔大炸弹
+            // --- A. 基础分 ---
             if (analysis.level > 0) {
                 // 炸弹：Level 权重 > Length 权重 > Value 权重
                 cost += analysis.level * 100000;
                 
-                // 510K 的 level 比较低 (1或2)，会被普通炸弹(level 3)压制，符合逻辑
-                
-                // 普通炸弹 (Level 3) 或 至尊炸弹 (Level 5)
                 if (analysis.type === 'BOMB_STD' || analysis.type === 'BOMB_MAX') {
                     cost += analysis.len * 1000;
                 }
@@ -6577,31 +6919,39 @@ const BotLogic = {
                 // 如果出的不是炸弹，检查是否用了炸弹里的牌
                 const breaksBomb = sol.some(c => bombCardsSet.has(c));
                 if (breaksBomb) {
-                    cost += 2000000; // [修改] 极大的惩罚：Bot 绝不应拆炸弹，除非是最后没办法
+                    cost += 2000000; // Bot 严禁拆炸弹
                 }
             }
 
-            // --- C. 炸弹压制判断 (避免大材小用) ---
+            // --- C. 炸弹压制判断 ---
             if (isMoveBomb && !lastIsBomb && lastAnalysis) {
-                // 上家不是炸弹，我用炸弹管 -> 亏，除非这是为了赢
-                // 但如果这手牌打完就赢了，则无视 Cost
+                // 上家不是炸弹，我用炸弹管 -> 亏
                 if (hand.length === sol.length) cost = -9999999;
                 else cost += 1000; 
             }
 
             // --- D. 自由出牌 (首出) 偏好 ---
             if (!lastAnalysis) {
-                // 优先出复杂牌型，快速减少手牌数量
                 if (analysis.type === 'AIRPLANE') cost -= 200;
                 else if (analysis.type === 'LIANDUI') cost -= 150;
                 else if (analysis.type === 'TRIPLE') cost -= 100;
                 else if (analysis.type === 'PAIR') cost -= 50;
                 
-                // 炸弹尽量留到最后出，除非它是为了冲刺
+                // [关键修改] 单张逻辑细化 (废牌优先)
+                else if (analysis.type === 'SINGLE') {
+                    const countInHand = handCounts[analysis.val] || 0;
+                    if (countInHand === 1) {
+                        // 真正的废牌，Cost 比对子还低，优先打出
+                        cost -= 80;
+                    } else {
+                        // 拆对子出的单牌，Cost = val (正数)，优先级很低
+                    }
+                }
+
+                // 炸弹尽量留到最后出
                 if (isMoveBomb) {
-                    // 如果只剩炸弹了，那就赶紧出
                     if (hand.length === sol.length) cost = -9999999;
-                    else cost += 8000; // [修改] Bot 也不要起手扔炸弹
+                    else cost += 8000; 
                 }
             }
 
@@ -6615,7 +6965,8 @@ const BotLogic = {
     },
 
     // [智能决策入口]
-    decideMove: (hand, lastPlayedCards, deckCount) => {
+    // 增加 context 参数
+    decideMove: (hand, lastPlayedCards, deckCount, context = {}) => {
         try {
             // 如果只剩一手牌，直接梭哈
             const analysis = CardRules.analyze(hand, deckCount);
@@ -6624,11 +6975,10 @@ const BotLogic = {
                 if (CardRules.canPlay(hand, lastPlayedCards, deckCount)) return hand;
             }
 
-            const solutions = BotLogic.getSortedHints(hand, lastPlayedCards, deckCount);
+            const solutions = BotLogic.getSortedHints(hand, lastPlayedCards, deckCount, context);
             if (solutions.length === 0) return null;
 
             // getSortedHints 已经排好序了，直接取第一个最优解
-            // 简单的贪婪策略：取 Cost 最低的
             return solutions[0];
         } catch (e) {
             console.error("BotLogic decideMove error:", e);
@@ -6732,7 +7082,7 @@ const BotLogic = {
                 for (let p of uniquePoints) {
                     if (grouped[p].length >= 2) {
                         solutions.push(grouped[p].slice(0, 2));
-                        // [优化] 不再 break，允许找大一点的对子，虽然通常出最小的，但留给Cost函数决定
+                        // 不 break，保留更多选择
                     }
                 }
                 // 3. 三张
@@ -6742,18 +7092,16 @@ const BotLogic = {
                     }
                 }
                 
-                // [优化] 4. 连对 (查找所有可能的2连对)
+                // 4. 连对 (查找所有可能的2连对)
                 for(let i=0; i<uniquePoints.length-1; i++) {
                     const p1 = uniquePoints[i];
                     const p2 = uniquePoints[i+1];
-                    // 必须连续，且不能超过A(14)，因为2不能连
                     if (p2 === p1 + 1 && p2 < 15 && grouped[p1].length >= 2 && grouped[p2].length >= 2) {
                          solutions.push([...grouped[p1].slice(0,2), ...grouped[p2].slice(0,2)]);
-                         // [重要提升] 不再 break，这样 Bot 能发现中间段的连对
                     }
                 }
 
-                // [优化] 5. 飞机 (查找所有可能的2连三张)
+                // 5. 飞机 (查找所有可能的2连三张)
                 for(let i=0; i<uniquePoints.length-1; i++) {
                     const p1 = uniquePoints[i];
                     const p2 = uniquePoints[i+1];
@@ -6766,7 +7114,7 @@ const BotLogic = {
                 const bombs = findAllBombs(-1, -1);
                 bombs.forEach(b => solutions.push(b.cards));
                 
-                // 兜底：如果没找到啥牌，就把前几个单张都加进去备选
+                // 兜底
                 if (solutions.length < 3) {
                     for(let i=0; i<Math.min(uniquePoints.length, 3); i++) {
                         solutions.push([grouped[uniquePoints[i]][0]]);
@@ -6866,13 +7214,16 @@ class BotManager {
         this.timer = null;
     }
 
-    // ... (保留 toggleAutoPlay, clearTimer, checkAndRun, _playMinCard, _forcePass 等方法不变) ...
     // 切换托管状态
     toggleAutoPlay(playerId) {
         const player = this.game.players.find(p => p.id === playerId);
         if (!player || player.isBot) return; 
 
         player.isAutoPlay = !player.isAutoPlay;
+        // [修改] 开启时重置为默认模式 (SMART)
+        if (player.isAutoPlay) {
+            player.autoPlayMode = 'SMART'; 
+        }
         
         // 如果当前正好轮到该玩家，且开启了托管，立即触发机器人逻辑
         if (this.game.gameState && 
@@ -6945,15 +7296,33 @@ class BotManager {
             const sortedHand = [...hand].sort((a,b) => CardRules.getPoint(a) - CardRules.getPoint(b));
             
             let cardsToPlay = null;
+
+            // [新增] 构建策略上下文
+            const strategyContext = {
+                mode: botPlayer.autoPlayMode || 'SMART',
+                pendingScore: this.game.gameState.pendingTablePoints || 0,
+                isTeammate: false
+            };
+
+            // 判断上家是否为队友
+            if (!isNewRound && this.game.gameState.roundWinnerId) {
+                const lastWinner = this.game.players.find(p => p.id === this.game.gameState.roundWinnerId);
+                if (lastWinner && botPlayer.team !== null && botPlayer.team !== undefined) {
+                    if (lastWinner.team === botPlayer.team && lastWinner.id !== botPlayer.id) {
+                        strategyContext.isTeammate = true;
+                    }
+                }
+            }
+
             try {
-                // 调用纯算法模块
-                cardsToPlay = BotLogic.decideMove(sortedHand, cardsToBeat, this.game.config.deckCount);
+                // [修改] 传入 context
+                cardsToPlay = BotLogic.decideMove(sortedHand, cardsToBeat, this.game.config.deckCount, strategyContext);
             } catch (err) {
                 console.error("[Bot Error] Logic crashed:", err);
             }
 
             if (cardsToPlay) {
-                console.log(`[Bot/Auto] ${botPlayer.name} plays ${cardsToPlay.length} cards.`);
+                console.log(`[Bot/Auto] ${botPlayer.name} plays ${cardsToPlay.length} cards (Mode: ${strategyContext.mode}).`);
                 // 调用 GameManager 的核心出牌方法
                 const result = this.game.playCards(botPlayer.id, cardsToPlay);
                 
@@ -6962,7 +7331,6 @@ class BotManager {
                         this.game.io.to(botPlayer.id).emit('hand_update', this.game.gameState.hands[botPlayer.id]);
                     }
 
-                    // [修改] 无论是否结束，先广播出牌信息，让前端更新 UI，避免游戏直接结束看不到最后一张牌
                     const analysis = CardRules.analyze(cardsToPlay, this.game.config.deckCount);
                     const desc = CardRules.getAnalysisText(analysis);
                     let logText = `${botPlayer.name}: ${desc}`;
@@ -6974,7 +7342,6 @@ class BotManager {
                     this.game._broadcastUpdate(logText);
 
                     if (result.isRoundOver) {
-                        // [修改] 增加 3秒 延迟，确保前端展示出牌动画和停留效果
                         setTimeout(() => {
                             this.game._handleWin(result, botPlayer.id);
                         }, 3000);
@@ -7009,11 +7376,9 @@ class BotManager {
             
             const analysis = CardRules.analyze(minCard, this.game.config.deckCount);
             const desc = CardRules.getAnalysisText(analysis);
-            // [修改] 先广播更新
             this.game._broadcastUpdate(`${botPlayer.name}: ${desc} (系统)`);
 
             if (result.isRoundOver) {
-                // [修改] 增加 3秒 延迟
                 setTimeout(() => {
                     this.game._handleWin(result, botPlayer.id);
                 }, 3000);
@@ -7027,7 +7392,6 @@ class BotManager {
     _forcePass(botPlayer) {
         const result = this.game.passTurn(botPlayer.id);
         
-        // [修改] 如果 pass 导致结束，也需要延迟
         if (result.isRoundOver) {
              this.game._broadcastUpdate(`${botPlayer.name}: 不要`);
              setTimeout(() => {
@@ -7037,11 +7401,9 @@ class BotManager {
             this.game._broadcastUpdate(`${botPlayer.name}: 不要`);
         } else {
             console.error("[Bot Critical] Failed to pass turn:", result.error);
-            // 如果连 pass 都失败了，强制流转
             this.game._advanceTurn();
             this.game._broadcastUpdate();
             this.game._resetTimer();
-            // 链式调用：继续检查下一个玩家
             this.checkAndRun();
         }
     }
@@ -7788,7 +8150,12 @@ class GameManager {
         this.roomId = roomId;
 
         this.grandScores = {}; // 总大分
-        this.players.forEach(p => this.grandScores[p.id] = 0);
+        this.players.forEach(p => {
+            this.grandScores[p.id] = 0;
+            // [新增] 初始化托管模式，默认为智能
+            p.autoPlayMode = 'SMART'; 
+        });
+        
         this.lastWinnerId = null;
         this.gameState = null; 
         
@@ -7800,6 +8167,14 @@ class GameManager {
         this.collectedCards = [];
 
         this.botManager = new BotManager(this);
+    }
+    
+    // [新增] 设置托管模式
+    setPlayerAutoPlayMode(playerId, mode) {
+        const player = this.players.find(p => p.id === playerId);
+        if (player) {
+            player.autoPlayMode = mode;
+        }
     }
 
     toggleAutoPlay(playerId) {
@@ -7815,6 +8190,7 @@ class GameManager {
         }
 
         // 每一小局开始时，强制关闭所有人类玩家的托管状态
+        // [修改] 模式保持不变，只重置开关
         this.players.forEach(p => {
             if (!p.isBot) {
                 p.isAutoPlay = false;
@@ -8043,7 +8419,6 @@ class GameManager {
                     const winnerPlayer = this.players.find(p => p.id === wId);
                     
                     if (!winnerPlayer) {
-                         // 极端情况：赢家跑了，直接下家接风
                          console.warn("[GameManager] Round winner left the game, passing priority to next.");
                          infoMessage = `${currPlayer.name}: 不要 (上家已离线)`;
                     } else {
@@ -8228,15 +8603,15 @@ class GameManager {
         this.players.forEach(p => {
             const grand = this.grandScores[p.id] || 0;
             const round = this.gameState.roundPoints[p.id] || 0;
-            // [注意] 这里的逻辑是 总分 + 当前局抓分
-            // 修复前：如果 _concludeRound 不清零 round，这里就会变成 (Grand+Round) + Round，导致双倍叠加
             currentScoresDisplay[p.id] = grand + round;
             roundPointsDisplay[p.id] = round; 
             
             playersInfo[p.id] = { 
                 isBot: p.isBot, 
                 isAutoPlay: p.isAutoPlay,
-                team: p.team 
+                team: p.team,
+                // [新增] 暴露托管模式
+                autoPlayMode: p.autoPlayMode 
             };
             handCounts[p.id] = this.gameState.hands[p.id] ? this.gameState.hands[p.id].length : 0;
         });
@@ -8429,9 +8804,6 @@ class GameManager {
             this.grandScores[p.id] += currentRoundScores[p.id];
             scoreBreakdown[p.id].final = currentRoundScores[p.id];
             
-            // [关键修复] 累加到总分后，必须立即清空当前局抓分
-            // 否则 getPublicState 会返回 (Grand + Round)，因为 Grand 已经包含了 Round
-            // 导致结算等待期分数重复叠加 (暴涨)
             if (this.gameState && this.gameState.roundPoints) {
                 this.gameState.roundPoints[p.id] = 0;
             }
@@ -8445,7 +8817,30 @@ class GameManager {
         });
 
         const firstWinnerName = this.players.find(p => p.id === firstWinnerId)?.name || '未知';
-        const isGrandOver = this.grandScores[firstWinnerId] >= this.config.targetScore;
+
+        let isGrandOver = false;
+        const targetScore = this.config.targetScore;
+        const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
+
+        if (isTeamMode) {
+            let redTotal = 0;
+            let blueTotal = 0;
+            this.players.forEach(p => {
+                const s = this.grandScores[p.id] || 0;
+                if (p.team === 0) redTotal += s;
+                else if (p.team === 1) blueTotal += s;
+            });
+            
+            if (redTotal >= targetScore || blueTotal >= targetScore) {
+                isGrandOver = true;
+            }
+        } else {
+            const maxScore = Math.max(...Object.values(this.grandScores));
+            if (maxScore >= targetScore) {
+                isGrandOver = true;
+            }
+        }
+
         const totalPointsEarned = currentRoundScores[firstWinnerId];
 
         return {
@@ -8605,17 +9000,36 @@ module.exports = (io, socket, rooms) => {
         io.to(roomId).emit('game_state_update', publicState);
     };
 
-    // 辅助函数：开始游戏逻辑
+    // 辅助函数：广播房间信息（用于大厅/房间等待阶段）
+    const broadcastRoomInfo = (roomId, room) => {
+        const currentGrandScores = room.gameManager ? room.gameManager.grandScores : {};
+        // 确保所有玩家都有大分记录
+        if (Object.keys(currentGrandScores).length === 0) {
+            room.players.forEach(p => {
+                if (currentGrandScores[p.id] === undefined) currentGrandScores[p.id] = 0;
+            });
+        }
+        io.to(roomId).emit('room_info', { 
+            roomId, 
+            config: room.config, 
+            players: room.players, 
+            grandScores: currentGrandScores 
+        });
+    };
+
+    // 处理游戏开始逻辑
     const handleGameStart = (roomId, isNextRound) => {
         const room = rooms[roomId];
         if (!room) return;
 
+        // 如果是新一局或没有管理器，重新实例化
         if (!isNextRound || !room.gameManager) {
             room.gameManager = new GameManager(room.config, room.players, io, roomId);
         }
 
         const startInfo = room.gameManager.startRound(isNextRound);
 
+        // 给每个非机器人玩家发送手牌
         room.players.forEach((p) => {
             if (!p.isBot) { 
                 const hand = startInfo.hands[p.id];
@@ -8635,28 +9049,103 @@ module.exports = (io, socket, rooms) => {
         broadcastGameState(roomId, room, msg);
     };
 
-    // --- 开始游戏 (含座位抽签) ---
-    socket.on('start_game', ({ roomId }) => {
+    // --- 事件监听 ---
+
+    // 1. 更新房间配置
+    socket.on('update_config', ({ roomId, config }) => {
         const room = rooms[roomId];
         if (!room) return;
         
-        // 修正奇数人数问题
+        // 只有房主能修改 (通常第一个人是房主，这里简化判断，或者信任前端)
+        room.config = { ...room.config, ...config };
+        broadcastRoomInfo(roomId, room);
+    });
+
+    // 2. 添加机器人
+    socket.on('add_bot', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+        if (room.gameManager) return socket.emit('error_msg', '游戏进行中无法加人');
+        if (room.players.length >= 8) return socket.emit('error_msg', '房间已满');
+
+        const botId = `bot_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+        const botName = `机器人${Math.floor(Math.random()*100)}`;
+        
+        room.players.push({
+            id: botId,
+            name: botName,
+            isBot: true,
+            isReady: true,
+            team: null
+        });
+
+        broadcastRoomInfo(roomId, room);
+    });
+
+    // 3. 踢出玩家
+    socket.on('kick_player', ({ roomId, targetId }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+        
+        // 简单鉴权：只能踢别人
+        if (targetId === socket.id) return; 
+
+        const idx = room.players.findIndex(p => p.id === targetId);
+        if (idx !== -1) {
+            const removed = room.players.splice(idx, 1)[0];
+            
+            // 通知被踢玩家
+            if (!removed.isBot) {
+                io.to(removed.id).emit('kicked', '你已被房主移出房间');
+                // 也可以强制断开socket连接或清理状态
+            }
+            broadcastRoomInfo(roomId, room);
+        }
+    });
+
+    // 4. 交换座位
+    socket.on('switch_seat', ({ roomId, fromIndex, toIndex }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+        if (room.gameManager) return; // 游戏中不能换座
+
+        if (fromIndex < 0 || fromIndex >= room.players.length || 
+            toIndex < 0 || toIndex >= room.players.length) return;
+
+        const temp = room.players[fromIndex];
+        room.players[fromIndex] = room.players[toIndex];
+        room.players[toIndex] = temp;
+
+        broadcastRoomInfo(roomId, room);
+    });
+
+    // 5. 开始游戏 (抽牌/直接开始)
+    socket.on('start_game', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+
+        // 清理旧的游戏管理器
+        if (room.gameManager) {
+            if (room.gameManager._clearTimer) room.gameManager._clearTimer();
+            room.gameManager = null;
+        }
+        
+        // 组队模式人数检查
         if (room.config.isTeamMode && room.players.length % 2 !== 0) {
             room.config.isTeamMode = false;
             io.to(roomId).emit('error_msg', '人数为奇数，已自动关闭组队模式');
-            
-            // 简单更新一下配置信息给客户端
-            const currentGrandScores = room.gameManager ? room.gameManager.grandScores : {};
-            if (Object.keys(currentGrandScores).length === 0) room.players.forEach(p => currentGrandScores[p.id] = 0);
-            io.to(roomId).emit('room_info', { roomId, config: room.config, players: room.players, grandScores: currentGrandScores });
+            broadcastRoomInfo(roomId, room);
         }
 
         const isTeamMode = room.config.isTeamMode && (room.players.length % 2 === 0);
+        
+        // 初始化座位管理器 (用于抽牌选座)
         room.seatManager = new SeatManager(io, roomId, room.players, isTeamMode);
         
+        // 通知前端进入抽牌阶段
         io.to(roomId).emit('enter_draw_phase', { totalCards: room.players.length });
         
-        // 机器人自动抽卡
+        // 机器人自动抽牌逻辑
         const bots = room.players.filter(p => p.isBot);
         bots.forEach((bot, i) => {
             setTimeout(() => {
@@ -8673,6 +9162,7 @@ module.exports = (io, socket, rooms) => {
                                 playerId: bot.id,
                                 name: bot.name
                             });
+                            // 检查是否所有人都抽完了
                             if (res.isFinished) {
                                 setTimeout(() => {
                                     if (!rooms[roomId]) return;
@@ -8690,7 +9180,7 @@ module.exports = (io, socket, rooms) => {
         });
     });
 
-    // --- 抽卡动作 ---
+    // 6. 玩家抽座次牌
     socket.on('draw_seat_card', ({ roomId, cardIndex }) => {
         const room = rooms[roomId];
         if (!room || !room.seatManager) return;
@@ -8724,10 +9214,10 @@ module.exports = (io, socket, rooms) => {
         }
     });
 
-    // --- 下一局 ---
+    // 7. 下一局
     socket.on('next_round', ({ roomId }) => handleGameStart(roomId, true));
 
-    // --- 出牌 ---
+    // 8. 出牌
     socket.on('play_cards', ({ roomId, cards }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -8740,22 +9230,15 @@ module.exports = (io, socket, rooms) => {
         io.to(socket.id).emit('hand_update', currentHand);
 
         if (result.isRoundOver) { 
-            // 1. 如果有出牌动作（不是直接结束），先广播出牌动画
             if (result.cardsPlayed && result.cardsPlayed.length > 0) {
                  broadcastGameState(roomId, room, result.logText);
             }
 
-            // 2. 延迟 3秒 后触发结算
             setTimeout(() => {
-                // 双重检查防止房间被销毁
                 if (!rooms[roomId]) return;
-                
-                // [核心修复] 
-                // 不再手动 emit round_over，而是调用 GameManager._handleWin 
-                // 这样能确保与 Bot 获胜时的逻辑完全一致，包含 scoreBreakdown 和 matchHistory
                 room.gameManager._handleWin(result, socket.id);
 
-                // 如果是大局结束，清理 GameManager 引用
+                // 如果大局结束，清理 GameManager
                 if (result.roundResult.isGrandOver) {
                     room.gameManager = null; 
                 }
@@ -8765,7 +9248,7 @@ module.exports = (io, socket, rooms) => {
         }
     });
 
-    // --- 过牌 ---
+    // 9. 不要/过牌
     socket.on('pass_turn', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -8773,17 +9256,13 @@ module.exports = (io, socket, rooms) => {
         const result = room.gameManager.passTurn(socket.id);
         if (!result.success) return socket.emit('play_error', result.error);
 
-        // 如果过牌导致游戏结束 (如最后一手都没人要)
         if (result.isRoundOver) {
             broadcastGameState(roomId, room, result.logText);
             
             setTimeout(() => {
                 if (!rooms[roomId]) return;
-                
-                // [核心修复] 同样调用 _handleWin 统一结算逻辑
                 room.gameManager._handleWin(result, socket.id);
                 
-                // 这里的 result.roundResult 依然包含 isGrandOver 等信息
                 if (result.roundResult && result.roundResult.isGrandOver) {
                     room.gameManager = null;
                 }
@@ -8793,7 +9272,7 @@ module.exports = (io, socket, rooms) => {
         }
     });
 
-    // --- 切换托管 ---
+    // 10. 切换托管开关
     socket.on('toggle_auto_play', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -8802,10 +9281,20 @@ module.exports = (io, socket, rooms) => {
         broadcastGameState(roomId, room);
     });
 
-    // --- 请求提示 ---
+    // 11. [新增] 切换托管模式 (智能/省钱/躺平)
+    socket.on('switch_autoplay_mode', ({ roomId, mode }) => {
+        const room = rooms[roomId];
+        if (!room || !room.gameManager) return;
+
+        room.gameManager.setPlayerAutoPlayMode(socket.id, mode);
+        broadcastGameState(roomId, room);
+    });
+
+    // 12. 请求提示
     socket.on('request_hint', ({ roomId }) => {
         const room = rooms[roomId];
         if (room && room.gameManager) {
+            // 注意: 现在的提示主要在前端计算，后端保留此接口以防万一
             const cards = room.gameManager.getHint(socket.id);
             socket.emit('hint_response', cards);
         }
@@ -8817,6 +9306,13 @@ FILE PATH: server\handlers\roomHandler.js
 ================================================================================
 module.exports = (io, socket, rooms) => {
     
+    // [修复] 添加 Ping 监听，解决前端 Ping 值为 0 的问题
+    socket.on('ping', (callback) => {
+        if (typeof callback === 'function') {
+            callback();
+        }
+    });
+
     // ... (保持辅助函数 broadcastRoomInfo, broadcastGameState 不变) ...
     const broadcastRoomInfo = (roomId) => {
         const room = rooms[roomId];

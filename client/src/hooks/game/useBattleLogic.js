@@ -126,7 +126,10 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
                 }
                 
                 if (data.infoText !== 'PASS') {
-                    setInfoMessage(data.infoText); setTimeout(()=>setInfoMessage(''), 2000);
+                    // [修改] 延长停留时间至 3.5s，配合 CSS 动画
+                    setInfoMessage(data.infoText); 
+                    setTimeout(() => setInfoMessage(''), 3500);
+                    
                     setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: data.infoText }]);
                 }
             }
@@ -148,7 +151,7 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
         const onPlayError = (msg) => { 
             setIsSubmitting(false); 
             setInfoMessage(msg); 
-            setTimeout(()=>setInfoMessage(''), 2000); 
+            setTimeout(()=>setInfoMessage(''), 3500); 
             SoundManager.play('lose'); 
             
             if (backupHandRef.current.length > 0) {
@@ -200,6 +203,10 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
     });
     
     const handleToggleAutoPlay = (roomId) => socket.emit('toggle_auto_play', { roomId });
+
+    // [新增] 切换托管模式
+    const handleSwitchAutoPlayMode = (roomId, mode) => socket.emit('switch_autoplay_mode', { roomId, mode });
+
     const handlePass = (roomId) => {
         if (isSubmitting) return; 
         setIsSubmitting(true);    
@@ -282,7 +289,8 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
 
         // Actions
         toggleSort, 
-        handleToggleAutoPlay, 
+        handleToggleAutoPlay,
+        handleSwitchAutoPlayMode, // [新增] 导出该方法
         handlePass, 
         handlePlayCards,
         handleRequestHint,

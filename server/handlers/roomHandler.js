@@ -1,5 +1,12 @@
 module.exports = (io, socket, rooms) => {
     
+    // [修复] 添加 Ping 监听，解决前端 Ping 值为 0 的问题
+    socket.on('ping', (callback) => {
+        if (typeof callback === 'function') {
+            callback();
+        }
+    });
+
     // ... (保持辅助函数 broadcastRoomInfo, broadcastGameState 不变) ...
     const broadcastRoomInfo = (roomId) => {
         const room = rooms[roomId];

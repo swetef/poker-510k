@@ -10,7 +10,12 @@ class GameManager {
         this.roomId = roomId;
 
         this.grandScores = {}; // 总大分
-        this.players.forEach(p => this.grandScores[p.id] = 0);
+        this.players.forEach(p => {
+            this.grandScores[p.id] = 0;
+            // [新增] 初始化托管模式，默认为智能
+            p.autoPlayMode = 'SMART'; 
+        });
+        
         this.lastWinnerId = null;
         this.gameState = null; 
         
@@ -22,6 +27,14 @@ class GameManager {
         this.collectedCards = [];
 
         this.botManager = new BotManager(this);
+    }
+    
+    // [新增] 设置托管模式
+    setPlayerAutoPlayMode(playerId, mode) {
+        const player = this.players.find(p => p.id === playerId);
+        if (player) {
+            player.autoPlayMode = mode;
+        }
     }
 
     toggleAutoPlay(playerId) {
@@ -37,6 +50,7 @@ class GameManager {
         }
 
         // 每一小局开始时，强制关闭所有人类玩家的托管状态
+        // [修改] 模式保持不变，只重置开关
         this.players.forEach(p => {
             if (!p.isBot) {
                 p.isAutoPlay = false;
@@ -265,7 +279,6 @@ class GameManager {
                     const winnerPlayer = this.players.find(p => p.id === wId);
                     
                     if (!winnerPlayer) {
-                         // 极端情况：赢家跑了，直接下家接风
                          console.warn("[GameManager] Round winner left the game, passing priority to next.");
                          infoMessage = `${currPlayer.name}: 不要 (上家已离线)`;
                     } else {
@@ -450,15 +463,15 @@ class GameManager {
         this.players.forEach(p => {
             const grand = this.grandScores[p.id] || 0;
             const round = this.gameState.roundPoints[p.id] || 0;
-            // [注意] 这里的逻辑是 总分 + 当前局抓分
-            // 修复前：如果 _concludeRound 不清零 round，这里就会变成 (Grand+Round) + Round，导致双倍叠加
             currentScoresDisplay[p.id] = grand + round;
             roundPointsDisplay[p.id] = round; 
             
             playersInfo[p.id] = { 
                 isBot: p.isBot, 
                 isAutoPlay: p.isAutoPlay,
-                team: p.team 
+                team: p.team,
+                // [新增] 暴露托管模式
+                autoPlayMode: p.autoPlayMode 
             };
             handCounts[p.id] = this.gameState.hands[p.id] ? this.gameState.hands[p.id].length : 0;
         });
@@ -651,9 +664,6 @@ class GameManager {
             this.grandScores[p.id] += currentRoundScores[p.id];
             scoreBreakdown[p.id].final = currentRoundScores[p.id];
             
-            // [关键修复] 累加到总分后，必须立即清空当前局抓分
-            // 否则 getPublicState 会返回 (Grand + Round)，因为 Grand 已经包含了 Round
-            // 导致结算等待期分数重复叠加 (暴涨)
             if (this.gameState && this.gameState.roundPoints) {
                 this.gameState.roundPoints[p.id] = 0;
             }
@@ -667,7 +677,30 @@ class GameManager {
         });
 
         const firstWinnerName = this.players.find(p => p.id === firstWinnerId)?.name || '未知';
-        const isGrandOver = this.grandScores[firstWinnerId] >= this.config.targetScore;
+
+        let isGrandOver = false;
+        const targetScore = this.config.targetScore;
+        const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
+
+        if (isTeamMode) {
+            let redTotal = 0;
+            let blueTotal = 0;
+            this.players.forEach(p => {
+                const s = this.grandScores[p.id] || 0;
+                if (p.team === 0) redTotal += s;
+                else if (p.team === 1) blueTotal += s;
+            });
+            
+            if (redTotal >= targetScore || blueTotal >= targetScore) {
+                isGrandOver = true;
+            }
+        } else {
+            const maxScore = Math.max(...Object.values(this.grandScores));
+            if (maxScore >= targetScore) {
+                isGrandOver = true;
+            }
+        }
+
         const totalPointsEarned = currentRoundScores[firstWinnerId];
 
         return {

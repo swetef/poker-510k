@@ -1,37 +1,48 @@
-/* 底分面板 */
+/* 底分面板 - 极简纯净版 */
 .scoreBoard {
     position: absolute;
-    top: 40%;
+    /* 稍微偏上(42%)，给下面的出牌留空间 */
+    top: 42%;
     left: 50%;
-    transform: translate(-50%, -100%) scale(0.8);
-    background: rgba(0,0,0,0.6);
-    padding: 5px 20px;
-    borderRadius: 20px;
-    text-align: center;
-    color: white;
-    border: 1px solid rgba(255,255,255,0.2);
-    backdrop-filter: blur(5px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    transform: translate(-50%, -50%);
+    
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    
+    padding: 0;
     z-index: 5;
+    pointer-events: none;
+    
+    animation: fadeIn 0.3s ease;
 }
 
-.scoreLabel {
-    font-size: 10px;
-    opacity: 0.8;
-    text-transform: uppercase;
+@keyframes fadeIn {
+    from { opacity: 0; transform: translate(-50%, -40%); }
+    to { opacity: 1; transform: translate(-50%, -50%); }
 }
 
 .scoreValue {
-    font-size: 24px;
-    font-weight: bold;
+    font-size: 28px;
+    font-weight: 900;
     color: #f1c40f;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
+    
+    text-shadow: 
+        0 2px 0 #b9770e,
+        0 4px 4px rgba(0,0,0,0.5),
+        -1px -1px 0 #000,  
+         1px -1px 0 #000,
+        -1px  1px 0 #000,
+         1px  1px 0 #000;
+    
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));
 }
 
-/* 系统消息 (全屏大字) */
+/* 系统消息 */
 .infoMessage {
     position: absolute;
     top: 25%;
@@ -44,13 +55,13 @@
     pointer-events: none;
     z-index: 50;
     letter-spacing: 2px;
-    animation: fadeInOut 2s forwards;
+    animation: fadeInOut 3.5s forwards;
 }
 
 @keyframes fadeInOut {
     0% { opacity: 0; transform: translateY(10px); }
     10% { opacity: 1; transform: translateY(0); }
-    90% { opacity: 1; transform: translateY(0); }
+    80% { opacity: 1; transform: translateY(0); }
     100% { opacity: 0; transform: translateY(-10px); }
 }
 
@@ -66,9 +77,11 @@
     z-index: 1;
 }
 
-/* 弹出动画容器 */
 .playedContainer {
     animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 @keyframes popIn {
@@ -76,7 +89,6 @@
     100% { transform: scale(1); opacity: 1; }
 }
 
-/* 出牌者名字标签 */
 .playerNameTag {
     color: white;
     text-align: center;
@@ -93,15 +105,25 @@
 /* 牌型行 */
 .playedRow {
     display: flex;
-    /* 负间距让牌叠在一起 */
-    gap: -10px; 
+    justify-content: center;
+    /* [修复] gap 不支持负值，改用 margin 实现叠牌 */
     filter: drop-shadow(0 10px 20px rgba(0,0,0,0.3));
+    /* 整体缩小一点点，看起来更精致 */
+    transform: scale(0.9);
 }
 
-/* 特殊修正：MiniCard 的负 margin 需要配合 CSS */
+/* * [重要] Card组件内部是 absolute 定位
+ * 这里 wrapper 需要相对定位并指定宽高，才能撑开 flex 布局 
+ * 55px x 70px 是 Card.module.css 定义的尺寸
+ */
 .miniCardWrapper {
-    margin-right: -10px;
+    width: 55px;
+    height: 70px;
+    position: relative;
+    /* 负 margin 实现叠牌效果 */
+    margin-right: -25px; 
 }
+
 .miniCardWrapper:last-child {
     margin-right: 0;
 }

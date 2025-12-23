@@ -6,11 +6,55 @@ const BotLogic = {
         PLAY_TRASH_BONUS: 10,    // 出废牌奖励(Bot决策用)
     },
 
-    // [新增/核心] 获取经过智能排序的提示列表
-    getSortedHints: (hand, lastPlayedCards, deckCount) => {
+    /**
+     * [新增/核心] 获取经过智能排序的提示列表
+     * @param {Array} hand 手牌
+     * @param {Array} lastPlayedCards 上家出的牌
+     * @param {Number} deckCount 牌副数
+     * @param {Object} context 策略上下文 { mode: 'SMART'|'THRIFTY'|'AFK', isTeammate: boolean, pendingScore: number }
+     */
+    getSortedHints: (hand, lastPlayedCards, deckCount, context = {}) => {
+        const { mode = 'SMART', isTeammate = false, pendingScore = 0 } = context;
+
+        // --- 策略前置拦截 (躺平模式) ---
+        // 如果是 AFK 模式，且不是首出（即需要管别人的牌），直接返回空数组（Pass）
+        if (mode === 'AFK' && lastPlayedCards && lastPlayedCards.length > 0) {
+            return [];
+        }
+
         // 1. 获取所有合法解
-        const solutions = BotLogic.findAllSolutions(hand, lastPlayedCards, deckCount);
+        let solutions = BotLogic.findAllSolutions(hand, lastPlayedCards, deckCount);
         if (!solutions || solutions.length === 0) return [];
+
+        // [修改] 过滤掉 510K (托管/Bot 不自动打出 510K)
+        solutions = solutions.filter(sol => {
+            const type = CardRules.analyze(sol, deckCount).type;
+            return type !== '510K_PURE' && type !== '510K_MIXED';
+        });
+
+        // --- 策略过滤 (SMART & THRIFTY) ---
+        solutions = solutions.filter(sol => {
+            const analysis = CardRules.analyze(sol, deckCount);
+            const isBomb = analysis.level > 0;
+
+            // 模式1: 智能模式 (默认) - 队友出的牌，不用炸弹管
+            if (mode === 'SMART' && isTeammate && isBomb) {
+                return false; 
+            }
+
+            // 模式2: 省钱模式 - 场上没分，不用炸弹管
+            if (mode === 'THRIFTY' && pendingScore === 0 && isBomb) {
+                // 注意：如果是首出(lastPlayedCards为空)，通常pendingScore也是0，但首出可以用炸弹
+                // 所以限定为管牌阶段 (lastPlayedCards 不为空)
+                if (lastPlayedCards && lastPlayedCards.length > 0) {
+                    return false;
+                }
+            }
+
+            return true;
+        });
+
+        if (solutions.length === 0) return [];
 
         // 2. 分析手牌中的炸弹（用于判断是否拆了炸弹）
         const myBombs = BotLogic.findAllBombsInHand(hand, deckCount);
@@ -23,20 +67,23 @@ const BotLogic = {
             : null;
         const lastIsBomb = lastAnalysis ? lastAnalysis.level > 0 : false;
 
+        // [新增] 统计手牌中每个点数的数量，用于识别“废牌”
+        const handCounts = {};
+        hand.forEach(c => {
+            const p = CardRules.getPoint(c);
+            handCounts[p] = (handCounts[p] || 0) + 1;
+        });
+
         // 4. 对每个方案计算 Cost (代价越低越优先)
         const scoredSolutions = solutions.map(sol => {
             const analysis = CardRules.analyze(sol, deckCount);
             let cost = 0;
             
-            // --- A. [修复] 基础分：优化炸弹与普通牌的排序 ---
-            // 之前的逻辑只加 val，导致长炸弹(7个3)比短炸弹(4个8) Cost低，Bot会先扔大炸弹
+            // --- A. 基础分 ---
             if (analysis.level > 0) {
                 // 炸弹：Level 权重 > Length 权重 > Value 权重
                 cost += analysis.level * 100000;
                 
-                // 510K 的 level 比较低 (1或2)，会被普通炸弹(level 3)压制，符合逻辑
-                
-                // 普通炸弹 (Level 3) 或 至尊炸弹 (Level 5)
                 if (analysis.type === 'BOMB_STD' || analysis.type === 'BOMB_MAX') {
                     cost += analysis.len * 1000;
                 }
@@ -53,31 +100,39 @@ const BotLogic = {
                 // 如果出的不是炸弹，检查是否用了炸弹里的牌
                 const breaksBomb = sol.some(c => bombCardsSet.has(c));
                 if (breaksBomb) {
-                    cost += 2000000; // [修改] 极大的惩罚：Bot 绝不应拆炸弹，除非是最后没办法
+                    cost += 2000000; // Bot 严禁拆炸弹
                 }
             }
 
-            // --- C. 炸弹压制判断 (避免大材小用) ---
+            // --- C. 炸弹压制判断 ---
             if (isMoveBomb && !lastIsBomb && lastAnalysis) {
-                // 上家不是炸弹，我用炸弹管 -> 亏，除非这是为了赢
-                // 但如果这手牌打完就赢了，则无视 Cost
+                // 上家不是炸弹，我用炸弹管 -> 亏
                 if (hand.length === sol.length) cost = -9999999;
                 else cost += 1000; 
             }
 
             // --- D. 自由出牌 (首出) 偏好 ---
             if (!lastAnalysis) {
-                // 优先出复杂牌型，快速减少手牌数量
                 if (analysis.type === 'AIRPLANE') cost -= 200;
                 else if (analysis.type === 'LIANDUI') cost -= 150;
                 else if (analysis.type === 'TRIPLE') cost -= 100;
                 else if (analysis.type === 'PAIR') cost -= 50;
                 
-                // 炸弹尽量留到最后出，除非它是为了冲刺
+                // [关键修改] 单张逻辑细化 (废牌优先)
+                else if (analysis.type === 'SINGLE') {
+                    const countInHand = handCounts[analysis.val] || 0;
+                    if (countInHand === 1) {
+                        // 真正的废牌，Cost 比对子还低，优先打出
+                        cost -= 80;
+                    } else {
+                        // 拆对子出的单牌，Cost = val (正数)，优先级很低
+                    }
+                }
+
+                // 炸弹尽量留到最后出
                 if (isMoveBomb) {
-                    // 如果只剩炸弹了，那就赶紧出
                     if (hand.length === sol.length) cost = -9999999;
-                    else cost += 8000; // [修改] Bot 也不要起手扔炸弹
+                    else cost += 8000; 
                 }
             }
 
@@ -91,7 +146,8 @@ const BotLogic = {
     },
 
     // [智能决策入口]
-    decideMove: (hand, lastPlayedCards, deckCount) => {
+    // 增加 context 参数
+    decideMove: (hand, lastPlayedCards, deckCount, context = {}) => {
         try {
             // 如果只剩一手牌，直接梭哈
             const analysis = CardRules.analyze(hand, deckCount);
@@ -100,11 +156,10 @@ const BotLogic = {
                 if (CardRules.canPlay(hand, lastPlayedCards, deckCount)) return hand;
             }
 
-            const solutions = BotLogic.getSortedHints(hand, lastPlayedCards, deckCount);
+            const solutions = BotLogic.getSortedHints(hand, lastPlayedCards, deckCount, context);
             if (solutions.length === 0) return null;
 
             // getSortedHints 已经排好序了，直接取第一个最优解
-            // 简单的贪婪策略：取 Cost 最低的
             return solutions[0];
         } catch (e) {
             console.error("BotLogic decideMove error:", e);
@@ -208,7 +263,7 @@ const BotLogic = {
                 for (let p of uniquePoints) {
                     if (grouped[p].length >= 2) {
                         solutions.push(grouped[p].slice(0, 2));
-                        // [优化] 不再 break，允许找大一点的对子，虽然通常出最小的，但留给Cost函数决定
+                        // 不 break，保留更多选择
                     }
                 }
                 // 3. 三张
@@ -218,18 +273,16 @@ const BotLogic = {
                     }
                 }
                 
-                // [优化] 4. 连对 (查找所有可能的2连对)
+                // 4. 连对 (查找所有可能的2连对)
                 for(let i=0; i<uniquePoints.length-1; i++) {
                     const p1 = uniquePoints[i];
                     const p2 = uniquePoints[i+1];
-                    // 必须连续，且不能超过A(14)，因为2不能连
                     if (p2 === p1 + 1 && p2 < 15 && grouped[p1].length >= 2 && grouped[p2].length >= 2) {
                          solutions.push([...grouped[p1].slice(0,2), ...grouped[p2].slice(0,2)]);
-                         // [重要提升] 不再 break，这样 Bot 能发现中间段的连对
                     }
                 }
 
-                // [优化] 5. 飞机 (查找所有可能的2连三张)
+                // 5. 飞机 (查找所有可能的2连三张)
                 for(let i=0; i<uniquePoints.length-1; i++) {
                     const p1 = uniquePoints[i];
                     const p2 = uniquePoints[i+1];
@@ -242,7 +295,7 @@ const BotLogic = {
                 const bombs = findAllBombs(-1, -1);
                 bombs.forEach(b => solutions.push(b.cards));
                 
-                // 兜底：如果没找到啥牌，就把前几个单张都加进去备选
+                // 兜底
                 if (solutions.length < 3) {
                     for(let i=0; i<Math.min(uniquePoints.length, 3); i++) {
                         solutions.push([grouped[uniquePoints[i]][0]]);

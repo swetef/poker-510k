@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Sparkles, Award, LogOut } from 'lucide-react';
+import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Sparkles, Award, ChevronLeft } from 'lucide-react';
 import css from './LobbyScreen.module.css'; 
 import { useGame } from '../context/GameContext.jsx';
 import { RoomSettingsForm } from '../components/game/RoomSettingsForm.jsx';
@@ -12,10 +12,10 @@ export const LobbyScreen = () => {
         handleSwitchSeat,
         handleUpdateConfig,
         handleKickPlayer,
-        handleLeaveRoom // [新增]
+        handleLeaveRoom 
     } = useGame();
     
-    // [修复] 统一获取当前玩家是否为房主，并赋予默认值 false 防止 undefined 导致 UI 闪烁
+    // 统一获取当前玩家是否为房主
     const amIHost = players.find(p => p.id === mySocketId)?.isHost || false;
     
     const isTeamMode = roomConfig.isTeamMode && roomConfig.maxPlayers % 2 === 0;
@@ -65,17 +65,26 @@ export const LobbyScreen = () => {
             
             <div className={css.lobbyHeader}>
                 <div style={{display:'flex', alignItems:'center', gap: 10, flexWrap: 'wrap'}}>
-                    {/* [新增] 返回首页按钮 (复用 Setting 按钮样式) */}
+                    
+                    {/* [修改] 退出按钮：改为向左的返回箭头，更加简洁 */}
                     <button 
                         onClick={handleLeaveRoom}
                         style={{
-                            background: '#f1f2f6', border: '1px solid #ccc', borderRadius: '50%', 
-                            width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: 'pointer', transition: 'all 0.2s', color: '#e74c3c'
+                            background: 'transparent',
+                            border: '1px solid #e1e4e8', 
+                            borderRadius: '8px', 
+                            padding: '6px 12px 6px 8px', // 左侧稍微少一点padding因为有箭头
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            gap: 2,
+                            cursor: 'pointer', 
+                            color: '#7f8c8d', 
+                            fontWeight: 'bold',
+                            fontSize: 14,
+                            transition: 'all 0.2s'
                         }}
-                        title="退出房间"
+                        title="返回首页"
                     >
-                        <LogOut size={18} style={{marginLeft: 2}}/> 
+                        <ChevronLeft size={20} /> 返回
                     </button>
 
                     <h2 style={{margin:0, fontSize: 24}}>房间: <span style={{fontFamily:'monospace', color:'#27ae60'}}>{roomId}</span></h2>
@@ -117,16 +126,23 @@ export const LobbyScreen = () => {
                     </div>
 
                     {amIHost && (
+                        /* [修改] 设置按钮：纯齿轮图标，无背景，悬停旋转效果 */
                         <button 
                             onClick={() => setShowSettings(true)}
                             style={{
-                                background: '#f1f2f6', border: '1px solid #ccc', borderRadius: '50%', 
-                                width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                cursor: 'pointer', transition: 'all 0.2s', color: '#2c3e50'
+                                background: 'transparent', 
+                                border: 'none', 
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer', 
+                                color: '#34495e', // 深色图标
+                                padding: 8,
+                                transition: 'transform 0.3s ease'
                             }}
                             title="修改房间规则"
+                            onMouseEnter={(e) => e.currentTarget.style.transform = 'rotate(45deg)'}
+                            onMouseLeave={(e) => e.currentTarget.style.transform = 'rotate(0deg)'}
                         >
-                            <Settings size={20} />
+                            <Settings size={24} />
                         </button>
                     )}
                 </div>
@@ -245,7 +261,6 @@ export const LobbyScreen = () => {
                 ))}
             </div>
 
-            {/* [修复] 使用 amIHost 变量判断，并增加 flexShrink: 0 防止被玩家列表挤压到不可见 */}
             <div className={`${css.lobbyFooter} mobile-lobby-footer`} style={{flexShrink: 0}}>
                 {amIHost ? (
                     <div style={{display:'flex', gap: 15, justifyContent: 'center'}}>

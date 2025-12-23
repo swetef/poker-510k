@@ -1,23 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { RotateCcw, Zap, Lightbulb, Clock, Loader2, AlertTriangle } from 'lucide-react';
+import { RotateCcw, Zap, Lightbulb, Clock, Loader2, AlertTriangle, Repeat, Shield, Coins, Coffee } from 'lucide-react';
 import css from './GameActionBar.module.css';
 import { useGame } from '../../context/GameContext.jsx';
 import TimerComponent from '../CountDownTimer.jsx';
-// [新增] 引入 isBomb 工具函数
 import { isBomb } from '../../utils/cardLogic.js';
 
 export const GameActionBar = () => {
     const { 
         winner, roundResult, grandResult, selectedCards, 
         playersInfo, mySocketId, currentTurnId, players, turnRemaining,
-        handleClearSelection, handleToggleAutoPlay, handlePass, handleRequestHint, handlePlayCards,
-        isSubmitting, lastPlayerName // [修改] 获取上家名字
+        handleClearSelection, handleToggleAutoPlay, handleSwitchAutoPlayMode,
+        handlePass, handleRequestHint, handlePlayCards,
+        isSubmitting, lastPlayerName 
     } = useGame();
 
-    // [新增] 确认状态：false=正常, true=待确认(管队友)
     const [confirmState, setConfirmState] = useState(false);
 
-    // [新增] 当选牌变化或轮次变化时，重置确认状态
     useEffect(() => {
         setConfirmState(false);
     }, [selectedCards, currentTurnId]);
@@ -26,43 +24,56 @@ export const GameActionBar = () => {
 
     const myInfo = playersInfo[mySocketId] || {};
     const amIAutoPlay = myInfo.isAutoPlay;
+    const currentMode = myInfo.autoPlayMode || 'SMART';
     
     const myTurn = currentTurnId === mySocketId;
     const currentTurnPlayer = players.find(p => p.id === currentTurnId);
     const waitingText = currentTurnPlayer ? `等待 ${currentTurnPlayer.name}...` : '等待中...';
 
-    // [新增] 智能出牌点击处理
     const handlePlayClick = () => {
         if (isSubmitting) return;
         
-        // 1. 如果没选牌，直接透传给原函数处理(原函数会弹Alert)
         if (selectedCards.length === 0) {
             handlePlayCards();
             return;
         }
 
-        // 2. 队友误伤检测逻辑
         const lastPlayer = players.find(p => p.name === lastPlayerName);
         const isTeammate = 
-            myInfo.team !== undefined && myInfo.team !== null && // 我在队伍中
-            lastPlayer && lastPlayer.id !== mySocketId &&        // 上家存在且不是我
-            playersInfo[lastPlayer.id]?.team === myInfo.team;    // 上家是队友
+            myInfo.team !== undefined && myInfo.team !== null && 
+            lastPlayer && lastPlayer.id !== mySocketId && 
+            playersInfo[lastPlayer.id]?.team === myInfo.team;
 
-        // [修改] 增加 isBomb 判断：只有用炸弹管队友才弹窗
         const playingBomb = isBomb(selectedCards);
 
-        // 3. 如果是炸弹压队友，且还没确认过
         if (isTeammate && playingBomb && !confirmState) {
             setConfirmState(true);
-            // 3秒后自动恢复，防止卡住
             setTimeout(() => setConfirmState(false), 3000);
             return;
         }
 
-        // 4. 正常出牌
         handlePlayCards();
         setConfirmState(false);
     };
+
+    // 模式切换循环
+    const cycleMode = () => {
+        const modes = ['SMART', 'THRIFTY', 'AFK'];
+        const currentIdx = modes.indexOf(currentMode);
+        const nextMode = modes[(currentIdx + 1) % modes.length];
+        handleSwitchAutoPlayMode(nextMode);
+    };
+
+    const getModeLabel = (mode) => {
+        switch(mode) {
+            case 'SMART': return { text: '智能(保队友)', icon: <Shield size={14} />, color: '#2ecc71' };
+            case 'THRIFTY': return { text: '省钱(无分不炸)', icon: <Coins size={14} />, color: '#f1c40f' };
+            case 'AFK': return { text: '躺平(全不要)', icon: <Coffee size={14} />, color: '#95a5a6' };
+            default: return { text: '智能', icon: <Shield size={14} />, color: '#2ecc71' };
+        }
+    };
+
+    const modeInfo = getModeLabel(currentMode);
 
     return (
         <div className={css.actionBar}>
@@ -78,12 +89,23 @@ export const GameActionBar = () => {
                 )}
                 
                 {amIAutoPlay ? (
-                    <button 
-                        className={css.btnCancelAuto}
-                        onClick={handleToggleAutoPlay}
-                    >
-                        <Zap size={18} /> 取消托管
-                    </button>
+                    <div className={css.autoPlayGroup}>
+                         {/* [新增] 模式切换按钮 */}
+                        <button 
+                            className={css.btnModeSwitch}
+                            onClick={cycleMode}
+                            style={{borderColor: modeInfo.color, color: modeInfo.color}}
+                        >
+                            {modeInfo.icon} {modeInfo.text} <Repeat size={12} style={{opacity:0.6}}/>
+                        </button>
+
+                        <button 
+                            className={css.btnCancelAuto}
+                            onClick={handleToggleAutoPlay}
+                        >
+                            <Zap size={18} /> 取消托管
+                        </button>
+                    </div>
                 ) : (
                     <>
                         {myTurn ? (

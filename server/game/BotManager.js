@@ -7,13 +7,16 @@ class BotManager {
         this.timer = null;
     }
 
-    // ... (保留 toggleAutoPlay, clearTimer, checkAndRun, _playMinCard, _forcePass 等方法不变) ...
     // 切换托管状态
     toggleAutoPlay(playerId) {
         const player = this.game.players.find(p => p.id === playerId);
         if (!player || player.isBot) return; 
 
         player.isAutoPlay = !player.isAutoPlay;
+        // [修改] 开启时重置为默认模式 (SMART)
+        if (player.isAutoPlay) {
+            player.autoPlayMode = 'SMART'; 
+        }
         
         // 如果当前正好轮到该玩家，且开启了托管，立即触发机器人逻辑
         if (this.game.gameState && 
@@ -86,15 +89,33 @@ class BotManager {
             const sortedHand = [...hand].sort((a,b) => CardRules.getPoint(a) - CardRules.getPoint(b));
             
             let cardsToPlay = null;
+
+            // [新增] 构建策略上下文
+            const strategyContext = {
+                mode: botPlayer.autoPlayMode || 'SMART',
+                pendingScore: this.game.gameState.pendingTablePoints || 0,
+                isTeammate: false
+            };
+
+            // 判断上家是否为队友
+            if (!isNewRound && this.game.gameState.roundWinnerId) {
+                const lastWinner = this.game.players.find(p => p.id === this.game.gameState.roundWinnerId);
+                if (lastWinner && botPlayer.team !== null && botPlayer.team !== undefined) {
+                    if (lastWinner.team === botPlayer.team && lastWinner.id !== botPlayer.id) {
+                        strategyContext.isTeammate = true;
+                    }
+                }
+            }
+
             try {
-                // 调用纯算法模块
-                cardsToPlay = BotLogic.decideMove(sortedHand, cardsToBeat, this.game.config.deckCount);
+                // [修改] 传入 context
+                cardsToPlay = BotLogic.decideMove(sortedHand, cardsToBeat, this.game.config.deckCount, strategyContext);
             } catch (err) {
                 console.error("[Bot Error] Logic crashed:", err);
             }
 
             if (cardsToPlay) {
-                console.log(`[Bot/Auto] ${botPlayer.name} plays ${cardsToPlay.length} cards.`);
+                console.log(`[Bot/Auto] ${botPlayer.name} plays ${cardsToPlay.length} cards (Mode: ${strategyContext.mode}).`);
                 // 调用 GameManager 的核心出牌方法
                 const result = this.game.playCards(botPlayer.id, cardsToPlay);
                 
@@ -103,7 +124,6 @@ class BotManager {
                         this.game.io.to(botPlayer.id).emit('hand_update', this.game.gameState.hands[botPlayer.id]);
                     }
 
-                    // [修改] 无论是否结束，先广播出牌信息，让前端更新 UI，避免游戏直接结束看不到最后一张牌
                     const analysis = CardRules.analyze(cardsToPlay, this.game.config.deckCount);
                     const desc = CardRules.getAnalysisText(analysis);
                     let logText = `${botPlayer.name}: ${desc}`;
@@ -115,7 +135,6 @@ class BotManager {
                     this.game._broadcastUpdate(logText);
 
                     if (result.isRoundOver) {
-                        // [修改] 增加 3秒 延迟，确保前端展示出牌动画和停留效果
                         setTimeout(() => {
                             this.game._handleWin(result, botPlayer.id);
                         }, 3000);
@@ -150,11 +169,9 @@ class BotManager {
             
             const analysis = CardRules.analyze(minCard, this.game.config.deckCount);
             const desc = CardRules.getAnalysisText(analysis);
-            // [修改] 先广播更新
             this.game._broadcastUpdate(`${botPlayer.name}: ${desc} (系统)`);
 
             if (result.isRoundOver) {
-                // [修改] 增加 3秒 延迟
                 setTimeout(() => {
                     this.game._handleWin(result, botPlayer.id);
                 }, 3000);
@@ -168,7 +185,6 @@ class BotManager {
     _forcePass(botPlayer) {
         const result = this.game.passTurn(botPlayer.id);
         
-        // [修改] 如果 pass 导致结束，也需要延迟
         if (result.isRoundOver) {
              this.game._broadcastUpdate(`${botPlayer.name}: 不要`);
              setTimeout(() => {
@@ -178,11 +194,9 @@ class BotManager {
             this.game._broadcastUpdate(`${botPlayer.name}: 不要`);
         } else {
             console.error("[Bot Critical] Failed to pass turn:", result.error);
-            // 如果连 pass 都失败了，强制流转
             this.game._advanceTurn();
             this.game._broadcastUpdate();
             this.game._resetTimer();
-            // 链式调用：继续检查下一个玩家
             this.checkAndRun();
         }
     }

@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Zap, Minimize, Maximize, Layers, Shield, ChevronDown, ChevronUp, Wifi, WifiOff, LogOut } from 'lucide-react';
-import css from './GameHeader.module.css'; // 新 CSS
+// [修改] 引入 Info 图标
+import { Zap, Minimize, Maximize, Layers, Shield, ChevronDown, ChevronUp, Wifi, WifiOff, LogOut, Info } from 'lucide-react';
+import css from './GameHeader.module.css'; 
 import { useGame } from '../../context/GameContext.jsx';
 
 /**
  * [比分板组件] 红蓝队分数 (内部使用)
  */
 const TeamScoreBoard = () => {
+    // ... (保持 TeamScoreBoard 代码不变，省略以节省空间) ...
     const { players, playersInfo, playerScores, roomConfig } = useGame();
     const [isCollapsed, setIsCollapsed] = useState(true);
 
@@ -57,8 +59,11 @@ const TeamScoreBoard = () => {
  * [Header组件]
  */
 export const GameHeader = () => {
-    const { roomId, playersInfo, mySocketId, toggleSort, sortMode, handleToggleAutoPlay, ping, isConnected, handleLeaveRoom } = useGame();
+    // [修改] 解构 roomConfig
+    const { roomId, playersInfo, mySocketId, toggleSort, sortMode, handleToggleAutoPlay, ping, isConnected, handleLeaveRoom, roomConfig } = useGame();
     const [isFullScreen, setIsFullScreen] = useState(false);
+    // [新增] 控制房间详情显示
+    const [showRoomInfo, setShowRoomInfo] = useState(false);
     
     const myInfo = playersInfo[mySocketId] || {};
     const amIAutoPlay = myInfo.isAutoPlay;
@@ -82,18 +87,30 @@ export const GameHeader = () => {
         return '#e74c3c';
     };
 
-    // [修改] 增加理牌文案映射
     const getSortButtonText = () => {
         if (sortMode === 'POINT') return '点数';
-        if (sortMode === 'ARRANGE') return '理牌(提)'; // 提=提取510K
-        if (sortMode === 'ARRANGE_MERGED') return '理牌(合)'; // 合=融合510K
+        if (sortMode === 'ARRANGE') return '理牌(提)'; 
+        if (sortMode === 'ARRANGE_MERGED') return '理牌(合)'; 
         return '未知';
+    };
+
+    // [新增] 策略名称转换 helper
+    const getStrategyName = () => {
+        if (!roomConfig) return '加载中';
+        const s = roomConfig.shuffleStrategy;
+        const p = roomConfig.preciseMode;
+        if (s === 'NO_SHUFFLE') return '均贫富(不洗牌)';
+        if (s === 'SIMULATION') return '模拟手洗';
+        if (s === 'PRECISE') {
+            const modes = { normal: '常规', stimulating: '刺激', thrilling: '惊险', exciting: '爽局' };
+            return `智能控牌(${modes[p] || '刺激'})`;
+        }
+        return '随机洗牌';
     };
 
     return (
         <div className={css.header}>
             <div className={css.roomBadgeContainer}>
-                {/* [新增] 退出按钮 */}
                 <button 
                     className={css.iconBtn} 
                     onClick={handleLeaveRoom}
@@ -103,7 +120,46 @@ export const GameHeader = () => {
                     <LogOut size={16} />
                 </button>
 
-                <div className={css.roomBadge}>Room {roomId}</div>
+                {/* [修改] 房间号区域，包裹一个相对定位的 div 以便定位弹窗 */}
+                <div style={{position: 'relative'}}>
+                    <div className={css.roomBadgeGroup}>
+                        <div className={css.roomBadge}>Room {roomId}</div>
+                        {/* [新增] 详情缩放按钮 */}
+                        <button 
+                            className={css.infoBtn} 
+                            onClick={() => setShowRoomInfo(!showRoomInfo)}
+                        >
+                            <Info size={12} />
+                        </button>
+                    </div>
+
+                    {/* [新增] 房间详情弹窗 */}
+                    {showRoomInfo && roomConfig && (
+                        <div className={css.roomInfoDropdown}>
+                            <div className={css.infoTitle}>房间规则</div>
+                            <div className={css.infoRow}>
+                                <span>洗牌策略:</span>
+                                <span className={css.infoVal}>{getStrategyName()}</span>
+                            </div>
+                            <div className={css.infoRow}>
+                                <span>目标分数:</span>
+                                <span className={css.infoVal}>{roomConfig.targetScore}</span>
+                            </div>
+                            <div className={css.infoRow}>
+                                <span>排名赏罚:</span>
+                                <span className={css.infoVal}>
+                                    {roomConfig.enableRankPenalty 
+                                        ? `${roomConfig.rankPenaltyScores[0]} / ${roomConfig.rankPenaltyScores[1]}` 
+                                        : '关闭'}
+                                </span>
+                            </div>
+                            <div className={css.infoRow}>
+                                <span>牌库/人数:</span>
+                                <span className={css.infoVal}>{roomConfig.deckCount}副 / {roomConfig.maxPlayers}人</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
                 
                 <div className={css.pingBadge} style={{ color: getPingColor(ping) }}>
                     {isConnected ? <Wifi size={10}/> : <WifiOff size={10}/>}

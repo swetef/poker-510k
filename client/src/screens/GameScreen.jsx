@@ -2,6 +2,8 @@ import React from 'react';
 import css from './GameScreen.module.css'; 
 import { GameLogPanel } from '../components/BaseUI.jsx';
 import { useGame } from '../context/GameContext.jsx';
+// [新增] 引入刷新图标
+import { RefreshCw, AlertCircle } from 'lucide-react';
 
 import { GameHeader } from '../components/game/GameHeader.jsx';
 import { TableCenterArea } from '../components/game/TableCenterArea.jsx';
@@ -18,11 +20,46 @@ export const GameScreen = () => {
 
     // 身份同步保护
     const myPlayerExists = players.some(p => p.id === mySocketId);
+    
+    // [关键修改] 如果卡在同步界面，显示更详细的提示和手动刷新按钮
     if (!myPlayerExists && players.length > 0) {
-        // Loading 态使用简单的内联样式即可，无需依赖 styles.js
         return (
-            <div className={css.gameTable} style={{color:'white', display:'flex', justifyContent:'center', alignItems:'center'}}>
-                正在同步数据...
+            <div className={css.gameTable} style={{
+                color:'white', 
+                display:'flex', 
+                flexDirection: 'column', 
+                justifyContent:'center', 
+                alignItems:'center',
+                gap: 20,
+                textAlign: 'center'
+            }}>
+                <AlertCircle size={40} color="#f1c40f" />
+                
+                <div>
+                    <div style={{fontSize: 20, fontWeight: 'bold', marginBottom: 5}}>正在同步数据...</div>
+                    <div style={{fontSize: 14, opacity: 0.7}}>如果是从后台切回，可能需要重新连接</div>
+                </div>
+
+                {/* 手动刷新按钮：解决卡死问题的“逃生门” */}
+                <button 
+                    onClick={() => window.location.reload()}
+                    style={{
+                        background: 'rgba(255,255,255,0.2)',
+                        border: '1px solid rgba(255,255,255,0.5)',
+                        color: 'white',
+                        padding: '10px 25px',
+                        borderRadius: 30,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        cursor: 'pointer',
+                        fontSize: 16,
+                        fontWeight: 'bold',
+                        marginTop: 10
+                    }}
+                >
+                    <RefreshCw size={18} /> 刷新页面
+                </button>
             </div>
         );
     }
@@ -31,16 +68,16 @@ export const GameScreen = () => {
         <div className={css.gameTable}>
             <div className={css.gameSafeArea}>
                 
-                {/* 1. 左上角日志 (直接渲染，组件内部已包含 absolute 定位) */}
+                {/* 1. 左上角日志 */}
                 <GameLogPanel logs={gameLogs} />
 
-                {/* 2. 顶部 Header (包含比分板、全屏按钮等) */}
+                {/* 2. 顶部 Header */}
                 <GameHeader />
 
-                {/* 3. 桌面中间区域 (底分、消息、出牌展示) */}
+                {/* 3. 桌面中间区域 */}
                 <TableCenterArea />
 
-                {/* 4. 结算弹窗 (如果有) */}
+                {/* 4. 结算弹窗 */}
                 <SettlementModal />
 
                 {/* 5. 玩家头像布局 */}

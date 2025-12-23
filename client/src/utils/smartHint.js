@@ -1,6 +1,9 @@
 /**
  * 智能提示逻辑
  * 根据手牌和上家牌型，计算所有可行解，并按优劣排序
+ * * [修改记录]
+ * 1. 过滤掉了 510K 牌型，提示不再推荐 510K。
+ * 2. 优化自由出牌逻辑：优先出“真正的单张废牌”，不再优先拆对子出单张。
  */
 import GameRules from './gameRules.js';
 
@@ -15,11 +18,18 @@ const SmartHint = {
      */
     getSortedHints: (hand, lastPlayedCards, deckCount = 2) => {
         // 1. 获取所有合法解
-        const solutions = SmartHint.findAllSolutions(hand, lastPlayedCards, deckCount);
+        let solutions = SmartHint.findAllSolutions(hand, lastPlayedCards, deckCount);
         if (!solutions || solutions.length === 0) return [];
 
+        // [修改] 过滤掉 510K 牌型 (提示和托管不会自动出 510K)
+        solutions = solutions.filter(sol => {
+            const type = GameRules.analyze(sol, deckCount).type;
+            return type !== '510K_PURE' && type !== '510K_MIXED';
+        });
+
+        if (solutions.length === 0) return [];
+
         // 2. 预分析手牌中的炸弹（用于判断出牌是否拆了炸弹）
-        // [优化] 这里现在只调用轻量级的炸弹查找，不再进行全量牌型计算
         const myBombs = SmartHint.findAllBombsInHand(hand, deckCount);
         const bombCardsSet = new Set();
         myBombs.forEach(b => b.cards.forEach(c => bombCardsSet.add(c)));
@@ -30,20 +40,21 @@ const SmartHint = {
             : null;
         const lastIsBomb = lastAnalysis ? lastAnalysis.level > 0 : false;
 
+        // [新增] 统计手牌中每个点数的数量，用于识别“废牌”
+        const handCounts = {};
+        hand.forEach(c => {
+            const p = GameRules.getPoint(c);
+            handCounts[p] = (handCounts[p] || 0) + 1;
+        });
+
         // 4. 对每个方案计算 Cost (代价越低越优先)
         const scoredSolutions = solutions.map(sol => {
             const analysis = GameRules.analyze(sol, deckCount);
             let cost = 0;
             
-            // --- A. [修复] 基础分计算优化 ---
-            // 之前的逻辑只看点数，导致 7个3(Val=3) 比 4个8(Val=8) Cost更低，从而被误判为更小的牌
-            // 新逻辑：炸弹优先看 Level(级别) 和 Length(张数)，普通牌看 Val(点数)
-            
+            // --- A. 基础分计算 ---
             if (analysis.level > 0) {
-                // 是炸弹：Level 权重最大 (100000)，其次是张数 (1000)，最后是点数
-                // 这样 4个8 (Level 3, Len 4) Cost ≈ 304008
-                // 而 7个3 (Level 3, Len 7) Cost ≈ 307003
-                // 结果：4个8 会排在 7个3 前面 (符合“提示更小的炸弹”的逻辑)
+                // 是炸弹：Level 权重最大，其次是张数，最后是点数
                 cost += analysis.level * 100000;
                 
                 // 普通炸弹和至尊炸弹，张数权重很高
@@ -63,29 +74,44 @@ const SmartHint = {
                 // 如果出的不是炸弹，检查是否用了炸弹里的牌
                 const breaksBomb = sol.some(c => bombCardsSet.has(c));
                 if (breaksBomb) {
-                    cost += 2000000; // [修改] 大幅增加拆弹惩罚，防止为了出小牌拆散大炸弹
+                    cost += 2000000; // 严禁拆炸弹
                 }
             }
 
             // --- C. 炸弹压制判断 (避免大材小用) ---
             if (isMoveBomb && !lastIsBomb && lastAnalysis) {
-                // 上家不是炸弹，我用炸弹管 -> 略亏，除非这是最后一手或者没有其他牌
-                // 但提示机制里，我们还是应该列出来，只是排在后面
+                // 上家不是炸弹，我用炸弹管 -> 略亏，除非这是最后一手
                 cost += 500; 
             }
 
-            // --- D. 优先出包含更多手牌的组合 (比如连对优于对子) ---
+            // --- D. 自由出牌 (首出) 策略优化 ---
             if (!lastAnalysis) {
                 if (analysis.type === 'AIRPLANE') cost -= 200;
                 else if (analysis.type === 'LIANDUI') cost -= 150;
                 else if (analysis.type === 'TRIPLE') cost -= 100;
-                else if (analysis.type === 'PAIR') cost -= 50;
+                else if (analysis.type === 'PAIR') cost -= 50; // 对子优惠 50
                 
-                // 首出时，尽量不先出炸弹，除非它是为了冲刺
+                // [关键修改] 单张逻辑细化
+                else if (analysis.type === 'SINGLE') {
+                    const countInHand = handCounts[analysis.val] || 0;
+                    
+                    if (countInHand === 1) {
+                        // 真正的废牌（手里只有这一张）：给予极高优先级
+                        // 设定为 -80，比对子的 -50 更小，所以会优先出单张废牌
+                        cost -= 80; 
+                    } else {
+                        // 如果 countInHand > 1，说明是拆了对子或三张打的单牌
+                        // 不给予减分优惠，Cost = val (正数)
+                        // 这样 Cost(-80) < Cost(Pair -50) < Cost(Single positive)
+                        // 顺序变成：废牌 > 对子 > 拆开的单牌
+                    }
+                }
+                
+                // 首出炸弹惩罚
                 if (isMoveBomb) {
                     // 如果这手牌出完就跑了，那就无视 Cost 优先出
                     if (hand.length === sol.length) cost = -9999999;
-                    else cost += 8000; // [修改] 增加首出炸弹的惩罚，避免开局就扔炸弹
+                    else cost += 8000; // 避免起手扔炸弹
                 }
             }
 
@@ -205,14 +231,13 @@ const SmartHint = {
                 for (let p of uniquePoints) {
                     if (grouped[p].length >= 2) {
                         solutions.push(grouped[p].slice(0, 2));
-                        break; 
+                        // 不 break，允许找大一点的对子，让 Cost 函数决定
                     }
                 }
                 // 3. 三张
                 for (let p of uniquePoints) {
                     if (grouped[p].length >= 3) {
                         solutions.push(grouped[p].slice(0, 3));
-                        break;
                     }
                 }
                 // 4. 连对 (简单检测)
@@ -221,7 +246,6 @@ const SmartHint = {
                     const p2 = uniquePoints[i+1];
                     if (p2 === p1 + 1 && p2 < 15 && grouped[p1].length >=2 && grouped[p2].length >= 2) {
                          solutions.push([...grouped[p1].slice(0,2), ...grouped[p2].slice(0,2)]);
-                         break;
                     }
                 }
 
@@ -300,9 +324,6 @@ const SmartHint = {
             const currentVal = lastState.val || 0;
             
             // 调用核心逻辑
-            // [修复] 对于炸弹压制，这里必须传入 Level 以过滤掉打不过的炸弹
-            // 但注意：同 Level 的炸弹还需要比长度或点数，coreFindBombs 只是简单的筛选
-            // 所以后面必须配合 GameRules.canPlay 进行二次校验
             const bombs = SmartHint.coreFindBombs(hand, grouped, uniquePoints, deckCount, 0, 0);
             
             bombs.forEach(b => {

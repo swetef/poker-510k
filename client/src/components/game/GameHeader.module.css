@@ -18,15 +18,82 @@
     pointer-events: auto;
 }
 
-.roomBadge {
+/* [新增] 房间号与按钮的组合容器 */
+.roomBadgeGroup {
+    display: flex;
+    align-items: center;
     background: rgba(0,0,0,0.3);
+    border-radius: 15px;
+    border: 1px solid rgba(255,255,255,0.1);
+    overflow: hidden;
+}
+
+/* [修改] Room Badge 样式微调，移除独立边框 */
+.roomBadge {
     color: white;
     padding: 4px 8px;
-    border-radius: 15px;
     font-size: 11px;
-    border: 1px solid rgba(255,255,255,0.1);
     font-weight: bold;
     white-space: nowrap;
+}
+
+/* [新增] 信息按钮样式 */
+.infoBtn {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    border-left: 1px solid rgba(255,255,255,0.1);
+    color: #ecf0f1;
+    cursor: pointer;
+    padding: 4px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    height: 100%;
+}
+
+.infoBtn:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+/* [新增] 房间详情下拉框 */
+.roomInfoDropdown {
+    position: absolute;
+    top: 115%;
+    left: 0;
+    width: 160px;
+    background: rgba(30, 40, 50, 0.95);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 10px;
+    color: white;
+    font-size: 11px;
+    backdrop-filter: blur(5px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    z-index: 100;
+    animation: fadeIn 0.2s ease;
+    text-align: left;
+}
+
+.infoTitle {
+    font-weight: bold;
+    color: #f1c40f;
+    margin-bottom: 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding-bottom: 4px;
+    text-align: center;
+}
+
+.infoRow {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    color: #bdc3c7;
+}
+
+.infoVal {
+    color: white;
+    font-weight: bold;
 }
 
 /* Ping 值徽章 */
