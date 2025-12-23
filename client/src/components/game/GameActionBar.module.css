@@ -7,7 +7,8 @@
     justify-content: center;
     align-items: center;
     pointer-events: none; /* 容器穿透 */
-    z-index: 30;
+    /* [修改] 提升层级至 100，确保高于手牌区域 (z-index: 20) 和其他特效层 */
+    z-index: 100;
 }
 
 .buttonGroup {

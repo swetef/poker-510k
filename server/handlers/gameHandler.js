@@ -21,11 +21,15 @@ module.exports = (io, socket, rooms) => {
                 if (currentGrandScores[p.id] === undefined) currentGrandScores[p.id] = 0;
             });
         }
+        
+        const spectatorCount = room.spectators ? room.spectators.length : 0;
+
         io.to(roomId).emit('room_info', { 
             roomId, 
             config: room.config, 
             players: room.players, 
-            grandScores: currentGrandScores 
+            grandScores: currentGrandScores,
+            spectatorCount
         });
     };
 
@@ -53,6 +57,19 @@ module.exports = (io, socket, rooms) => {
             }
         });
 
+        // [新增] 向观众发送游戏开始信号
+        if (room.spectators) {
+            room.spectators.forEach(s => {
+                io.to(s.id).emit('game_started', {
+                    hand: [],
+                    startPlayerId: startInfo.startPlayerId,
+                    grandScores: room.gameManager.grandScores,
+                    handCounts: room.gameManager.getPublicState().handCounts,
+                    isSpectator: true
+                });
+            });
+        }
+
         const startPlayerName = room.players[startInfo.startPlayerIndex].name;
         const msg = isNextRound 
             ? `新一轮开始！由 ${startPlayerName} 先出` 
@@ -61,80 +78,16 @@ module.exports = (io, socket, rooms) => {
         broadcastGameState(roomId, room, msg);
     };
 
-    // --- 事件监听 ---
+    // --- 事件监听 (仅保留游戏相关) ---
 
-    // 1. 更新房间配置
-    socket.on('update_config', ({ roomId, config }) => {
-        const room = rooms[roomId];
-        if (!room) return;
-        
-        // 只有房主能修改 (通常第一个人是房主，这里简化判断，或者信任前端)
-        room.config = { ...room.config, ...config };
-        broadcastRoomInfo(roomId, room);
-    });
-
-    // 2. 添加机器人
-    socket.on('add_bot', ({ roomId }) => {
-        const room = rooms[roomId];
-        if (!room) return;
-        if (room.gameManager) return socket.emit('error_msg', '游戏进行中无法加人');
-        if (room.players.length >= 8) return socket.emit('error_msg', '房间已满');
-
-        const botId = `bot_${Date.now()}_${Math.floor(Math.random()*1000)}`;
-        const botName = `机器人${Math.floor(Math.random()*100)}`;
-        
-        room.players.push({
-            id: botId,
-            name: botName,
-            isBot: true,
-            isReady: true,
-            team: null
-        });
-
-        broadcastRoomInfo(roomId, room);
-    });
-
-    // 3. 踢出玩家
-    socket.on('kick_player', ({ roomId, targetId }) => {
-        const room = rooms[roomId];
-        if (!room) return;
-        
-        // 简单鉴权：只能踢别人
-        if (targetId === socket.id) return; 
-
-        const idx = room.players.findIndex(p => p.id === targetId);
-        if (idx !== -1) {
-            const removed = room.players.splice(idx, 1)[0];
-            
-            // 通知被踢玩家
-            if (!removed.isBot) {
-                io.to(removed.id).emit('kicked', '你已被房主移出房间');
-                // 也可以强制断开socket连接或清理状态
-            }
-            broadcastRoomInfo(roomId, room);
-        }
-    });
-
-    // 4. 交换座位
-    socket.on('switch_seat', ({ roomId, fromIndex, toIndex }) => {
-        const room = rooms[roomId];
-        if (!room) return;
-        if (room.gameManager) return; // 游戏中不能换座
-
-        if (fromIndex < 0 || fromIndex >= room.players.length || 
-            toIndex < 0 || toIndex >= room.players.length) return;
-
-        const temp = room.players[fromIndex];
-        room.players[fromIndex] = room.players[toIndex];
-        room.players[toIndex] = temp;
-
-        broadcastRoomInfo(roomId, room);
-    });
-
-    // 5. 开始游戏 (抽牌/直接开始)
+    // 1. 开始游戏 (抽牌/直接开始)
     socket.on('start_game', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room) return;
+        
+        const player = room.players.find(p => p.id === socket.id);
+        if (!player || !player.isHost) return socket.emit('error_msg', '只有房主可以开始游戏');
+        if (room.players.length < 2) return socket.emit('error_msg', '人数不足');
 
         // 清理旧的游戏管理器
         if (room.gameManager) {
@@ -192,7 +145,7 @@ module.exports = (io, socket, rooms) => {
         });
     });
 
-    // 6. 玩家抽座次牌
+    // 2. 玩家抽座次牌
     socket.on('draw_seat_card', ({ roomId, cardIndex }) => {
         const room = rooms[roomId];
         if (!room || !room.seatManager) return;
@@ -226,10 +179,10 @@ module.exports = (io, socket, rooms) => {
         }
     });
 
-    // 7. 下一局
+    // 3. 下一局
     socket.on('next_round', ({ roomId }) => handleGameStart(roomId, true));
 
-    // 8. 出牌
+    // 4. 出牌
     socket.on('play_cards', ({ roomId, cards }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -260,7 +213,7 @@ module.exports = (io, socket, rooms) => {
         }
     });
 
-    // 9. 不要/过牌
+    // 5. 不要/过牌
     socket.on('pass_turn', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -284,7 +237,7 @@ module.exports = (io, socket, rooms) => {
         }
     });
 
-    // 10. 切换托管开关
+    // 6. 切换托管开关
     socket.on('toggle_auto_play', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -293,7 +246,7 @@ module.exports = (io, socket, rooms) => {
         broadcastGameState(roomId, room);
     });
 
-    // 11. [新增] 切换托管模式 (智能/省钱/躺平)
+    // 7. 切换托管模式 (智能/省钱/躺平)
     socket.on('switch_autoplay_mode', ({ roomId, mode }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -302,11 +255,10 @@ module.exports = (io, socket, rooms) => {
         broadcastGameState(roomId, room);
     });
 
-    // 12. 请求提示
+    // 8. 请求提示
     socket.on('request_hint', ({ roomId }) => {
         const room = rooms[roomId];
         if (room && room.gameManager) {
-            // 注意: 现在的提示主要在前端计算，后端保留此接口以防万一
             const cards = room.gameManager.getHint(socket.id);
             socket.emit('hint_response', cards);
         }

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 
 import { useSocketConnection } from '../hooks/useSocketConnection.js';
 import { useRoomLogic } from '../hooks/game/useRoomLogic.js';
@@ -8,17 +8,19 @@ import { useBattleLogic } from '../hooks/game/useBattleLogic.js';
 const GameContext = createContext(null);
 
 export const GameProvider = ({ children }) => {
-  // Step A: 基础连接
   const { socket, isConnected, mySocketId, ping } = useSocketConnection();
 
-  // Step B: 房间交互
+  // [新增] 观众状态
+  const [isSpectator, setIsSpectator] = useState(false);
+  // [新增] 观察到的其他人手牌 { playerId: [cards] }
+  const [observedHands, setObservedHands] = useState({});
+
   const roomLogic = useRoomLogic(socket, isConnected);
   const { 
       username, roomId, inputConfig, isLoading, setIsLoading,
       handleRoomAction, handleUpdateConfig
   } = roomLogic;
 
-  // Step C: 全局游戏数据
   const gameData = useGameData(socket, setIsLoading);
   const { 
       gameState, players, syncedConfig, 
@@ -26,14 +28,54 @@ export const GameProvider = ({ children }) => {
       handleAddBot, handleSwitchSeat, handleDrawCard, handleKickPlayer
   } = gameData;
 
-  // 计算当前生效的配置
   const activeRoomConfig = (gameState === 'LOGIN') ? inputConfig : (syncedConfig || inputConfig);
 
-  // Step D: 战斗逻辑 (局内)
   const deckCount = activeRoomConfig ? activeRoomConfig.deckCount : 2;
   const battleLogic = useBattleLogic(socket, username, mySocketId, roomId, deckCount);
 
-  // Step E: 聚合数据
+  // [新增] 监听观众事件和手牌观察事件
+  useEffect(() => {
+    if (!socket) return;
+
+    const onSpectatorJoin = (data) => {
+        setIsSpectator(true);
+        // 如果进入时游戏已经是 GAME 状态，手动解除 loading (防止 useGameData 逻辑覆盖)
+        setIsLoading(false); 
+        alert(data.message);
+    };
+
+    const onObservationUpdate = (data) => {
+        // data: { targetId, hand, targetName }
+        setObservedHands(prev => ({
+            ...prev,
+            [data.targetId]: data.hand
+        }));
+    };
+
+    // 每次新局开始，清空观察的手牌
+    const onGameStarted = (data) => {
+        setObservedHands({});
+        // 如果服务器明确标记你是观众
+        if (data.isSpectator) {
+            setIsSpectator(true);
+        } else {
+            // 如果我是玩家（有手牌），确保 isSpectator 为 false
+            if (data.hand && data.hand.length > 0) setIsSpectator(false);
+        }
+    };
+
+    socket.on('spectator_join', onSpectatorJoin);
+    socket.on('observation_update', onObservationUpdate);
+    socket.on('game_started', onGameStarted);
+
+    return () => {
+        socket.off('spectator_join', onSpectatorJoin);
+        socket.off('observation_update', onObservationUpdate);
+        socket.off('game_started', onGameStarted);
+    };
+  }, [socket, setIsLoading]);
+
+
   const wrappedActions = {
       handleRoomAction,
       handleUpdateConfig: (cfg) => handleUpdateConfig(roomId, cfg),
@@ -49,7 +91,6 @@ export const GameProvider = ({ children }) => {
       handlePlayCards: () => battleLogic.handlePlayCards(roomId),
       handleRequestHint: () => battleLogic.handleRequestHint(roomId),
 
-      // [新增] 快速重连 (用于首页一键回房)
       handleQuickReconnect: () => {
           const lastRid = localStorage.getItem('poker_roomid');
           const lastName = localStorage.getItem('poker_username');
@@ -59,16 +100,13 @@ export const GameProvider = ({ children }) => {
           }
           if (!isConnected) return alert("网络连接未就绪，请稍候");
 
-          // 1. 同步 UI 状态 (让输入框变回原来的值，提升视觉反馈)
           roomLogic.setRoomId(lastRid);
           roomLogic.setUsername(lastName);
           roomLogic.setIsCreatorMode(false);
           
-          // 2. 发起连接
           if (setIsLoading) setIsLoading(true);
           console.log(`[QuickReconnect] 尝试重回房间: ${lastRid} as ${lastName}`);
           
-          // 确保 socket 是连接状态
           if (socket && socket.connected) {
               socket.emit('join_room', { roomId: lastRid, username: lastName });
           } else {
@@ -77,47 +115,39 @@ export const GameProvider = ({ children }) => {
           }
       },
 
-      // 离开房间/返回首页
       handleLeaveRoom: () => {
           if (window.confirm("确定要退出房间返回首页吗？")) {
-              // [关键修改]
-              // 不再清除 localStorage，这样如果是“手误”退出，
-              // 回到首页后依然可以看到“一键重连”按钮，随时可以回去。
-              // localStorage.removeItem('poker_roomid'); // 已注释
-              
               window.location.reload();
           }
       }
   };
 
   const contextValue = {
-      // 基础
       socket, isConnected, mySocketId, ping,
       
-      // 房间表单
       username, setUsername: roomLogic.setUsername,
       roomId, setRoomId: roomLogic.setRoomId,
       isCreatorMode: roomLogic.isCreatorMode, setIsCreatorMode: roomLogic.setIsCreatorMode,
       isLoading,
       
-      // 核心配置与状态
       roomConfig: activeRoomConfig, 
       setRoomConfig: roomLogic.setInputConfig, 
       gameState, 
       players, 
       
-      // 战斗数据
       ...gameData, 
       ...battleLogic, 
       
-      // 动作
       ...wrappedActions,
       
-      // 辅助
       handleMouseDown: battleLogic.handleMouseDown,
       handleMouseEnter: battleLogic.handleMouseEnter,
       handleClearSelection: battleLogic.handleClearSelection,
-      toggleSort: battleLogic.toggleSort
+      toggleSort: battleLogic.toggleSort,
+
+      // [新增] 暴露给 UI 的新状态
+      isSpectator,
+      observedHands 
   };
 
   return (

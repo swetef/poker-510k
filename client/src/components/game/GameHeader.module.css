@@ -70,10 +70,12 @@
     font-size: 11px;
     backdrop-filter: blur(5px);
     box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-    z-index: 100;
+    /* [修改] 提升层级，确保高于左侧的 GameLogPanel (z-index: 1000) */
+    z-index: 2000;
     animation: fadeIn 0.2s ease;
     text-align: left;
 }
+
 
 .infoTitle {
     font-weight: bold;

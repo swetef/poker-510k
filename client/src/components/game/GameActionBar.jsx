@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RotateCcw, Zap, Lightbulb, Clock, Loader2, AlertTriangle, Repeat, Shield, Coins, Coffee } from 'lucide-react';
+import { RotateCcw, Zap, Lightbulb, Clock, Loader2, AlertTriangle, Repeat, Shield, Coins, Coffee, Eye } from 'lucide-react';
 import css from './GameActionBar.module.css';
 import { useGame } from '../../context/GameContext.jsx';
 import TimerComponent from '../CountDownTimer.jsx';
@@ -11,7 +11,8 @@ export const GameActionBar = () => {
         playersInfo, mySocketId, currentTurnId, players, turnRemaining,
         handleClearSelection, handleToggleAutoPlay, handleSwitchAutoPlayMode,
         handlePass, handleRequestHint, handlePlayCards,
-        isSubmitting, lastPlayerName 
+        isSubmitting, lastPlayerName,
+        isSpectator, observedHands // [新增]
     } = useGame();
 
     const [confirmState, setConfirmState] = useState(false);
@@ -22,9 +23,35 @@ export const GameActionBar = () => {
 
     if (winner || roundResult || grandResult) return null;
 
+    // [新增] 如果是观众，显示简单的状态栏
+    if (isSpectator) {
+        return (
+             <div className={css.actionBar}>
+                <div className={css.waitingBadge}>
+                    <Eye size={20} /> 正在观战中...
+                </div>
+            </div>
+        );
+    }
+
     const myInfo = playersInfo[mySocketId] || {};
     const amIAutoPlay = myInfo.isAutoPlay;
     const currentMode = myInfo.autoPlayMode || 'SMART';
+    
+    // [新增] 如果已经打完牌了 (赢了)，显示观看状态
+    // 通过判断手牌数 (myHand 在 Context 里，但这里没解构，可以用 observedHands 侧面判断)
+    // 更简单的判断：如果在 observedHands 里有数据，说明我已经 finished 并且收到了推送
+    const isFinishedAndWatching = Object.keys(observedHands).length > 0;
+    
+    if (isFinishedAndWatching) {
+        return (
+            <div className={css.actionBar}>
+                <div className={css.waitingBadge} style={{background: 'rgba(52, 152, 219, 0.4)'}}>
+                    <Eye size={20} /> 已完赛，观看队友中
+                </div>
+            </div>
+        );
+    }
     
     const myTurn = currentTurnId === mySocketId;
     const currentTurnPlayer = players.find(p => p.id === currentTurnId);
@@ -56,7 +83,6 @@ export const GameActionBar = () => {
         setConfirmState(false);
     };
 
-    // 模式切换循环
     const cycleMode = () => {
         const modes = ['SMART', 'THRIFTY', 'AFK'];
         const currentIdx = modes.indexOf(currentMode);
@@ -90,7 +116,6 @@ export const GameActionBar = () => {
                 
                 {amIAutoPlay ? (
                     <div className={css.autoPlayGroup}>
-                         {/* [新增] 模式切换按钮 */}
                         <button 
                             className={css.btnModeSwitch}
                             onClick={cycleMode}

@@ -1,8 +1,8 @@
 /* 底分面板 - 极简纯净版 */
 .scoreBoard {
     position: absolute;
-    /* 稍微偏上(42%)，给下面的出牌留空间 */
-    top: 42%;
+    /* [修改] 从 42% 上移至 30%，避开下方的出牌区人名 */
+    top: 30%;
     left: 50%;
     transform: translate(-50%, -50%);
     
