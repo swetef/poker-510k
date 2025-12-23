@@ -4,7 +4,10 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    z-index: 20;
+    /* [修改] 提升层级至 1100，确保高于 GameLogPanel (1000) */
+    z-index: 1100;
+    /* [修改] 显式添加 relative 以确保 z-index 生效 (虽然 flex item 也会生效，但这更稳健) */
+    position: relative;
     width: 100%;
     pointer-events: none; /* 让点击穿透，按钮单独开启 auto */
     box-sizing: border-box;
@@ -70,7 +73,7 @@
     font-size: 11px;
     backdrop-filter: blur(5px);
     box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-    /* [修改] 提升层级，确保高于左侧的 GameLogPanel (z-index: 1000) */
+    /* z-index 在父容器 context 内生效，2000 足够保证在 Header 内部置顶 */
     z-index: 2000;
     animation: fadeIn 0.2s ease;
     text-align: left;

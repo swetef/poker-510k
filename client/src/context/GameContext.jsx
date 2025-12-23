@@ -87,6 +87,9 @@ export const GameProvider = ({ children }) => {
       handleKickPlayer: (tid) => handleKickPlayer(roomId, tid),
       
       handleToggleAutoPlay: () => battleLogic.handleToggleAutoPlay(roomId),
+      // [修复] 增加对 handleSwitchAutoPlayMode 的封装，自动注入 roomId
+      handleSwitchAutoPlayMode: (mode) => battleLogic.handleSwitchAutoPlayMode(roomId, mode),
+      
       handlePass: () => battleLogic.handlePass(roomId),
       handlePlayCards: () => battleLogic.handlePlayCards(roomId),
       handleRequestHint: () => battleLogic.handleRequestHint(roomId),

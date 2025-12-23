@@ -1,15 +1,14 @@
 import React from 'react';
-import { RefreshCw, AlertCircle } from 'lucide-react'; 
-// [修改] 引入 useGame
-import { useGame } from './context/GameContext.jsx';
+import { RefreshCw, AlertCircle, WifiOff } from 'lucide-react'; 
+// [修复] 修正导入路径，确保在 client/src/App.jsx 位置能正确引用
+import { useGame } from './context/GameContext'; // Vite 通常可以自动解析 .jsx，也可以显式写
 
-import { LoginScreen } from './screens/LoginScreen.jsx';
-import { LobbyScreen } from './screens/LobbyScreen.jsx';
-import { GameScreen } from './screens/GameScreen.jsx';
-import { DrawSeatScreen } from './screens/DrawSeatScreen.jsx';
+import { LoginScreen } from './screens/LoginScreen';
+import { LobbyScreen } from './screens/LobbyScreen';
+import { GameScreen } from './screens/GameScreen';
+import { DrawSeatScreen } from './screens/DrawSeatScreen';
 
 export default function App() {
-  // [修改] 直接从 Context 获取需要的状态
   const { gameState, isConnected } = useGame();
 
   const renderLandscapeHint = () => (
@@ -29,26 +28,32 @@ export default function App() {
       </div>
   );
 
+  // [修改] 优化后的断线重连提示
   const renderDisconnectAlert = () => (
       !isConnected && (
           <div style={{
               position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
-              background: '#e74c3c', color: 'white', padding: '10px',
+              background: 'rgba(231, 76, 60, 0.95)', color: 'white', padding: '8px',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-              boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
+              boxShadow: '0 2px 10px rgba(0,0,0,0.2)', backdropFilter: 'blur(5px)',
+              fontSize: 13, fontWeight: '500'
           }}>
-              <AlertCircle size={20} />
-              <span style={{fontWeight: 'bold'}}>连接已断开，正在尝试重连...</span>
+              <WifiOff size={16} className="pulse-icon" />
+              <span>网络连接已断开，正在尝试自动恢复...</span>
+              
+              {/* 如果自动重连太久没反应，给个手动按钮 */}
               <button 
                 onClick={() => window.location.reload()} 
                 style={{
                     background: 'white', color: '#e74c3c', border: 'none', 
                     borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 'bold',
-                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                    marginLeft: 10
                 }}
               >
-                  <RefreshCw size={12} /> 刷新重连
+                  <RefreshCw size={12} /> 立即刷新
               </button>
+              <style>{`.pulse-icon { animation: pulse 1.5s infinite; } @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }`}</style>
           </div>
       )
   );
@@ -58,7 +63,6 @@ export default function App() {
       {renderDisconnectAlert()}
       {renderLandscapeHint()}
       
-      {/* [修改] 子组件不再需要传参，它们会自己去 Context 里拿数据 */}
       {gameState === 'LOGIN' && <LoginScreen />}
       
       {gameState === 'LOBBY' && <LobbyScreen />}

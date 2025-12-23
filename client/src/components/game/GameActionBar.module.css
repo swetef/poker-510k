@@ -26,6 +26,9 @@
     padding: 10px;
     border-radius: 40px;
     border: 1px solid rgba(255,255,255,0.2);
+    /* [修复] 显式开启点击事件并提升层级，防止被手牌遮罩层挡住 */
+    pointer-events: auto;
+    z-index: 101;
 }
 
 /* 模式切换按钮 */

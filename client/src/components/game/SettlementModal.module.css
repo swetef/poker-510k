@@ -5,7 +5,8 @@
     display: flex; 
     justify-content: center; 
     align-items: center; 
-    z-index: 99; 
+    /* [修改] 提升至 3000，确保高于 Header (1100) 和 LogPanel (1000) */
+    z-index: 3000; 
     backdrop-filter: blur(8px);
     pointer-events: auto;
 }

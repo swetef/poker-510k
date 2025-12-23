@@ -13,7 +13,8 @@ class BotManager {
         if (!player || player.isBot) return; 
 
         player.isAutoPlay = !player.isAutoPlay;
-        // [修改] 开启时重置为默认模式 (SMART)
+        
+        // 开启时重置为默认模式 (SMART)，保持“功能保护”原则
         if (player.isAutoPlay) {
             player.autoPlayMode = 'SMART'; 
         }
@@ -58,10 +59,32 @@ class BotManager {
 
         // 如果是 AI，设置思考时间
         if (isAI && this.game.gameState.hands[currPlayer.id].length > 0) {
-            const delay = 1000 + Math.random() * 1000; // 1-2秒延迟
+            
+            // [优化] 动态思考时间：牌越少越快，提升紧张感和响应速度
+            const handSize = this.game.gameState.hands[currPlayer.id].length;
+            let baseDelay = 1000;
+            let randomRange = 1000;
+
+            if (handSize <= 5) {
+                // 冲刺阶段：0.5s - 1.0s
+                baseDelay = 500;
+                randomRange = 500;
+            } else if (handSize <= 10) {
+                // 中后段：0.8s - 1.6s
+                baseDelay = 800;
+                randomRange = 800;
+            } else {
+                // 开局：1.0s - 2.0s
+                baseDelay = 1000;
+                randomRange = 1000;
+            }
+
+            const delay = baseDelay + Math.random() * randomRange;
+
             this.timer = setTimeout(() => {
                 this.executeTurn(currPlayer);
             }, delay);
+
         } else if (isAI && this.game.gameState.hands[currPlayer.id].length === 0 && this.game.gameState.lastShotPhase) {
             // [特殊] 如果是 AI 在最后一手阶段没牌了，直接过
              this._forcePass(currPlayer);
@@ -90,7 +113,7 @@ class BotManager {
             
             let cardsToPlay = null;
 
-            // [新增] 构建策略上下文
+            // 构建策略上下文
             const strategyContext = {
                 mode: botPlayer.autoPlayMode || 'SMART',
                 pendingScore: this.game.gameState.pendingTablePoints || 0,
@@ -108,14 +131,13 @@ class BotManager {
             }
 
             try {
-                // [修改] 传入 context
+                // 使用优化后的 BotLogic 决策
                 cardsToPlay = BotLogic.decideMove(sortedHand, cardsToBeat, this.game.config.deckCount, strategyContext);
             } catch (err) {
                 console.error("[Bot Error] Logic crashed:", err);
             }
 
             if (cardsToPlay) {
-                console.log(`[Bot/Auto] ${botPlayer.name} plays ${cardsToPlay.length} cards (Mode: ${strategyContext.mode}).`);
                 // 调用 GameManager 的核心出牌方法
                 const result = this.game.playCards(botPlayer.id, cardsToPlay);
                 
