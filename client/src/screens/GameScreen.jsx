@@ -1,6 +1,5 @@
 import React from 'react';
 import css from './GameScreen.module.css'; 
-// [修改] 彻底移除 styles.js 引用
 import { GameLogPanel } from '../components/BaseUI.jsx';
 import { useGame } from '../context/GameContext.jsx';
 
@@ -29,13 +28,11 @@ export const GameScreen = () => {
     }
 
     return (
-        <div className={css.gameTable} onMouseUp={() => { /* 全局鼠标抬起事件通常用于取消拖拽，已在 Hook 中处理 */ }}>
+        <div className={css.gameTable}>
             <div className={css.gameSafeArea}>
                 
-                {/* 1. 左上角日志 */}
-                <div className="gameLogPanel">
-                     <GameLogPanel logs={gameLogs} />
-                </div>
+                {/* 1. 左上角日志 (直接渲染，组件内部已包含 absolute 定位) */}
+                <GameLogPanel logs={gameLogs} />
 
                 {/* 2. 顶部 Header (包含比分板、全屏按钮等) */}
                 <GameHeader />

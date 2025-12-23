@@ -1,6 +1,6 @@
 module.exports = (io, socket, rooms) => {
     
-    // 辅助函数：广播房间信息
+    // ... (保持辅助函数 broadcastRoomInfo, broadcastGameState 不变) ...
     const broadcastRoomInfo = (roomId) => {
         const room = rooms[roomId];
         if (!room) return;
@@ -19,7 +19,6 @@ module.exports = (io, socket, rooms) => {
         io.to(roomId).emit('room_info', data);
     };
 
-    // 辅助函数：广播游戏状态
     const broadcastGameState = (roomId, room, infoText = null) => {
         if (!room.gameManager) return;
         const publicState = room.gameManager.getPublicState();
@@ -77,14 +76,25 @@ module.exports = (io, socket, rooms) => {
         if (existingPlayerIndex !== -1) {
             const existingPlayer = room.players[existingPlayerIndex];
             
-            if (existingPlayer.online) {
-                return socket.emit('error_msg', `名字 "${cleanName}" 已被使用且玩家在线`);
+            // [关键修改] 移除在线检查报错，允许顶号重连
+            // 之前的代码会在这里 return error，导致刷新后进不去
+            
+            // 如果旧连接还在线，踢掉它 (强制下线旧设备/旧页面)
+            if (existingPlayer.online && existingPlayer.id !== socket.id) {
+                 const oldSocket = io.sockets.sockets.get(existingPlayer.id);
+                 if (oldSocket) {
+                     // 通知旧连接被顶号
+                     oldSocket.emit('error_msg', '您的账号已在其他页面登录');
+                     oldSocket.disconnect(); 
+                     console.log(`[Join] Kicking old socket for ${cleanName}: ${existingPlayer.id}`);
+                 }
             }
 
             isReconnect = true;
             oldSocketId = existingPlayer.id;
             console.log(`[Reconnect] Success! ${cleanName} (${oldSocketId} -> ${socket.id})`);
 
+            // 更新为新 socket id
             existingPlayer.id = socket.id;
             existingPlayer.online = true; 
 
@@ -113,6 +123,7 @@ module.exports = (io, socket, rooms) => {
         socket.join(roomId);
         broadcastRoomInfo(roomId);
 
+        // 如果游戏正在进行，立即发送当前状态，让前端切回游戏界面
         const isGameRunning = room.gameManager && room.gameManager.gameState;
         if (isGameRunning) {
             if (isReconnect) {
@@ -144,7 +155,7 @@ module.exports = (io, socket, rooms) => {
         }
     });
 
-    // --- 更新房间配置 ---
+    // ... (后续 update_room_config, add_bot, kick_player, switch_seat 保持不变) ...
     socket.on('update_room_config', ({ roomId, config }) => {
         const room = rooms[roomId];
         if (!room) return;
@@ -169,7 +180,6 @@ module.exports = (io, socket, rooms) => {
         broadcastRoomInfo(roomId);
     });
 
-    // --- 添加机器人 ---
     socket.on('add_bot', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room) return;
@@ -178,17 +188,14 @@ module.exports = (io, socket, rooms) => {
         
         const botId = `bot_${Date.now()}_${Math.floor(Math.random()*1000)}`;
         
-        // [修复] 防止机器人重名
-        // 尝试生成名字，如果重复则重试，最多尝试 10 次
         let botName = '';
         let attempts = 0;
         do {
-            const randomNum = Math.floor(Math.random() * 1000); // 范围扩大到 0-999
+            const randomNum = Math.floor(Math.random() * 1000); 
             botName = `Robot ${randomNum}`;
             attempts++;
         } while (room.players.some(p => p.name === botName) && attempts < 10);
 
-        // 如果重试 10 次还重复，强制加时间戳后缀
         if (room.players.some(p => p.name === botName)) {
             botName = `Bot_${Date.now().toString().slice(-4)}`;
         }
@@ -204,7 +211,6 @@ module.exports = (io, socket, rooms) => {
         broadcastRoomInfo(roomId);
     });
 
-    // --- 踢人 ---
     socket.on('kick_player', ({ roomId, targetId }) => {
         const room = rooms[roomId];
         if (!room) return;
@@ -237,7 +243,6 @@ module.exports = (io, socket, rooms) => {
         broadcastRoomInfo(roomId);
     });
 
-    // --- 切换座位 ---
     socket.on('switch_seat', ({ roomId, index1, index2 }) => {
         const room = rooms[roomId];
         if (!room) return;

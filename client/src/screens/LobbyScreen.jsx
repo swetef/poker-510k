@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Sparkles, Award } from 'lucide-react';
+import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Sparkles, Award, LogOut } from 'lucide-react';
 import css from './LobbyScreen.module.css'; 
 import { useGame } from '../context/GameContext.jsx';
 import { RoomSettingsForm } from '../components/game/RoomSettingsForm.jsx';
@@ -11,7 +11,8 @@ export const LobbyScreen = () => {
         handleAddBot,
         handleSwitchSeat,
         handleUpdateConfig,
-        handleKickPlayer
+        handleKickPlayer,
+        handleLeaveRoom // [新增]
     } = useGame();
     
     // [修复] 统一获取当前玩家是否为房主，并赋予默认值 false 防止 undefined 导致 UI 闪烁
@@ -64,6 +65,19 @@ export const LobbyScreen = () => {
             
             <div className={css.lobbyHeader}>
                 <div style={{display:'flex', alignItems:'center', gap: 10, flexWrap: 'wrap'}}>
+                    {/* [新增] 返回首页按钮 (复用 Setting 按钮样式) */}
+                    <button 
+                        onClick={handleLeaveRoom}
+                        style={{
+                            background: '#f1f2f6', border: '1px solid #ccc', borderRadius: '50%', 
+                            width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: 'pointer', transition: 'all 0.2s', color: '#e74c3c'
+                        }}
+                        title="退出房间"
+                    >
+                        <LogOut size={18} style={{marginLeft: 2}}/> 
+                    </button>
+
                     <h2 style={{margin:0, fontSize: 24}}>房间: <span style={{fontFamily:'monospace', color:'#27ae60'}}>{roomId}</span></h2>
                     
                     {roomConfig.shuffleStrategy === 'NO_SHUFFLE' && (

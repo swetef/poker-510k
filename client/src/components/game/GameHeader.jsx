@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Zap, Minimize, Maximize, Layers, Shield, ChevronDown, ChevronUp, Wifi, WifiOff } from 'lucide-react';
+import { Zap, Minimize, Maximize, Layers, Shield, ChevronDown, ChevronUp, Wifi, WifiOff, LogOut } from 'lucide-react';
 import css from './GameHeader.module.css'; // 新 CSS
 import { useGame } from '../../context/GameContext.jsx';
 
@@ -57,7 +57,7 @@ const TeamScoreBoard = () => {
  * [Header组件]
  */
 export const GameHeader = () => {
-    const { roomId, playersInfo, mySocketId, toggleSort, sortMode, handleToggleAutoPlay, ping, isConnected } = useGame();
+    const { roomId, playersInfo, mySocketId, toggleSort, sortMode, handleToggleAutoPlay, ping, isConnected, handleLeaveRoom } = useGame();
     const [isFullScreen, setIsFullScreen] = useState(false);
     
     const myInfo = playersInfo[mySocketId] || {};
@@ -93,6 +93,16 @@ export const GameHeader = () => {
     return (
         <div className={css.header}>
             <div className={css.roomBadgeContainer}>
+                {/* [新增] 退出按钮 */}
+                <button 
+                    className={css.iconBtn} 
+                    onClick={handleLeaveRoom}
+                    style={{padding: '4px 8px', border:'none', background:'transparent'}}
+                    title="退出房间"
+                >
+                    <LogOut size={16} />
+                </button>
+
                 <div className={css.roomBadge}>Room {roomId}</div>
                 
                 <div className={css.pingBadge} style={{ color: getPingColor(ping) }}>

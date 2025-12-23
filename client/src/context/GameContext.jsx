@@ -28,6 +28,10 @@ export const GameProvider = ({ children }) => {
   useEffect(() => {
       if (isConnected && socket && roomIdRef.current && usernameRef.current) {
           console.log(`[Auto-Rejoin] 自动恢复身份: ${usernameRef.current} @ Room ${roomIdRef.current}`);
+          
+          // [新增] 自动重连时，让 UI 进入加载状态，提升体验
+          if (setIsLoading) setIsLoading(true);
+
           socket.emit('join_room', { 
               roomId: roomIdRef.current, 
               username: usernameRef.current 
@@ -66,6 +70,13 @@ export const GameProvider = ({ children }) => {
       handlePass: () => battleLogic.handlePass(roomId),
       handlePlayCards: () => battleLogic.handlePlayCards(roomId),
       handleRequestHint: () => battleLogic.handleRequestHint(roomId),
+
+      // [新增] 离开房间/返回首页 (通过刷新页面重置所有状态)
+      handleLeaveRoom: () => {
+          if (window.confirm("确定要退出房间返回首页吗？")) {
+              window.location.reload();
+          }
+      }
   };
 
   const contextValue = {
