@@ -45,7 +45,7 @@ module.exports = (io, socket, rooms) => {
     // ==========================================
 
     socket.on('create_room', ({ roomId, username, config }) => {
-        // [修改] 智能房间覆盖逻辑
+        // [修改] 智能房间覆盖逻辑 (实现“顶替”)
         if (rooms[roomId]) {
             const room = rooms[roomId];
             
@@ -56,12 +56,13 @@ module.exports = (io, socket, rooms) => {
             // 检查是否有真人在线 (排除 Bot)
             const hasOnlineRealPlayers = room.players.some(p => !p.isBot && p.online);
 
-            // 如果房间存在，但没有真人在线（所有人已离开或断线），视为“僵尸房间”，允许直接覆盖
+            // 核心逻辑：如果房间存在，但没有真人在线（所有人已离开或断线），视为“僵尸房间”
+            // 此时用户显式点击“创建”，说明意图是“开新局”，因此直接销毁旧房间
             if (!hasOnlineRealPlayers) {
                 console.log(`[Room] Overwriting empty zombie room ${roomId}`);
                 // 清理旧定时器
                 if (room.destroyTimer) clearTimeout(room.destroyTimer);
-                // 删除旧房间数据，后续代码会重新创建
+                // 彻底删除旧房间数据，后续代码会重新创建全新的
                 delete rooms[roomId];
             } else {
                 // 如果还有人在线，才报“已存在”
@@ -124,6 +125,7 @@ module.exports = (io, socket, rooms) => {
             existingPlayer.id = socket.id;
             existingPlayer.online = true; 
 
+            // 既然有人重连回来了，取消销毁定时器
             if (room.destroyTimer) {
                 clearTimeout(room.destroyTimer);
                 room.destroyTimer = null;
@@ -254,7 +256,7 @@ module.exports = (io, socket, rooms) => {
     });
 
     // ==========================================
-    //          断开连接处理
+    //          断开连接处理 (智能销毁逻辑)
     // ==========================================
     
     socket.on('disconnecting', () => {
@@ -301,21 +303,26 @@ module.exports = (io, socket, rooms) => {
                         broadcastRoomInfo(roomId);
                     }
 
-                    // 检查是否空房间，空则销毁
+                    // 检查是否空房间 (全是 Bot 或无人)
                     const realPlayers = room.players.filter(p => !p.isBot);
                     const onlineRealPlayers = realPlayers.filter(p => p.online);
 
+                    // 房间变空了，开始销毁倒计时
                     if (onlineRealPlayers.length === 0) {
-                        // 设置销毁定时器 (保留一段时间给玩家重连)
                         if (!room.isPermanent) {
                              if (room.destroyTimer) clearTimeout(room.destroyTimer);
                              
-                             // [修改] 将超时时间从 1小时 (3600000) 缩短为 5分钟 (300000)
-                             // 同时，配合 create_room 的覆盖逻辑，用户可以随时“顶替”掉这个倒计时中的房间
+                             // [关键逻辑] 智能判断销毁延迟：
+                             // 1. 如果游戏从未开始（gameManager 为空） -> 纯大厅空置 -> 2秒销毁
+                             // 2. 如果游戏已开始或已结束（gameManager 存在） -> 保留 5分钟（允许断线重连或查看战绩）
+                             
+                             const hasGameData = !!room.gameManager; 
+                             const destroyDelay = hasGameData ? 300000 : 2000; // 5分钟 vs 2秒
+                             
                              room.destroyTimer = setTimeout(() => {
-                                 console.log(`[Room] Destroying empty room ${roomId}`);
+                                 console.log(`[Room] Destroying empty room ${roomId} (Delay: ${destroyDelay}ms)`);
                                  delete rooms[roomId];
-                             }, 300000); 
+                             }, destroyDelay); 
                         }
                     }
                 }
