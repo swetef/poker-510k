@@ -43,7 +43,8 @@ class BotManager {
 
     // 检查当前玩家是否是机器人/托管，并执行逻辑
     checkAndRun() {
-        if (!this.game.gameState) return;
+        // [Bug修复] 如果游戏已销毁，停止所有Bot逻辑
+        if (!this.game || !this.game.gameState || this.game.disposed) return;
         
         this.clearTimer();
 
@@ -93,7 +94,9 @@ class BotManager {
 
     // 执行机器人的回合
     executeTurn(botPlayer) {
-        if (!this.game.gameState) return;
+        // [Bug修复] 再次检查游戏是否销毁
+        if (!this.game || !this.game.gameState || this.game.disposed) return;
+        
         // 双重检查：确保当前还是该机器人出牌（防止网络延迟导致的异步问题）
         if (this.game.players[this.game.gameState.currentTurnIndex].id !== botPlayer.id) return;
 
@@ -158,7 +161,7 @@ class BotManager {
 
                     if (result.isRoundOver) {
                         setTimeout(() => {
-                            this.game._handleWin(result, botPlayer.id);
+                            if (!this.game.disposed) this.game._handleWin(result, botPlayer.id);
                         }, 3000);
                     } 
                 } else {
@@ -184,6 +187,7 @@ class BotManager {
 
     // 内部辅助：出一张最小的牌
     _playMinCard(botPlayer, sortedHand) {
+        if (this.game.disposed) return;
         const minCard = [sortedHand[0]];
         const result = this.game.playCards(botPlayer.id, minCard);
         if (result.success) {
@@ -195,7 +199,7 @@ class BotManager {
 
             if (result.isRoundOver) {
                 setTimeout(() => {
-                    this.game._handleWin(result, botPlayer.id);
+                    if (!this.game.disposed) this.game._handleWin(result, botPlayer.id);
                 }, 3000);
             }
         } else {
@@ -205,12 +209,13 @@ class BotManager {
 
     // 内部辅助：强制过牌
     _forcePass(botPlayer) {
+        if (this.game.disposed) return;
         const result = this.game.passTurn(botPlayer.id);
         
         if (result.isRoundOver) {
              this.game._broadcastUpdate(`${botPlayer.name}: 不要`);
              setTimeout(() => {
-                this.game._handleWin(result, botPlayer.id); 
+                if (!this.game.disposed) this.game._handleWin(result, botPlayer.id); 
              }, 3000);
         } else if (result.success) {
             this.game._broadcastUpdate(`${botPlayer.name}: 不要`);

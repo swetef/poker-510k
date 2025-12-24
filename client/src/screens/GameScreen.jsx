@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import css from './GameScreen.module.css'; 
 import { GameLogPanel } from '../components/BaseUI.jsx';
 import { useGame } from '../context/GameContext.jsx';
@@ -12,12 +12,16 @@ import { HandArea } from '../components/game/HandArea.jsx';
 import { GameActionBar } from '../components/game/GameActionBar.jsx';
 
 export const GameScreen = () => {
-    // [修改] 解构 isSpectator
-    const { players, mySocketId, gameLogs, isSpectator } = useGame();
+    const { players, mySocketId, gameLogs, isSpectator, isRoundOver } = useGame();
 
+    // [新增] 控制结算弹窗显示
+    const [showSettlement, setShowSettlement] = useState(false);
+
+    // [新增] 当小局结束时，不自动弹，但如果是大局结束(GameOver)，可能还是需要强制弹
+    // 这里我们简单处理：如果是RoundOver，默认不弹，由用户点；但如果是GrandOver，组件内部逻辑会处理
+    
     const myPlayerExists = players.some(p => p.id === mySocketId);
     
-    // [修改] 如果不是观众且没有同步到玩家数据，才显示同步界面
     if (!myPlayerExists && !isSpectator && players.length > 0) {
         return (
             <div className={css.gameTable} style={{
@@ -30,12 +34,10 @@ export const GameScreen = () => {
                 textAlign: 'center'
             }}>
                 <AlertCircle size={40} color="#f1c40f" />
-                
                 <div>
                     <div style={{fontSize: 20, fontWeight: 'bold', marginBottom: 5}}>正在同步数据...</div>
                     <div style={{fontSize: 14, opacity: 0.7}}>如果是从后台切回，可能需要重新连接</div>
                 </div>
-
                 <button 
                     onClick={() => window.location.reload()}
                     style={{
@@ -61,7 +63,6 @@ export const GameScreen = () => {
 
     return (
         <div className={css.gameTable}>
-            {/* [新增] 观众模式水印 */}
             {isSpectator && (
                 <div style={{
                     position: 'absolute', top: 60, right: 20, 
@@ -78,10 +79,18 @@ export const GameScreen = () => {
                 <GameLogPanel logs={gameLogs} />
                 <GameHeader />
                 <TableCenterArea />
-                <SettlementModal />
+                
+                {/* [修改] 传递 isOpen 和 onClose */}
+                <SettlementModal 
+                    isOpen={showSettlement || (useGame().grandResult !== null)} // 大局结束强制显示
+                    onClose={() => setShowSettlement(false)} 
+                />
+                
                 <PlayerLayout />
                 <HandArea />
-                <GameActionBar />
+                
+                {/* [修改] 传递回调 */}
+                <GameActionBar onShowSettlement={() => setShowSettlement(true)} />
             </div>
         </div>
     );

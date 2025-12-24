@@ -1,27 +1,18 @@
 import { useState, useEffect } from 'react';
 import SoundManager from '../../utils/SoundManager.js';
 
-export const useGameData = (socket, setIsLoading) => {
+export const useGameData = (socket, setIsLoading, { setIsRoundOver, setRoundOverData, setReadyPlayers }) => {
     const [gameState, setGameState] = useState('LOGIN'); 
     const [players, setPlayers] = useState([]);
-    
-    // 从服务器同步回来的配置 (用于大厅展示和游戏内逻辑)
     const [syncedConfig, setSyncedConfig] = useState(null);
-
-    // 抽签阶段特有数据
     const [drawState, setDrawState] = useState(null); 
-    // { totalCards: number, history: Array<{playerId, index, val, name}> }
 
     useEffect(() => {
         if (!socket) return;
 
-        // --- 监听大厅与全局状态 ---
-
         const onRoomInfo = (data) => {
             setSyncedConfig(data.config);
             setPlayers(data.players);
-            
-            // 自动流转状态
             if (gameState !== 'GAME' && gameState !== 'DRAW_SEATS') {
                 setGameState('LOBBY'); 
             }
@@ -41,12 +32,37 @@ export const useGameData = (socket, setIsLoading) => {
 
         const onSeatDrawFinished = (data) => {
             setPlayers(data.players); 
-            // 游戏开始事件会紧接着触发，不用这里切状态
         };
 
         const onGameStarted = (data) => {
             setGameState('GAME');
             SoundManager.play('deal');
+            // [新增] 重置状态
+            setIsRoundOver(false);
+            setRoundOverData(null);
+            setReadyPlayers([]);
+        };
+        
+        // [新增] 小局结束 (不弹窗，只切状态)
+        const onRoundOver = (data) => {
+            setRoundOverData(data);
+            setIsRoundOver(true);
+            const isWinner = data.roundWinner === players.find(p => p.id === socket.id)?.name;
+            // 可以播放音效，但不要alert
+            // SoundManager.play(isWinner ? 'win' : 'lose'); // 逻辑在 useBattleLogic 处理了
+        };
+        
+        // [新增] 大局结束
+        const onGrandGameOver = (data) => {
+            setRoundOverData(data);
+            setIsRoundOver(true); 
+            // 保持原有逻辑，GameManager 会把 isGrandOver: true 传过来
+            SoundManager.play('win');
+        };
+
+        // [新增] 准备状态更新
+        const onReadyStateUpdate = (data) => {
+            setReadyPlayers(data.readyPlayerIds || []);
         };
         
         const onErrorMsg = (msg) => {
@@ -64,6 +80,9 @@ export const useGameData = (socket, setIsLoading) => {
         socket.on('seat_draw_update', onSeatDrawUpdate);
         socket.on('seat_draw_finished', onSeatDrawFinished);
         socket.on('game_started', onGameStarted);
+        socket.on('round_over', onRoundOver);
+        socket.on('grand_game_over', onGrandGameOver);
+        socket.on('ready_state_update', onReadyStateUpdate);
         socket.on('error_msg', onErrorMsg);
         socket.on('kicked', onKicked);
 
@@ -73,16 +92,16 @@ export const useGameData = (socket, setIsLoading) => {
             socket.off('seat_draw_update', onSeatDrawUpdate);
             socket.off('seat_draw_finished', onSeatDrawFinished);
             socket.off('game_started', onGameStarted);
+            socket.off('round_over', onRoundOver);
+            socket.off('grand_game_over', onGrandGameOver);
+            socket.off('ready_state_update', onReadyStateUpdate);
             socket.off('error_msg', onErrorMsg);
             socket.off('kicked', onKicked);
         };
-    }, [socket, gameState, setIsLoading]);
+    }, [socket, gameState, setIsLoading, players]); 
 
-    // --- 大厅操作 Actions ---
     const handleStartGame = (roomId) => socket.emit('start_game', { roomId });
-    // [修复] 增加 handleNextRound
     const handleNextRound = (roomId) => socket.emit('next_round', { roomId });
-    
     const handleAddBot = (roomId) => socket.emit('add_bot', { roomId });
     const handleKickPlayer = (roomId, targetId) => socket.emit('kick_player', { roomId, targetId });
     const handleSwitchSeat = (roomId, index1, index2) => socket.emit('switch_seat', { roomId, index1, index2 });
@@ -94,9 +113,8 @@ export const useGameData = (socket, setIsLoading) => {
         syncedConfig, setSyncedConfig,
         drawState,
         
-        // Actions
         handleStartGame, 
-        handleNextRound, // 导出
+        handleNextRound, 
         handleAddBot, 
         handleKickPlayer, 
         handleSwitchSeat, 

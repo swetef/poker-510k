@@ -102,6 +102,7 @@ export const useSocketConnection = () => {
                     newSocket.connect();
                 } else {
                     // 2. 即使 connected 为 true，也可能是假死，发一个包激活一下
+                    // 如果这个包发不出去，socket.io 内部会自动触发 disconnect
                     newSocket.emit('ping', () => {
                         console.log("[App] 连接活性检查通过");
                     });

@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { RotateCcw, Zap, Lightbulb, Clock, Loader2, AlertTriangle, Repeat, Shield, Coins, Coffee, Eye } from 'lucide-react';
+import { RotateCcw, Zap, Lightbulb, Clock, Loader2, AlertTriangle, Repeat, Shield, Coins, Coffee, Eye, ClipboardList, CheckCircle } from 'lucide-react';
 import css from './GameActionBar.module.css';
 import { useGame } from '../../context/GameContext.jsx';
 import TimerComponent from '../CountDownTimer.jsx';
 import { isBomb } from '../../utils/cardLogic.js';
 
-export const GameActionBar = () => {
+// [修改] 接收回调
+export const GameActionBar = ({ onShowSettlement }) => {
     const { 
         winner, roundResult, grandResult, selectedCards, 
         playersInfo, mySocketId, currentTurnId, players, turnRemaining,
         handleClearSelection, handleToggleAutoPlay, handleSwitchAutoPlayMode,
         handlePass, handleRequestHint, handlePlayCards,
         isSubmitting, lastPlayerName,
-        isSpectator, observedHands // [新增]
+        isSpectator, observedHands,
+        // [新增]
+        isRoundOver, readyPlayers, handlePlayerReady
     } = useGame();
 
     const [confirmState, setConfirmState] = useState(false);
@@ -21,9 +24,44 @@ export const GameActionBar = () => {
         setConfirmState(false);
     }, [selectedCards, currentTurnId]);
 
+    // [新增] 结束状态的特殊 ActionBar
+    // [修复] 增加 grandResult 判断：如果大局结束，不显示准备按钮（只允许查看战绩，重开需走结算窗）
+    if (isRoundOver) {
+        const isReady = readyPlayers.includes(mySocketId);
+        return (
+            <div className={css.actionBar}>
+                <div className={css.buttonGroup}>
+                    {/* 查看战绩 */}
+                    <button 
+                        className={css.btnSecondary}
+                        onClick={onShowSettlement}
+                        style={{background: '#34495e', padding: '10px 20px'}}
+                    >
+                        <ClipboardList size={18} style={{marginRight:5}} /> 查看战绩
+                    </button>
+
+                    {/* 准备按钮：仅当大局未结束时显示 */}
+                    {!grandResult && (
+                        <button 
+                            className={isReady ? css.btnSecondary : css.btnPlay}
+                            onClick={handlePlayerReady}
+                            disabled={isReady} // 准备后不可取消
+                            style={isReady ? {background: '#27ae60', opacity: 0.8, cursor: 'default'} : {padding: '10px 30px'}}
+                        >
+                            {isReady ? (
+                                <><CheckCircle size={18} style={{marginRight:5}} /> 已准备</>
+                            ) : (
+                                '准备下一局'
+                            )}
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     if (winner || roundResult || grandResult) return null;
 
-    // [新增] 如果是观众，显示简单的状态栏
     if (isSpectator) {
         return (
              <div className={css.actionBar}>
@@ -38,11 +76,7 @@ export const GameActionBar = () => {
     const amIAutoPlay = myInfo.isAutoPlay;
     const currentMode = myInfo.autoPlayMode || 'SMART';
     
-    // [新增] 如果已经打完牌了 (赢了)，显示观看状态
-    // 通过判断手牌数 (myHand 在 Context 里，但这里没解构，可以用 observedHands 侧面判断)
-    // 更简单的判断：如果在 observedHands 里有数据，说明我已经 finished 并且收到了推送
     const isFinishedAndWatching = Object.keys(observedHands).length > 0;
-    
     if (isFinishedAndWatching) {
         return (
             <div className={css.actionBar}>
@@ -59,7 +93,6 @@ export const GameActionBar = () => {
 
     const handlePlayClick = () => {
         if (isSubmitting) return;
-        
         if (selectedCards.length === 0) {
             handlePlayCards();
             return;
@@ -70,7 +103,7 @@ export const GameActionBar = () => {
             myInfo.team !== undefined && myInfo.team !== null && 
             lastPlayer && lastPlayer.id !== mySocketId && 
             playersInfo[lastPlayer.id]?.team === myInfo.team;
-
+        
         const playingBomb = isBomb(selectedCards);
 
         if (isTeammate && playingBomb && !confirmState) {
@@ -98,7 +131,6 @@ export const GameActionBar = () => {
             default: return { text: '智能', icon: <Shield size={14} />, color: '#2ecc71' };
         }
     };
-
     const modeInfo = getModeLabel(currentMode);
 
     return (

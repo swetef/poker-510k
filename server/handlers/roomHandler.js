@@ -135,6 +135,18 @@ module.exports = (io, socket, rooms) => {
             if (room.seatManager) room.seatManager.reconnectPlayer(oldSocketId, socket.id);
 
             socket.join(roomId);
+
+            // [核心修复] Bot 房主回收机制
+            // 如果我是真人重连，且现在的房主是 Bot，则我立即抢回房主
+            if (!existingPlayer.isBot) {
+                const currentHost = room.players.find(p => p.isHost);
+                if (!currentHost || currentHost.isBot) {
+                    if (currentHost) currentHost.isHost = false;
+                    existingPlayer.isHost = true;
+                    console.log(`[Room] Host claimed by returning player ${cleanName}`);
+                }
+            }
+
         } else {
             // --- 新玩家或观众逻辑 ---
             const isFull = room.players.length >= room.config.maxPlayers;
@@ -153,8 +165,15 @@ module.exports = (io, socket, rooms) => {
                 // 正常加入
                 socket.join(roomId);
                 if (!room.players.find(u => u.id === socket.id)) {
-                    const hasHost = room.players.some(p => p.isHost && p.online);
-                    const isHost = !hasHost;
+                    // 如果房主是Bot或没人是房主，新人自动成为房主
+                    const realHostExists = room.players.some(p => p.isHost && !p.isBot && p.online);
+                    const isHost = !realHostExists;
+                    
+                    // 如果之前Bot是房主，取消Bot的房主
+                    if (isHost) {
+                        room.players.forEach(p => p.isHost = false);
+                    }
+
                     room.players.push({ id: socket.id, name: cleanName, isHost: isHost, online: true });
                 }
             }
@@ -171,6 +190,19 @@ module.exports = (io, socket, rooms) => {
                     grandScores: room.gameManager.grandScores,
                     handCounts: room.gameManager.getPublicState().handCounts
                 });
+                
+                // [核心修复] 如果重连时，处于“小局结束”状态，补发结算包
+                // 解决 Issue 4: 重连后只显示打牌按钮，不显示准备按钮
+                if (room.gameManager.isRoundOverState) {
+                    const settlementData = room.gameManager.getSettlementData();
+                    if (settlementData) {
+                        // 稍作延迟，确保前端先处理完 game_started 的状态初始化
+                        setTimeout(() => {
+                             socket.emit('round_over', settlementData);
+                        }, 500);
+                    }
+                }
+
             } else {
                 // 观众或新加入者
                 socket.emit('game_started', { 

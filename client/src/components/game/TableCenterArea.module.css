@@ -1,61 +1,115 @@
-/* 底分面板 - 极简纯净版 */
-.scoreBoard {
+/* 桌面出牌展示区 (居中) */
+.tableCenter {
     position: absolute;
-    /* [修改] 从 30% 上移至 12%，移至顶部区域，避开出牌区人名，并与顶部按钮大致平齐 */
-    top: 5%; 
+    top: 42%;
     left: 50%;
     transform: translate(-50%, -50%);
-    
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    backdrop-filter: none;
-    
-    padding: 0;
-    z-index: 5;
-    pointer-events: none;
-    
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    width: 100%;
+    pointer-events: none; /* 确保不阻挡点击 */
+}
+
+/* 顶部信息行：包含 姓名 和 底分 */
+.infoRow {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 8px; /* 姓名和底分之间的间距 */
+    margin-bottom: 15px; /* 与下方牌区的距离 */
     animation: fadeIn 0.3s ease;
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: translate(-50%, -40%); }
-    to { opacity: 1; transform: translate(-50%, -50%); }
+/* 底分面板 */
+.scoreBoard {
+    background: rgba(0, 0, 0, 0.5);
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,215,0,0.3);
+    display: flex;
+    align-items: center;
 }
 
 .scoreValue {
-    font-size: 28px;
-    font-weight: 900;
+    font-size: 20px;
+    font-weight: 800;
     color: #f1c40f;
     display: flex;
     align-items: center;
     justify-content: center;
-    
-    text-shadow: 
-        0 2px 0 #b9770e,
-        0 4px 4px rgba(0,0,0,0.5),
-        -1px -1px 0 #000,  
-         1px -1px 0 #000,
-        -1px  1px 0 #000,
-         1px  1px 0 #000;
-    
-    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));
+    text-shadow: 1px 1px 0 #000;
+}
+
+/* 姓名标签 */
+.playerNameTag {
+    color: white;
+    text-align: center;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    font-size: 14px;
+    font-weight: bold;
+    background: linear-gradient(90deg, rgba(44, 62, 80, 0.9), rgba(44, 62, 80, 0.7));
+    padding: 4px 12px;
+    border-radius: 15px;
+    border: 1px solid rgba(255,255,255,0.2);
+    white-space: nowrap;
+}
+
+/* 出牌容器 */
+.playedContainer {
+    animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: flex;
+    justify-content: center;
+}
+
+/* 牌型行 */
+.playedRow {
+    display: flex;
+    justify-content: center;
+    filter: drop-shadow(0 5px 15px rgba(0,0,0,0.4));
+}
+
+.miniCardWrapper {
+    width: 40px;
+    height: 60px;
+    position: relative;
+    margin-right: -25px; /* 叠牌 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.miniCardWrapper:last-child {
+    margin-right: 0;
+}
+
+.cardScaler {
+    transform: scale(1.4);
+    transform-origin: center;
 }
 
 /* 系统消息 */
 .infoMessage {
     position: absolute;
-    top: 25%;
+    top: 65%;
     width: 100%;
     text-align: center;
     color: #f1c40f;
-    font-size: 40px;
+    font-size: 32px;
     font-weight: bold;
     text-shadow: 0 5px 15px rgba(0,0,0,0.5);
     pointer-events: none;
     z-index: 50;
     letter-spacing: 2px;
     animation: fadeInOut 3.5s forwards;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes fadeInOut {
@@ -65,65 +119,7 @@
     100% { opacity: 0; transform: translateY(-10px); }
 }
 
-/* 桌面出牌展示区 */
-.tableCenter {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1;
-}
-
-.playedContainer {
-    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
 @keyframes popIn {
-    0% { transform: scale(0.5); opacity: 0; }
+    0% { transform: scale(0.8); opacity: 0; }
     100% { transform: scale(1); opacity: 1; }
-}
-
-.playerNameTag {
-    color: white;
-    text-align: center;
-    margin-bottom: 5px;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-    font-size: 14px;
-    font-weight: bold;
-    background: rgba(0,0,0,0.3);
-    padding: 2px 10px;
-    border-radius: 20px;
-    display: inline-block;
-}
-
-/* 牌型行 */
-.playedRow {
-    display: flex;
-    justify-content: center;
-    /* [修复] gap 不支持负值，改用 margin 实现叠牌 */
-    filter: drop-shadow(0 10px 20px rgba(0,0,0,0.3));
-    /* 整体缩小一点点，看起来更精致 */
-    transform: scale(0.9);
-}
-
-/* * [重要] Card组件内部是 absolute 定位
- * 这里 wrapper 需要相对定位并指定宽高，才能撑开 flex 布局 
- * 55px x 70px 是 Card.module.css 定义的尺寸
- */
-.miniCardWrapper {
-    width: 55px;
-    height: 70px;
-    position: relative;
-    /* 负 margin 实现叠牌效果 */
-    margin-right: -25px; 
-}
-
-.miniCardWrapper:last-child {
-    margin-right: 0;
 }
