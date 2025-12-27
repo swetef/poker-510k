@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/24 16:18:38
+Project Context Generated at 2025/12/27 20:11:03
 
 
 ================================================================================
@@ -2389,7 +2389,6 @@ FILE PATH: client\src\components\game\TableCenterArea.module.css
 /* 桌面出牌展示区 (居中) */
 .tableCenter {
     position: absolute;
-    /* 垂直位置：屏幕中央偏上一点 */
     top: 42%;
     left: 50%;
     transform: translate(-50%, -50%);
@@ -2399,62 +2398,91 @@ FILE PATH: client\src\components\game\TableCenterArea.module.css
     justify-content: center;
     z-index: 10;
     width: 100%;
+    pointer-events: none; /* 确保不阻挡点击 */
 }
 
-/* * [修改] 底分面板 
- * 现在的策略是：让它相对于 tableCenter 进行定位，而不是相对于屏幕
- * 这样它就会始终显示在出牌区的正上方
- */
-.scoreBoard {
-    /* 设为相对定位或静态，让它在 Flex 容器中自然占据上方位置 */
-    position: relative; 
-    top: auto; 
-    left: auto;
-    transform: none;
-    
-    margin-bottom: 20px; /* 与下方出牌区拉开距离 */
-    
-    background: transparent;
-    padding: 0;
-    z-index: 5;
-    pointer-events: none;
+/* 顶部信息行：包含 姓名 和 底分 */
+.infoRow {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 8px; /* 姓名和底分之间的间距 */
+    margin-bottom: 15px; /* 与下方牌区的距离 */
     animation: fadeIn 0.3s ease;
-    
-    /* 增强显示效果，作为全场焦点 */
-    background: rgba(0, 0, 0, 0.4);
-    padding: 5px 20px;
-    border-radius: 30px;
-    border: 1px solid rgba(255,215,0,0.3);
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-10px); }
-    to { opacity: 1; transform: translateY(0); }
+/* 底分面板 */
+.scoreBoard {
+    background: rgba(0, 0, 0, 0.5);
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,215,0,0.3);
+    display: flex;
+    align-items: center;
 }
 
 .scoreValue {
-    font-size: 32px; /* 字号加大 */
-    font-weight: 900;
+    font-size: 20px;
+    font-weight: 800;
     color: #f1c40f;
     display: flex;
     align-items: center;
     justify-content: center;
-    
-    text-shadow: 
-        0 2px 0 #b9770e,
-        0 4px 4px rgba(0,0,0,0.5),
-        -1px -1px 0 #000,  
-         1px -1px 0 #000,
-        -1px  1px 0 #000,
-         1px  1px 0 #000;
-    
-    filter: drop-shadow(0 2px 8px rgba(241, 196, 15, 0.4));
+    text-shadow: 1px 1px 0 #000;
+}
+
+/* 姓名标签 */
+.playerNameTag {
+    color: white;
+    text-align: center;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    font-size: 14px;
+    font-weight: bold;
+    background: linear-gradient(90deg, rgba(44, 62, 80, 0.9), rgba(44, 62, 80, 0.7));
+    padding: 4px 12px;
+    border-radius: 15px;
+    border: 1px solid rgba(255,255,255,0.2);
+    white-space: nowrap;
+}
+
+/* 出牌容器 */
+.playedContainer {
+    animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: flex;
+    justify-content: center;
+}
+
+/* 牌型行 */
+.playedRow {
+    display: flex;
+    justify-content: center;
+    filter: drop-shadow(0 5px 15px rgba(0,0,0,0.4));
+}
+
+.miniCardWrapper {
+    width: 40px;
+    height: 60px;
+    position: relative;
+    margin-right: -25px; /* 叠牌 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.miniCardWrapper:last-child {
+    margin-right: 0;
+}
+
+.cardScaler {
+    transform: scale(1.4);
+    transform-origin: center;
 }
 
 /* 系统消息 */
 .infoMessage {
     position: absolute;
-    top: 65%; /* 稍微往下移，避开底分和出牌 */
+    top: 65%;
     width: 100%;
     text-align: center;
     color: #f1c40f;
@@ -2467,6 +2495,11 @@ FILE PATH: client\src\components\game\TableCenterArea.module.css
     animation: fadeInOut 3.5s forwards;
 }
 
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
 @keyframes fadeInOut {
     0% { opacity: 0; transform: translateY(10px); }
     10% { opacity: 1; transform: translateY(0); }
@@ -2474,62 +2507,9 @@ FILE PATH: client\src\components\game\TableCenterArea.module.css
     100% { opacity: 0; transform: translateY(-10px); }
 }
 
-/* * [修改] 出牌容器
- * 改为横向 Flex 布局，让名字在左，牌在右
- */
-.playedContainer {
-    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    display: flex;
-    flex-direction: row; /* 横向排列 */
-    align-items: center; /* 垂直居中 */
-    gap: 15px; /* 名字和牌之间的间距 */
-}
-
 @keyframes popIn {
-    0% { transform: scale(0.5); opacity: 0; }
+    0% { transform: scale(0.8); opacity: 0; }
     100% { transform: scale(1); opacity: 1; }
-}
-
-/* * [修改] 名字标签
- * 样式优化：气泡风格，带小箭头指向右侧的牌
- */
-.playerNameTag {
-    color: white;
-    text-align: center;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-    font-size: 14px;
-    font-weight: bold;
-    
-    background: linear-gradient(90deg, rgba(44, 62, 80, 0.9), rgba(44, 62, 80, 0.7));
-    padding: 6px 12px;
-    border-radius: 20px;
-    border-top-right-radius: 4px; /* 让它看起来像个对话气泡 */
-    border: 1px solid rgba(255,255,255,0.2);
-    
-    white-space: nowrap;
-    position: relative;
-    /* 移除之前的 margin-bottom */
-    margin-bottom: 0; 
-}
-
-/* 牌型行 */
-.playedRow {
-    display: flex;
-    justify-content: center;
-    filter: drop-shadow(0 5px 15px rgba(0,0,0,0.4));
-    transform: scale(0.95);
-    /* 确保牌在名字右边 */
-}
-
-.miniCardWrapper {
-    width: 55px;
-    height: 70px;
-    position: relative;
-    margin-right: -30px; /* 更加紧凑的叠牌 */
-}
-
-.miniCardWrapper:last-child {
-    margin-right: 0;
 }
 
 ================================================================================
@@ -3262,6 +3242,22 @@ export const GameProvider = ({ children }) => {
   const deckCount = activeRoomConfig ? activeRoomConfig.deckCount : 2;
   const battleLogic = useBattleLogic(socket, username, mySocketId, roomId, deckCount);
 
+  // --- [核心修复] 切后台断线后的自动重连逻辑 ---
+  useEffect(() => {
+    // 只有当 Socket 重新连接上 (isConnected=true)，且本地有房间信息时，才尝试自动重连
+    if (isConnected && socket && roomId && username) {
+        // 防止在登录页面（LOGIN状态）且未发起请求时误操作
+        // 但如果是在游戏状态下断线重连，gameState 可能还停留在 GAME，这时候需要重发 join
+        
+        console.log(`[AutoRejoin] Socket restored. Attempting to rejoin room ${roomId}...`);
+        
+        // 只有当并未处于正常的“手动退出”流程时才重连
+        // 这里简单发一个 join_room，服务端会自动识别是重连还是新加
+        socket.emit('join_room', { roomId, username });
+    }
+  }, [isConnected, socket]); // 依赖 isConnected 变化
+
+
   useEffect(() => {
     if (!socket) return;
 
@@ -3347,6 +3343,8 @@ export const GameProvider = ({ children }) => {
 
       handleLeaveRoom: () => {
           if (window.confirm("确定要退出房间返回首页吗？")) {
+              // 清除本地状态以防自动重连误判
+              localStorage.removeItem('poker_roomid');
               window.location.reload();
           }
       }
@@ -4166,6 +4164,7 @@ export const useSocketConnection = () => {
                     newSocket.connect();
                 } else {
                     // 2. 即使 connected 为 true，也可能是假死，发一个包激活一下
+                    // 如果这个包发不出去，socket.io 内部会自动触发 disconnect
                     newSocket.emit('ping', () => {
                         console.log("[App] 连接活性检查通过");
                     });
@@ -8460,6 +8459,9 @@ class GameManager {
         this.isRoundOverState = false; // 小局是否结束
         this.isGrandOverState = false; // 大局(整场比赛)是否结束
         
+        // [新增] 缓存最后一次结算数据，用于断线重连补发
+        this.lastSettlementData = null;
+
         this.lastWinnerId = null;
         this.gameState = null;
         this.matchHistory = []; 
@@ -8484,6 +8486,7 @@ class GameManager {
         // [功能保护] 清空引用帮助GC
         this.players = [];
         this.gameState = null;
+        this.lastSettlementData = null;
         console.log(`[GameManager] Instance for room ${this.roomId} disposed.`);
     }
 
@@ -8510,6 +8513,7 @@ class GameManager {
         // 1. 重置所有结束状态标记，防止逻辑死循环
         this.isRoundOverState = false;
         this.isGrandOverState = false; 
+        this.lastSettlementData = null; // 清空旧结算数据
         this.readyPlayers.clear();
         this.players.forEach(p => {
             p.isReady = false;
@@ -8685,6 +8689,9 @@ class GameManager {
             isGrandOver: rInfo.isGrandOver,
             remainingHands: rInfo.remainingHands 
         };
+
+        // [核心修复] 缓存结算数据，供重连使用
+        this.lastSettlementData = settlementData;
 
         if (rInfo.isGrandOver) {
             console.log(`[Game] Grand Game Over! Winner: ${rInfo.roundWinnerName}`);
@@ -9176,6 +9183,11 @@ class GameManager {
         if (!hand) return [];
         // TODO: 实现更复杂的提示逻辑
         return [];
+    }
+
+    // [新增] 供 RoomHandler 获取补发的结算数据
+    getSettlementData() {
+        return this.lastSettlementData;
     }
 
     _handContainsCards(hand, cardsToPlay) {
@@ -9885,6 +9897,18 @@ module.exports = (io, socket, rooms) => {
             if (room.seatManager) room.seatManager.reconnectPlayer(oldSocketId, socket.id);
 
             socket.join(roomId);
+
+            // [核心修复] Bot 房主回收机制
+            // 如果我是真人重连，且现在的房主是 Bot，则我立即抢回房主
+            if (!existingPlayer.isBot) {
+                const currentHost = room.players.find(p => p.isHost);
+                if (!currentHost || currentHost.isBot) {
+                    if (currentHost) currentHost.isHost = false;
+                    existingPlayer.isHost = true;
+                    console.log(`[Room] Host claimed by returning player ${cleanName}`);
+                }
+            }
+
         } else {
             // --- 新玩家或观众逻辑 ---
             const isFull = room.players.length >= room.config.maxPlayers;
@@ -9903,8 +9927,15 @@ module.exports = (io, socket, rooms) => {
                 // 正常加入
                 socket.join(roomId);
                 if (!room.players.find(u => u.id === socket.id)) {
-                    const hasHost = room.players.some(p => p.isHost && p.online);
-                    const isHost = !hasHost;
+                    // 如果房主是Bot或没人是房主，新人自动成为房主
+                    const realHostExists = room.players.some(p => p.isHost && !p.isBot && p.online);
+                    const isHost = !realHostExists;
+                    
+                    // 如果之前Bot是房主，取消Bot的房主
+                    if (isHost) {
+                        room.players.forEach(p => p.isHost = false);
+                    }
+
                     room.players.push({ id: socket.id, name: cleanName, isHost: isHost, online: true });
                 }
             }
@@ -9921,6 +9952,19 @@ module.exports = (io, socket, rooms) => {
                     grandScores: room.gameManager.grandScores,
                     handCounts: room.gameManager.getPublicState().handCounts
                 });
+                
+                // [核心修复] 如果重连时，处于“小局结束”状态，补发结算包
+                // 解决 Issue 4: 重连后只显示打牌按钮，不显示准备按钮
+                if (room.gameManager.isRoundOverState) {
+                    const settlementData = room.gameManager.getSettlementData();
+                    if (settlementData) {
+                        // 稍作延迟，确保前端先处理完 game_started 的状态初始化
+                        setTimeout(() => {
+                             socket.emit('round_over', settlementData);
+                        }, 500);
+                    }
+                }
+
             } else {
                 // 观众或新加入者
                 socket.emit('game_started', { 

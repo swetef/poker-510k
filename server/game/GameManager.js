@@ -13,15 +13,16 @@ class GameManager {
         this.grandScores = {};
         this.players.forEach(p => {
             this.grandScores[p.id] = 0;
-            // [功能保护] 确保默认属性存在
+            // [功能保护] 确保默认属性存在，不破坏原有数据结构
             p.autoPlayMode = p.autoPlayMode || 'SMART'; 
             p.isReady = false; 
             p.isAutoPlay = false;
+            p.isOffline = false; // [新增] 离线状态标记
         });
 
         this.readyPlayers = new Set();
         
-        // [状态管理修复]
+        // [状态管理修复] 核心锁
         this.isRoundOverState = false; // 小局是否结束
         this.isGrandOverState = false; // 大局(整场比赛)是否结束
         
@@ -36,7 +37,7 @@ class GameManager {
         this.collectedCards = [];
         this.botManager = new BotManager(this);
 
-        // [Bug修复] 增加销毁标记，防止旧实例“尸变”发送数据
+        // [Bug修复] 增加销毁标记
         this.disposed = false;
         
         console.log(`[GameManager] Created for room ${roomId}`);
@@ -96,9 +97,14 @@ class GameManager {
             this.collectedCards = [];
         }
 
-        // 3. 确保真人玩家退出托管状态 (可选，根据需求，一般新局开始不强制取消托管，但为了活跃度通常取消)
+        // 3. [功能保护] 新局开始，真人玩家默认不托管（除非掉线）
         this.players.forEach(p => {
-            if (!p.isBot) p.isAutoPlay = false;
+            if (!p.isBot) {
+                // 如果玩家在线，则取消托管；如果离线，保持原样(后续逻辑会处理离线行为)
+                if (!p.isOffline) {
+                    p.isAutoPlay = false;
+                }
+            }
         });
 
         // 4. 发牌逻辑
@@ -338,6 +344,9 @@ class GameManager {
         if (this.disposed) return { success: false, error: '游戏已销毁' }; 
         if (!this.gameState) return { success: false, error: '游戏未开始' };
         
+        // [Bug修复核心] 如果本局已结束，直接拦截出牌请求，防止重复结算
+        if (this.isRoundOverState) return { success: false, error: '本局已结束' };
+
         const currPlayer = this.players[this.gameState.currentTurnIndex];
         if (currPlayer.id !== playerId) return { success: false, error: '还没轮到你' };
 
@@ -442,6 +451,9 @@ class GameManager {
         if (this.disposed) return { success: false, error: '游戏已销毁' }; 
         if (!this.gameState) return { success: false, error: '游戏未开始' };
         
+        // [Bug修复核心] 如果本局已结束，直接拦截请求，防止最后一手重复点击导致多次结算
+        if (this.isRoundOverState) return { success: false, error: '本局已结束' };
+
         const currPlayer = this.players[this.gameState.currentTurnIndex];
         if (currPlayer.id !== playerId) return { success: false, error: '还没轮到你' };
 
@@ -480,6 +492,7 @@ class GameManager {
                         const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
                         
                         if (isTeamMode && winnerPlayer.team !== undefined && winnerPlayer.team !== null) {
+                            // [功能保护] 组队模式找队友逻辑 (完整保留)
                             const wIdx = this.players.findIndex(p => p.id === wId);
                             const pCount = this.players.length;
                             let foundTeammate = false;
@@ -487,6 +500,7 @@ class GameManager {
                             for (let i = 1; i < pCount; i++) {
                                 const tIdx = (wIdx + i) % pCount;
                                 const potentialTeammate = this.players[tIdx];
+                                // 队友必须和赢家同队，且手里必须有牌
                                 if (potentialTeammate.team === winnerPlayer.team && this.gameState.hands[potentialTeammate.id] && this.gameState.hands[potentialTeammate.id].length > 0) {
                                     this.gameState.currentTurnIndex = tIdx;
                                     infoMessage = `${currPlayer.name}: 不要 (队友接风)`;
@@ -497,6 +511,7 @@ class GameManager {
                             }
                             if (!foundTeammate) this._advanceTurn();
                         } else {
+                            // [功能保护] 个人模式找下家逻辑 (完整保留)
                             const wIdx = this.players.findIndex(p => p.id === wId);
                             let nextActiveIdx = wIdx;
                             let found = false;
@@ -522,6 +537,8 @@ class GameManager {
             // Last Shot 检查
             if (this.gameState.lastShotPhase) {
                 const roundResult = this._concludeRound();
+                // 注意：_concludeRound 已经将 this.isRoundOverState 设为 true，
+                // 任何后续的 passTurn 请求都会被顶部的 if check 拦截。
                 return { success: true, isRoundOver: true, roundResult, turnCleared: true, logText: infoMessage + " - 无人接风，结束" };
             }
 
@@ -541,28 +558,60 @@ class GameManager {
         this.timer = null;
     }
 
+    // [逻辑修改] 根据玩家状态设置不同的超时逻辑
     _resetTimer() {
         this._clearTimer();
         if (this.disposed) return; 
 
         if (this.gameState && this._getActivePlayerCount() > 0) {
             this.turnStartTime = Date.now();
-            const timeLimit = this.config.turnTimeout || 60000;
+            const currPlayer = this.players[this.gameState.currentTurnIndex];
+
+            let timeLimit = this.config.turnTimeout || 60000;
+            
+            // 如果玩家掉线，仅给1.5秒缓冲，然后触发_handleTimeout进行自动Pass
+            if (currPlayer.isOffline) {
+                timeLimit = 1500; 
+            } else if (currPlayer.isBot) {
+                // Bot有自己的节奏，给个长超时兜底
+                timeLimit = 60000; 
+            }
+            // 正常在线玩家使用 turnTimeout
+
             this.timer = setTimeout(() => {
                 if (!this.disposed) this._handleTimeout();
             }, timeLimit);
         }
     }
 
+    // [逻辑修改与功能保护] 
+    // 1. 如果是离线玩家：自动不要/出最小牌 (不托管)
+    // 2. 如果是在线玩家：超时 -> 自动托管 (恢复此功能)
     _handleTimeout() {
         if (this.disposed) return; 
         if (!this.gameState) return;
         const currIdx = this.gameState.currentTurnIndex;
         const currPlayer = this.players[currIdx];
         
+        // [功能恢复] 如果是在线玩家超时，进入托管模式，然后让Bot接手
+        if (!currPlayer.isBot && !currPlayer.isOffline && !currPlayer.isAutoPlay) {
+            console.log(`[Game] Player ${currPlayer.name} timed out. Enabling AutoPlay.`);
+            currPlayer.isAutoPlay = true; 
+            this._broadcastUpdate(`${currPlayer.name} 超时，已开启自动托管`);
+            // 立即触发Bot思考
+            this.botManager.checkAndRun();
+            return; 
+        }
+
+        // 以下情况进入消极处理逻辑：
+        // 1. 玩家已经离线 (isOffline=true) -> 快速跳过，不托管
+        // 2. 玩家已经是Bot (isBot=true) -> BotManager会处理，这里只是兜底
+        // 3. 玩家已经在托管 (isAutoPlay=true) -> 同上
+        
         const isNewRound = this.gameState.lastPlayedCards.length === 0;
+
         if (isNewRound) {
-            // 必须出牌
+            // 必须出牌：只能出一张最小的牌推进游戏
             const hand = this.gameState.hands[currPlayer.id];
             if (!hand || hand.length === 0) {
                 this._advanceTurn();
@@ -576,21 +625,23 @@ class GameManager {
             const result = this.playCards(currPlayer.id, cardToPlay);
             if (result.success) {
                 this._notifyHandUpdate(currPlayer.id);
-                const logText = result.logText || `${currPlayer.name} 超时出牌`;
+                const reason = currPlayer.isOffline ? '掉线自动出牌' : '托管出牌';
+                const logText = result.logText || `${currPlayer.name} ${reason}`;
                 this._broadcastUpdate(logText);
                 if (result.isRoundOver) {
                     setTimeout(() => { if (!this.disposed) this._handleWin(result, currPlayer.id); }, 3000);
                 }
             }
         } else {
-            // 过牌
+            // 可选择不要：直接执行 pass
             const result = this.passTurn(currPlayer.id);
             if (result.success) {
+                const reason = currPlayer.isOffline ? '掉线自动不要' : '托管不要';
                 if (result.isRoundOver) {
-                    this._broadcastUpdate(`${currPlayer.name}: 超时过牌`);
+                    this._broadcastUpdate(`${currPlayer.name}: ${reason}`);
                     setTimeout(() => { if (!this.disposed) this._handleWin(result, currPlayer.id); }, 3000);
                 } else {
-                    this._broadcastUpdate(`${currPlayer.name}: 超时过牌`);
+                    this._broadcastUpdate(`${currPlayer.name}: ${reason}`);
                 }
             }
         }
@@ -639,6 +690,7 @@ class GameManager {
             playersInfo[p.id] = { 
                 isBot: p.isBot, 
                 isAutoPlay: p.isAutoPlay,
+                isOffline: p.isOffline, // [新增] 前端可显示掉线图标
                 team: p.team,
                 autoPlayMode: p.autoPlayMode,
                 isReady: this.readyPlayers.has(p.id)
@@ -650,7 +702,11 @@ class GameManager {
         
         let remainingSeconds = 0;
         if (this.turnStartTime) {
-            const timeLimit = this.config.turnTimeout || 60000;
+            let timeLimit = this.config.turnTimeout || 60000;
+            // 修正前端倒计时显示：如果是离线玩家，倒计时应该很短
+            const currP = this.players[this.gameState.currentTurnIndex];
+            if (currP && currP.isOffline) timeLimit = 1500;
+            
             const elapsed = Date.now() - this.turnStartTime;
             remainingSeconds = Math.max(0, Math.ceil((timeLimit - elapsed) / 1000));
         }
@@ -672,47 +728,49 @@ class GameManager {
         };
     }
 
-    // [功能保护] 增加健壮性，防止字段丢失
+    // [功能保护] 健壮的重连逻辑，保留所有必要状态
     reconnectPlayer(oldId, newId) {
         if (this.disposed) return false;
         console.log(`[Game] Reconnecting ${oldId} -> ${newId}`);
-        // 迁移大局分数
+        
         if (this.grandScores[oldId] !== undefined) {
             this.grandScores[newId] = this.grandScores[oldId];
             delete this.grandScores[oldId];
         }
-        // 迁移胜利者记录
         if (this.lastWinnerId === oldId) this.lastWinnerId = newId;
         
-        // 迁移准备状态
         if (this.readyPlayers.has(oldId)) {
             this.readyPlayers.delete(oldId);
             this.readyPlayers.add(newId);
         }
 
-        // 更新玩家列表中的ID
         let player = this.players.find(p => p.id === newId);
         if (!player) {
             player = this.players.find(p => p.id === oldId);
             if (player) player.id = newId;
         }
         if (player) {
-            player.isAutoPlay = false; // 重连后取消托管
+            player.isAutoPlay = false; 
+            player.isOffline = false; // [关键修复] 重连后标记为在线
         }
 
-        // 迁移局内状态(手牌、分数等)
+        // [功能保护] 确保游戏内状态无缝迁移
         if (this.gameState) {
+            // 迁移手牌
             if (this.gameState.hands && this.gameState.hands[oldId]) {
                 this.gameState.hands[newId] = this.gameState.hands[oldId];
                 delete this.gameState.hands[oldId];
             } else if (this.gameState.hands) {
                 this.gameState.hands[newId] = [];
             }
+            // 迁移当前小局得分
             if (this.gameState.roundPoints[oldId] !== undefined) {
                 this.gameState.roundPoints[newId] = this.gameState.roundPoints[oldId];
                 delete this.gameState.roundPoints[oldId];
             }
+            // 迁移出牌权记录
             if (this.gameState.roundWinnerId === oldId) this.gameState.roundWinnerId = newId;
+            // 迁移排名
             const rankIdx = this.gameState.finishedRank.indexOf(oldId);
             if (rankIdx !== -1) {
                 this.gameState.finishedRank[rankIdx] = newId;
@@ -728,30 +786,36 @@ class GameManager {
             if (match.winnerId === oldId) match.winnerId = newId;
         });
 
+        // 立即重置计时器，让重连回来的玩家有完整的时间操作
+        if (this.gameState && this.players[this.gameState.currentTurnIndex].id === newId) {
+            this._resetTimer();
+        }
+
         return true;
     }
     
-    // [功能保护] 补全可能存在的接口，即使当前未实现复杂逻辑
+    // [功能保护] 记录离线状态
     leavePlayer(playerId) {
         if (this.disposed) return;
         const player = this.players.find(p => p.id === playerId);
         if (player) {
             player.isOffline = true;
             console.log(`[Game] Player ${player.name} left game.`);
+            // 如果正好轮到该离线玩家，立即重置计时器（触发快速超时）
+            if (this.gameState && this.players[this.gameState.currentTurnIndex].id === playerId) {
+                this._resetTimer();
+            }
         }
     }
     
-    // [功能保护] 补全提示接口
     getHint(playerId) {
-        // 预留接口，防止前端调用报错
         if (this.disposed || !this.gameState) return [];
         const hand = this.gameState.hands[playerId];
         if (!hand) return [];
-        // TODO: 实现更复杂的提示逻辑
+        // TODO: 预留复杂提示逻辑
         return [];
     }
 
-    // [新增] 供 RoomHandler 获取补发的结算数据
     getSettlementData() {
         return this.lastSettlementData;
     }
@@ -778,16 +842,16 @@ class GameManager {
     }
 
     _concludeRound() {
+        // [Bug修复核心] 设置锁状态
         this.isRoundOverState = true;
         
-        // 确保所有人都进入排名（如果还有人没出完，按顺序追加）
         const fullRankIds = [...this.gameState.finishedRank];
         this.players.forEach(p => {
             if (!fullRankIds.includes(p.id)) fullRankIds.push(p.id);
         });
 
         const firstWinnerId = fullRankIds[0];
-        this.lastWinnerId = firstWinnerId; // 下局头游
+        this.lastWinnerId = firstWinnerId; 
         
         let logLines = [];
         let penaltyDetails = [];
@@ -824,7 +888,6 @@ class GameManager {
             }
         });
 
-        // 罚分归头游
         if (firstWinnerId && totalCardPenalty > 0) {
             currentRoundScores[firstWinnerId] += totalCardPenalty;
             scoreBreakdown[firstWinnerId].penalty += totalCardPenalty;
@@ -833,7 +896,7 @@ class GameManager {
             penaltyDetails.push(`头游 ${winnerName} 收取手牌分 ${totalCardPenalty}`);
         }
 
-        // 2. 计算排名赏罚 (Rank Penalty / Tribute)
+        // 2. 计算排名赏罚 (Rank Penalty)
         if (this.config.enableRankPenalty && this.config.rankPenaltyScores && this.config.rankPenaltyScores.length > 0) {
             const penaltyConfig = this.config.rankPenaltyScores;
             const playerCount = fullRankIds.length;
@@ -851,7 +914,6 @@ class GameManager {
                         const loser = this.players.find(p=>p.id===loserId);
                         
                         if (winner && loser) {
-                            // 检查队友保护
                             if (winner.team !== null && winner.team !== undefined && winner.team === loser.team) {
                                 logLines.push(`[🛡️队友保护] 第${winnerIndex+1}名(${winner.name}) 与 倒数第${index+1}名(${loser.name}) 是队友，${score}分 免罚！`);
                                 penaltyDetails.push(`[队友保护] ${winner.name} 免收 ${loser.name} ${score} 分`);
@@ -874,7 +936,6 @@ class GameManager {
             this.grandScores[p.id] += currentRoundScores[p.id];
             scoreBreakdown[p.id].final = currentRoundScores[p.id];
             
-            // 清理局内分
             if (this.gameState && this.gameState.roundPoints) {
                 this.gameState.roundPoints[p.id] = 0;
             }
@@ -890,7 +951,7 @@ class GameManager {
         
         const firstWinnerName = this.players.find(p => p.id === firstWinnerId)?.name || '未知';
         
-        // 3. 判断是否整场比赛结束 (Grand Game Over)
+        // 3. 判断是否整场比赛结束
         let isGrandOver = false;
         const targetScore = this.config.targetScore;
         const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
