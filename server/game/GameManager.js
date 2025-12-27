@@ -569,45 +569,34 @@ class GameManager {
 
             let timeLimit = this.config.turnTimeout || 60000;
             
-            // 如果玩家掉线，仅给1.5秒缓冲，然后触发_handleTimeout进行自动Pass
-            if (currPlayer.isOffline) {
-                timeLimit = 1500; 
-            } else if (currPlayer.isBot) {
-                // Bot有自己的节奏，给个长超时兜底
+            // [修改] 移除掉线玩家的极速跳过，让他们正常烧绳子
+            if (currPlayer.isBot) {
                 timeLimit = 60000; 
             }
-            // 正常在线玩家使用 turnTimeout
-
+            
             this.timer = setTimeout(() => {
                 if (!this.disposed) this._handleTimeout();
             }, timeLimit);
         }
     }
 
-    // [逻辑修改与功能保护] 
-    // 1. 如果是离线玩家：自动不要/出最小牌 (不托管)
-    // 2. 如果是在线玩家：超时 -> 自动托管 (恢复此功能)
+    // [逻辑修改] 统一超时处理：在线->托管Bot；离线->烧绳结束->消极操作->开启托管
     _handleTimeout() {
         if (this.disposed) return; 
         if (!this.gameState) return;
         const currIdx = this.gameState.currentTurnIndex;
         const currPlayer = this.players[currIdx];
         
-        // [功能恢复] 如果是在线玩家超时，进入托管模式，然后让Bot接手
+        // 1. 在线真人玩家超时 -> 立即开启托管并让Bot接手
         if (!currPlayer.isBot && !currPlayer.isOffline && !currPlayer.isAutoPlay) {
             console.log(`[Game] Player ${currPlayer.name} timed out. Enabling AutoPlay.`);
             currPlayer.isAutoPlay = true; 
             this._broadcastUpdate(`${currPlayer.name} 超时，已开启自动托管`);
-            // 立即触发Bot思考
             this.botManager.checkAndRun();
             return; 
         }
 
-        // 以下情况进入消极处理逻辑：
-        // 1. 玩家已经离线 (isOffline=true) -> 快速跳过，不托管
-        // 2. 玩家已经是Bot (isBot=true) -> BotManager会处理，这里只是兜底
-        // 3. 玩家已经在托管 (isAutoPlay=true) -> 同上
-        
+        // 2. 离线/托管玩家超时 -> 执行消极操作 (Pass 或 最小牌)
         const isNewRound = this.gameState.lastPlayedCards.length === 0;
 
         if (isNewRound) {
@@ -628,6 +617,13 @@ class GameManager {
                 const reason = currPlayer.isOffline ? '掉线自动出牌' : '托管出牌';
                 const logText = result.logText || `${currPlayer.name} ${reason}`;
                 this._broadcastUpdate(logText);
+                
+                // [核心修改] 如果是掉线玩家，超时被强迫出牌后，开启托管
+                if (currPlayer.isOffline && !currPlayer.isAutoPlay) {
+                    currPlayer.isAutoPlay = true;
+                    this._broadcastUpdate(`${currPlayer.name} 掉线超时，下轮将自动托管`);
+                }
+
                 if (result.isRoundOver) {
                     setTimeout(() => { if (!this.disposed) this._handleWin(result, currPlayer.id); }, 3000);
                 }
@@ -637,11 +633,18 @@ class GameManager {
             const result = this.passTurn(currPlayer.id);
             if (result.success) {
                 const reason = currPlayer.isOffline ? '掉线自动不要' : '托管不要';
+                
                 if (result.isRoundOver) {
                     this._broadcastUpdate(`${currPlayer.name}: ${reason}`);
                     setTimeout(() => { if (!this.disposed) this._handleWin(result, currPlayer.id); }, 3000);
                 } else {
                     this._broadcastUpdate(`${currPlayer.name}: ${reason}`);
+                    
+                    // [核心修改] 如果是掉线玩家，超时被强迫过牌后，开启托管
+                    if (currPlayer.isOffline && !currPlayer.isAutoPlay) {
+                        currPlayer.isAutoPlay = true;
+                        this._broadcastUpdate(`${currPlayer.name} 掉线超时，下轮将自动托管`);
+                    }
                 }
             }
         }
@@ -703,10 +706,7 @@ class GameManager {
         let remainingSeconds = 0;
         if (this.turnStartTime) {
             let timeLimit = this.config.turnTimeout || 60000;
-            // 修正前端倒计时显示：如果是离线玩家，倒计时应该很短
-            const currP = this.players[this.gameState.currentTurnIndex];
-            if (currP && currP.isOffline) timeLimit = 1500;
-            
+            // [显示修正] 移除这里的1.5秒特殊显示，保持正常倒计时显示
             const elapsed = Date.now() - this.turnStartTime;
             remainingSeconds = Math.max(0, Math.ceil((timeLimit - elapsed) / 1000));
         }
@@ -801,10 +801,8 @@ class GameManager {
         if (player) {
             player.isOffline = true;
             console.log(`[Game] Player ${player.name} left game.`);
-            // 如果正好轮到该离线玩家，立即重置计时器（触发快速超时）
-            if (this.gameState && this.players[this.gameState.currentTurnIndex].id === playerId) {
-                this._resetTimer();
-            }
+            // [修改] 掉线后不再立即重置计时器触发超时，而是让他继续烧当前的绳子
+            // 如果正好轮到该离线玩家，什么都不做，等 _handleTimeout 自然触发
         }
     }
     
