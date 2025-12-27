@@ -250,8 +250,11 @@ class GameManager {
         if (this.disposed) return; 
         const rInfo = result.roundResult;
         
+        // [修改] 确保大局结束时，如果有 grandWinnerName (队伍名)，优先使用
+        const finalWinnerName = rInfo.grandWinnerName || rInfo.roundWinnerName;
+
         const settlementData = {
-            roundWinner: rInfo.roundWinnerName,
+            roundWinner: finalWinnerName, // 修正显示
             pointsEarned: rInfo.pointsEarned,
             detail: rInfo.detail,
             matchHistory: this.matchHistory,
@@ -266,12 +269,12 @@ class GameManager {
         this.lastSettlementData = settlementData;
 
         if (rInfo.isGrandOver) {
-            console.log(`[Game] Grand Game Over! Winner: ${rInfo.roundWinnerName}`);
+            console.log(`[Game] Grand Game Over! Winner: ${finalWinnerName}`);
             // [关键修复] 标记大局结束
             this.isGrandOverState = true; 
             
             this.io.to(this.roomId).emit('grand_game_over', { 
-                grandWinner: rInfo.roundWinnerName,
+                grandWinner: finalWinnerName, // 传递正确的获胜者/队伍名
                 ...settlementData 
             });
             
@@ -874,27 +877,61 @@ class GameManager {
             };
         });
 
-        // 1. 计算手牌罚分 (Hand Penalty)
-        let totalCardPenalty = 0;
-        let penaltySources = [];
+        // ===============================================
+        // 1. [核心修改] 计算手牌罚分 (Hand Penalty)
+        // ===============================================
+        
+        const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
+
         this.players.forEach(p => {
             const h = this.gameState.hands[p.id] || [];
             const handPts = CardRules.calculateTotalScore(h);
+
             if (handPts > 0) {
-                totalCardPenalty += handPts;
-                penaltySources.push(`${p.name}(${handPts})`);
+                let receiverId = firstWinnerId; // 默认给头游（个人模式）
+                let receiverName = '';
+
+                if (isTeamMode) {
+                    // [修改逻辑] 组队模式：给对方队伍
+                    const myTeam = p.team;
+                    const targetTeam = 1 - myTeam; // 0->1, 1->0
+                    
+                    // 寻找对方队伍中排名最靠前的玩家作为接收者
+                    const targetReceiverId = fullRankIds.find(rid => {
+                        const rp = this.players.find(player => player.id === rid);
+                        return rp && rp.team === targetTeam;
+                    });
+                    
+                    if (targetReceiverId) {
+                        receiverId = targetReceiverId;
+                    } else {
+                        // 兜底：如果对方全没走（理论上不可能，除非平局逻辑），随便找一个
+                        const anyTarget = this.players.find(player => player.team === targetTeam);
+                        if (anyTarget) receiverId = anyTarget.id;
+                    }
+                }
+
+                if (receiverId) {
+                    // 转移分数
+                    currentRoundScores[receiverId] = (currentRoundScores[receiverId] || 0) + handPts;
+                    
+                    // 记录 breakdown
+                    scoreBreakdown[receiverId].penalty += handPts;
+                    
+                    // 日志
+                    const receiver = this.players.find(pl => pl.id === receiverId);
+                    receiverName = receiver ? receiver.name : '未知';
+                    
+                    const relationText = (receiverId === firstWinnerId && !isTeamMode) ? "头游" : "对方队伍";
+                    logLines.push(`[手牌罚分] ${p.name} 剩 ${handPts} 分，归 ${receiverName} (${relationText})`);
+                    penaltyDetails.push(`${p.name} 剩牌分 -> ${receiverName}`);
+                }
             }
         });
 
-        if (firstWinnerId && totalCardPenalty > 0) {
-            currentRoundScores[firstWinnerId] += totalCardPenalty;
-            scoreBreakdown[firstWinnerId].penalty += totalCardPenalty;
-            const winnerName = this.players.find(p=>p.id===firstWinnerId)?.name;
-            logLines.push(`[手牌罚分] 输家剩余手牌分 (${penaltySources.join(', ')}) 共 ${totalCardPenalty} 分，归头游 ${winnerName}。`);
-            penaltyDetails.push(`头游 ${winnerName} 收取手牌分 ${totalCardPenalty}`);
-        }
-
+        // ===============================================
         // 2. 计算排名赏罚 (Rank Penalty)
+        // ===============================================
         if (this.config.enableRankPenalty && this.config.rankPenaltyScores && this.config.rankPenaltyScores.length > 0) {
             const penaltyConfig = this.config.rankPenaltyScores;
             const playerCount = fullRankIds.length;
@@ -949,10 +986,12 @@ class GameManager {
         
         const firstWinnerName = this.players.find(p => p.id === firstWinnerId)?.name || '未知';
         
-        // 3. 判断是否整场比赛结束
+        // ===============================================
+        // 3. 判断是否整场比赛结束 (Grand Over)
+        // ===============================================
         let isGrandOver = false;
+        let grandWinnerName = null; // [新增] 用于队伍获胜显示
         const targetScore = this.config.targetScore;
-        const isTeamMode = this.config.isTeamMode && (this.players.length % 2 === 0);
 
         if (isTeamMode) {
             let redTotal = 0;
@@ -962,20 +1001,31 @@ class GameManager {
                 if (p.team === 0) redTotal += s;
                 else if (p.team === 1) blueTotal += s;
             });
+
+            // [核心修改] 检测队伍总分是否达标
             if (redTotal >= targetScore || blueTotal >= targetScore) {
                 isGrandOver = true;
+                // 谁分高谁赢，或者都过了谁更高
+                if (redTotal > blueTotal) grandWinnerName = "红队 (Red Team)";
+                else if (blueTotal > redTotal) grandWinnerName = "蓝队 (Blue Team)";
+                else grandWinnerName = "平局 (Draw)"; // 罕见情况
             }
         } else {
             const maxScore = Math.max(...Object.values(this.grandScores));
             if (maxScore >= targetScore) {
                 isGrandOver = true;
+                // 个人模式，grandWinnerName 保持为 null，前端会使用 winnerId 对应的名字
+                // 或者在这里显式找出最高分的玩家
+                const winnerP = this.players.find(p => this.grandScores[p.id] === maxScore);
+                if (winnerP) grandWinnerName = winnerP.name;
             }
         }
 
         const totalPointsEarned = currentRoundScores[firstWinnerId];
 
         return {
-            roundWinnerName: firstWinnerName,
+            roundWinnerName: firstWinnerName, // 这一轮的第一名
+            grandWinnerName: grandWinnerName, // [新增] 整场比赛的获胜方（队伍名或人名）
             pointsEarned: totalPointsEarned,
             detail: logLines.join('\n') || '完美结束，未设置额外罚分',
             grandScores: this.grandScores,
