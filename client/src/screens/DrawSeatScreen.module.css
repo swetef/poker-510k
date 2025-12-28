@@ -26,6 +26,47 @@
     height: 100%;
 }
 
+/* [修改] 退出按钮样式 - 改为标准矩形按钮 */
+.exitBtn {
+    position: absolute;
+    top: max(15px, env(safe-area-inset-top));
+    left: max(15px, env(safe-area-inset-left));
+    
+    /* 红色系背景，警示退出 */
+    background: rgba(192, 57, 43, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    
+    /* 调整为自适应宽度的胶囊/矩形形状 */
+    padding: 8px 16px;
+    border-radius: 8px;
+    
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px; /* 图标和文字的间距 */
+    
+    cursor: pointer;
+    z-index: 100;
+    transition: all 0.2s;
+    
+    /* 字体样式 */
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+}
+
+.exitBtn:hover {
+    background: rgba(231, 76, 60, 1);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+}
+
+.exitBtn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
 /* 顶部提示框 */
 .infoBox {
     background: rgba(0, 0, 0, 0.6);
@@ -96,7 +137,7 @@
     color: #f1c40f;
 }
 
-/* 翻开的牌包装器 */
+/* 翻开后的牌包装器 */
 .flippedWrapper {
     transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     pointer-events: auto;

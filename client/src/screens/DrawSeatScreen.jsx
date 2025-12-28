@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '../components/BaseUI.jsx'; 
-import { Shuffle } from 'lucide-react';
+import { Shuffle, LogOut } from 'lucide-react';
 import { useGame } from '../context/GameContext.jsx';
-import css from './DrawSeatScreen.module.css'; // 新 CSS
+import css from './DrawSeatScreen.module.css';
 
 export const DrawSeatScreen = () => {
     const { 
         players, mySocketId, 
         drawState, // { totalCards, history: [...] }
         handleDrawCard,
+        handleLeaveRoom, 
         roomConfig
     } = useGame();
 
@@ -45,6 +46,16 @@ export const DrawSeatScreen = () => {
 
     return (
         <div className={css.drawTable}>
+            {/* [修改] 退出按钮：添加了文字描述 */}
+            <button 
+                className={css.exitBtn} 
+                onClick={handleLeaveRoom}
+                title="退出房间"
+            >
+                <LogOut size={18} />
+                <span>退出房间</span>
+            </button>
+
             <div className={css.contentContainer}>
                 
                 <div className={css.infoBox}>
@@ -92,7 +103,7 @@ export const DrawSeatScreen = () => {
                                             isSelected={false} 
                                             onClick={()=>{}} 
                                             onMouseEnter={()=>{}} 
-                                            spacing={0}
+                                            spacing={0} 
                                         />
                                     </div>
                                 ) : (

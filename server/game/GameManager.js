@@ -577,6 +577,9 @@ class GameManager {
                 timeLimit = 60000; 
             }
             
+            // 如果是离线玩家，同样给予完整的思考时间，等待重连
+            // 无需特殊代码，因为默认走配置的 turnTimeout
+
             this.timer = setTimeout(() => {
                 if (!this.disposed) this._handleTimeout();
             }, timeLimit);
@@ -617,11 +620,12 @@ class GameManager {
             const result = this.playCards(currPlayer.id, cardToPlay);
             if (result.success) {
                 this._notifyHandUpdate(currPlayer.id);
+                // 区分文案
                 const reason = currPlayer.isOffline ? '掉线自动出牌' : '托管出牌';
                 const logText = result.logText || `${currPlayer.name} ${reason}`;
                 this._broadcastUpdate(logText);
                 
-                // [核心修改] 如果是掉线玩家，超时被强迫出牌后，开启托管
+                // [核心修改] 如果是掉线玩家，超时被强迫出牌后，开启托管 (下轮生效)
                 if (currPlayer.isOffline && !currPlayer.isAutoPlay) {
                     currPlayer.isAutoPlay = true;
                     this._broadcastUpdate(`${currPlayer.name} 掉线超时，下轮将自动托管`);
@@ -643,7 +647,7 @@ class GameManager {
                 } else {
                     this._broadcastUpdate(`${currPlayer.name}: ${reason}`);
                     
-                    // [核心修改] 如果是掉线玩家，超时被强迫过牌后，开启托管
+                    // [核心修改] 如果是掉线玩家，超时被强迫过牌后，开启托管 (下轮生效)
                     if (currPlayer.isOffline && !currPlayer.isAutoPlay) {
                         currPlayer.isAutoPlay = true;
                         this._broadcastUpdate(`${currPlayer.name} 掉线超时，下轮将自动托管`);
@@ -753,6 +757,8 @@ class GameManager {
             if (player) player.id = newId;
         }
         if (player) {
+            // [注意] 重连回来后，如果是 AutoPlay，是否要自动取消？
+            // 现在的逻辑是：重连回来默认取消托管，让玩家自己打
             player.isAutoPlay = false; 
             player.isOffline = false; // [关键修复] 重连后标记为在线
         }

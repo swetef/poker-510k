@@ -315,13 +315,17 @@ module.exports = (io, socket, rooms) => {
                     if (room.gameManager && room.gameManager.gameState) {
                         // 游戏进行中：标记离线，不移除
                         player.online = false;
+                        
+                        // [新增] 通知 GameManager 处理掉线状态 (设置 isOffline = true)
+                        room.gameManager.leavePlayer(socket.id);
+
                         broadcastRoomInfo(roomId);
-                        // 如果开启了托管，自动接管
-                        if (!player.isAutoPlay && !player.isBot) {
-                            player.isAutoPlay = true;
-                            room.gameManager.botManager.checkAndRun();
-                            broadcastGameState(roomId, room, `${player.name} 断线，自动托管`);
-                        }
+                        
+                        // [关键修改] 掉线时不立即开启托管，而是让 GameManager 的定时器跑完
+                        // 只有当定时器超时后，GameManager 内部才会执行消极操作并开启托管
+                        // 此处仅广播消息告知他人
+                        broadcastGameState(roomId, room, `${player.name} 已断线，等待重连...`);
+
                     } else {
                         // 游戏未开始：直接移除
                         room.players = room.players.filter(p => p.id !== socket.id);

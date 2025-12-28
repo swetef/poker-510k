@@ -1,7 +1,7 @@
 /**
  * 智能提示逻辑 (优化版)
  * 根据手牌和上家牌型，计算所有可行解，并按优劣排序
- * [性能优化] 引入 analyze 结果缓存，大幅减少重复计算
+ * [优化点] 针对自由出牌阶段，优先清理真正的“废单张”，保护炸弹和对子结构，减少无效拆牌提示。
  */
 import GameRules from './gameRules.js';
 
@@ -19,97 +19,135 @@ const SmartHint = {
         const solutions = SmartHint.findAllSolutions(hand, lastPlayedCards, deckCount);
         if (!solutions || solutions.length === 0) return [];
 
-        // [优化] 预计算 analyze 结果，避免后续多次调用 GameRules.analyze (昂贵操作)
-        let candidates = solutions.map(sol => ({
-            cards: sol,
-            analysis: GameRules.analyze(sol, deckCount),
-            cost: 0
-        }));
-
-        // 2. 过滤
-        candidates = candidates.filter(item => {
-            const { type } = item.analysis;
-            // 过滤掉 510K
-            if (type === '510K_PURE' || type === '510K_MIXED') return false;
-            return true;
-        });
-
-        if (candidates.length === 0) return [];
-
-        // 3. 预分析手牌中的炸弹
+        // 预分析手牌中的炸弹，用于后续计算拆牌惩罚
         const myBombs = SmartHint.findAllBombsInHand(hand, deckCount);
         const bombCardsSet = new Set();
         myBombs.forEach(b => b.cards.forEach(c => bombCardsSet.add(c)));
 
-        // 4. 分析上家牌型
-        const lastAnalysis = (lastPlayedCards && lastPlayedCards.length > 0)
-            ? GameRules.analyze(lastPlayedCards, deckCount)
-            : null;
-        const lastIsBomb = lastAnalysis ? lastAnalysis.level > 0 : false;
-
-        // 5. 统计手牌点数
+        // 统计手牌点数频率 (用于判断是否是“拆对子/拆三张”)
         const handCounts = {};
         hand.forEach(c => {
             const p = GameRules.getPoint(c);
             handCounts[p] = (handCounts[p] || 0) + 1;
         });
 
-        // 6. 评分 (基于缓存的 analysis)
+        // 预计算 analyze 结果，避免后续排序时重复计算
+        let candidates = solutions.map(sol => ({
+            cards: sol,
+            analysis: GameRules.analyze(sol, deckCount),
+            cost: 0
+        }));
+
+        // 2. 过滤基础不合理项
+        candidates = candidates.filter(item => {
+            const { type } = item.analysis;
+            if (type === 'INVALID') return false;
+            // 首出时不推荐主动打 510K (除非是为了跑牌，但一般510K算炸弹留着管牌)
+            if ((!lastPlayedCards || lastPlayedCards.length === 0) && (type === '510K_PURE' || type === '510K_MIXED')) {
+                 return false; 
+            }
+            return true;
+        });
+
+        if (candidates.length === 0) return [];
+
+        // 3. 分析上家牌型 (判断是否是管牌阶段)
+        const lastAnalysis = (lastPlayedCards && lastPlayedCards.length > 0)
+            ? GameRules.analyze(lastPlayedCards, deckCount)
+            : null;
+        const lastIsBomb = lastAnalysis ? lastAnalysis.level > 0 : false;
+
+        // 4. 核心评分逻辑 (Cost 越小越优先)
         candidates.forEach(item => {
             const { analysis, cards } = item;
             let cost = 0;
             
-            // --- A. 基础分 ---
+            // --- A. 基础分 (点数越小 Cost 越低) ---
             if (analysis.level > 0) {
-                cost += analysis.level * 100000;
-                if (analysis.type === 'BOMB_STD' || analysis.type === 'BOMB_MAX') {
-                    cost += analysis.len * 1000;
-                }
+                // 炸弹惩罚：起手尽量不炸，保留实力
+                cost += analysis.level * 1000000; 
+                cost += analysis.len * 10000;
                 cost += analysis.val;
             } else {
                 cost += analysis.val;
             }
 
-            // --- B. 拆炸弹惩罚 ---
+            // --- B. 拆炸弹惩罚 (极高) ---
             const isMoveBomb = analysis.level > 0;
             if (!isMoveBomb) {
+                // 如果出的牌里包含了炸弹的组成牌，给予巨额惩罚
                 const breaksBomb = cards.some(c => bombCardsSet.has(c));
-                if (breaksBomb) cost += 2000000;
+                if (breaksBomb) cost += 5000000; 
             }
 
-            // --- C. 炸弹压制判断 ---
-            if (isMoveBomb && !lastIsBomb && lastAnalysis) {
-                cost += 500; 
-            }
-
-            // --- D. 自由出牌 (首出) ---
+            // --- C. 自由出牌 (First Play) 策略优化 ---
             if (!lastAnalysis) {
-                if (analysis.type === 'AIRPLANE') cost -= 200;
-                else if (analysis.type === 'LIANDUI') cost -= 150;
-                else if (analysis.type === 'TRIPLE') cost -= 100;
-                else if (analysis.type === 'PAIR') cost -= 50;
+                // 策略优先级：飞机 > 连对 > 纯废单张 > 纯对子 > 拆对单张 > ... > 炸弹
                 
+                if (analysis.type === 'AIRPLANE') cost -= 8000; // 长牌难出，优先跑
+                else if (analysis.type === 'LIANDUI') cost -= 6000;
+                else if (analysis.type === 'TRIPLE') cost -= 1000; 
+                else if (analysis.type === 'PAIR') {
+                    // 如果手里正好只有2张，全部打出，优先级高
+                    if (handCounts[analysis.val] === 2) cost -= 2000;
+                    else cost += 500; // 拆三张/炸弹打对子，稍微惩罚
+                }
                 else if (analysis.type === 'SINGLE') {
                     const countInHand = handCounts[analysis.val] || 0;
                     if (countInHand === 1) {
-                        // 真正的废牌优先出
-                        cost -= 80; 
+                        // [关键优化] 真正的单张废牌 (手里只有1张) -> 优先级大幅提升
+                        // 比普通对子更优先，旨在清理手中无法成型的牌
+                        cost -= 3000; 
+                    } else if (countInHand === 2) {
+                        // 拆对子打单张 -> 优先级低，不到万不得已不推荐
+                        cost += 2000;
+                    } else if (countInHand >= 3) {
+                        // 拆三张/炸弹打单张 -> 优先级极低
+                        cost += 3000;
                     }
                 }
                 
+                // 炸弹如果不为了管牌，尽量留到最后
                 if (isMoveBomb) {
+                    cost += 9000000;
+                }
+            } else {
+                // --- 管牌阶段 (Beat It) ---
+                // 炸弹压制判断
+                if (isMoveBomb && !lastIsBomb) {
+                     // 对方不是炸弹，我用炸弹管 -> 除非绝杀(只剩这手牌)，否则尽量不炸
                     if (hand.length === cards.length) cost = -9999999;
-                    else cost += 8000;
+                    else cost += 5000; 
                 }
             }
 
             item.cost = cost;
         });
 
-        // 7. 排序
+        // 5. 排序
         candidates.sort((a, b) => a.cost - b.cost);
 
-        return candidates.map(i => i.cards);
+        // 6. [体验优化] 结果去重
+        // 比如手里有红桃3和黑桃3单张，Cost一样，没必要提示两次，只保留一个即可
+        const uniqueCandidates = [];
+        const seenKeys = new Set();
+        
+        candidates.forEach(c => {
+            const { type, val, len, level } = c.analysis;
+            // 炸弹不去重 (因为花色可能影响510K或凑同花)，普通牌型去重
+            if (level === 0) {
+                // 唯一标识：牌型_点数_长度
+                const key = `${type}_${val}_${len}`;
+                if (!seenKeys.has(key)) {
+                    seenKeys.add(key);
+                    uniqueCandidates.push(c);
+                }
+            } else {
+                uniqueCandidates.push(c);
+            }
+        });
+
+        return uniqueCandidates.map(i => i.cards);
     },
 
     // 辅助：快速找出所有炸弹
@@ -126,13 +164,11 @@ const SmartHint = {
         });
         const uniquePoints = [...new Set(points)].sort((a, b) => a - b);
         
-        // 直接调用核心逻辑，不再重复分组
         return SmartHint.coreFindBombs(hand, grouped, uniquePoints, deckCount, 0, 0);
     },
 
     /**
      * [核心逻辑] 仅查找炸弹
-     * 提取出来复用
      */
     coreFindBombs: (hand, grouped, uniquePoints, deckCount, minLevel = 0, minVal = 0) => {
         const bombList = [];
@@ -158,14 +194,10 @@ const SmartHint = {
                                 }
                             }
                         }
-                        if(foundPure) break;
                     }
-                    if(foundPure) break;
                 }
-                
-                if (!foundPure && minLevel <= 1) {
-                    bombList.push({ cards: [fives[0], tens[0], kings[0]], level: 1, val: 1, type: '510K_MIXED' });
-                }
+                // 暂时不推荐杂色510K作为默认炸弹逻辑的一部分，除非显式需要
+                // 这里为了“保护炸弹不被拆”，我们把 纯510K 算作炸弹保护起来
             }
         }
 
@@ -173,14 +205,12 @@ const SmartHint = {
         for (let p of uniquePoints) {
             const count = grouped[p].length;
             if (count >= 4) {
-                if (minLevel < 3 || (minLevel === 3 && p > minVal)) {
-                    const isMax = (count === deckCount * 4);
-                    const level = isMax ? 5 : 3;
-                    const type = isMax ? 'BOMB_MAX' : 'BOMB_STD';
-
-                    if (level > minLevel || (level === minLevel && p > minVal)) {
-                        bombList.push({ cards: grouped[p], level, val: p, type, len: count });
-                    }
+                const isMax = (count === deckCount * 4);
+                const level = isMax ? 5 : 3;
+                const type = isMax ? 'BOMB_MAX' : 'BOMB_STD';
+                
+                if (level > minLevel || (level === minLevel && p > minVal)) {
+                     bombList.push({ cards: grouped[p], level, val: p, type, len: count });
                 }
             }
         }
@@ -216,47 +246,78 @@ const SmartHint = {
 
             // --- 场景 1: 自由出牌 (First Play) ---
             if (!lastPlayedCards || lastPlayedCards.length === 0) {
-                // 1. 单张
-                if (uniquePoints.length > 0) solutions.push([grouped[uniquePoints[0]][0]]);
-                // 2. 对子
-                for (let p of uniquePoints) {
-                    if (grouped[p].length >= 2) {
-                        solutions.push(grouped[p].slice(0, 2));
-                    }
-                }
-                // 3. 三张
-                for (let p of uniquePoints) {
-                    if (grouped[p].length >= 3) {
-                        solutions.push(grouped[p].slice(0, 3));
-                    }
-                }
-                // 4. 连对
-                for(let i=0; i<uniquePoints.length-1; i++) {
-                    const p1 = uniquePoints[i];
-                    const p2 = uniquePoints[i+1];
-                    if (p2 === p1 + 1 && p2 < 15 && grouped[p1].length >= 2 && grouped[p2].length >= 2) {
-                         solutions.push([...grouped[p1].slice(0,2), ...grouped[p2].slice(0,2)]);
-                    }
-                }
-                // 5. 飞机
-                for(let i=0; i<uniquePoints.length-1; i++) {
-                    const p1 = uniquePoints[i];
-                    const p2 = uniquePoints[i+1];
-                    if (p2 === p1 + 1 && p2 < 15 && grouped[p1].length >= 3 && grouped[p2].length >= 3) {
-                         solutions.push([...grouped[p1].slice(0,3), ...grouped[p2].slice(0,3)]);
-                    }
-                }
-                // 6. 炸弹
+                // [优化] 引入“保护牌”与“自由牌”概念
+                // 1. 先找出所有炸弹/510K，这些牌尽量不拆
                 const bombs = SmartHint.coreFindBombs(hand, grouped, uniquePoints, deckCount, -1, -1);
-                bombs.forEach(b => solutions.push(b.cards));
+                const protectedCards = new Set();
+                bombs.forEach(b => b.cards.forEach(c => protectedCards.add(c)));
+
+                // 2. 识别“自由牌”（非保护牌）
+                const freeGrouped = {};
+                const freePoints = [];
+                hand.forEach(c => {
+                    if (!protectedCards.has(c)) {
+                        const p = GameRules.getPoint(c);
+                        if (!freeGrouped[p]) {
+                            freeGrouped[p] = [];
+                            freePoints.push(p);
+                        }
+                        freeGrouped[p].push(c);
+                    }
+                });
+                freePoints.sort((a, b) => a - b);
+
+                // --- 策略生成 (优先基于自由牌) ---
                 
-                // 兜底
-                if (solutions.length === 1 && solutions[0].length === 1) {
-                    for(let i=1; i<Math.min(uniquePoints.length, 3); i++) {
-                        solutions.push([grouped[uniquePoints[i]][0]]);
+                // A. 连对 (在自由牌里找)
+                for(let i=0; i<freePoints.length-1; i++) {
+                    const p1 = freePoints[i];
+                    const p2 = freePoints[i+1];
+                    if (p2 === p1 + 1 && p2 < 15 && freeGrouped[p1].length >= 2 && freeGrouped[p2].length >= 2) {
+                         solutions.push([...freeGrouped[p1].slice(0,2), ...freeGrouped[p2].slice(0,2)]);
                     }
                 }
 
+                // B. 飞机 (在自由牌里找)
+                for(let i=0; i<freePoints.length-1; i++) {
+                    const p1 = freePoints[i];
+                    const p2 = freePoints[i+1];
+                    if (p2 === p1 + 1 && p2 < 15 && freeGrouped[p1].length >= 3 && freeGrouped[p2].length >= 3) {
+                         solutions.push([...freeGrouped[p1].slice(0,3), ...freeGrouped[p2].slice(0,3)]);
+                    }
+                }
+
+                // C. 三张 (自由牌)
+                for (let p of freePoints) {
+                    if (freeGrouped[p].length >= 3) {
+                        solutions.push(freeGrouped[p].slice(0, 3));
+                    }
+                }
+
+                // D. 对子 (自由牌)
+                for (let p of freePoints) {
+                    if (freeGrouped[p].length >= 2) {
+                        solutions.push(freeGrouped[p].slice(0, 2));
+                    }
+                }
+
+                // E. 单张 (所有自由牌的单张都可以出，这是废牌的主要来源)
+                for (let p of freePoints) {
+                     solutions.push([freeGrouped[p][0]]);
+                }
+                
+                // F. 补充：如果自由牌方案很少，允许拆牌兜底
+                // (但会因为 Cost 高而被排在后面)
+                uniquePoints.forEach(p => {
+                    // 如果该点数不在自由牌里(即被保护了)，但也添加单张方案作为备选
+                    if (!freeGrouped[p]) {
+                         solutions.push([grouped[p][0]]);
+                    }
+                });
+
+                // G. 炸弹 (起手也可以出炸弹)
+                bombs.forEach(b => solutions.push(b.cards));
+                
                 return solutions;
             }
 
@@ -264,7 +325,7 @@ const SmartHint = {
             const lastState = GameRules.analyze(lastPlayedCards, deckCount);
             if (lastState.type === 'INVALID') return [];
 
-            // A. 同牌型
+            // A. 同牌型压制
             if (['SINGLE', 'PAIR', 'TRIPLE'].includes(lastState.type)) {
                 const countNeeded = lastState.type === 'SINGLE' ? 1 : (lastState.type === 'PAIR' ? 2 : 3);
                 for (let p of uniquePoints) {
