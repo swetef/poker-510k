@@ -735,58 +735,84 @@ class GameManager {
         };
     }
 
-    // [功能保护] 健壮的重连逻辑，保留所有必要状态
+    // ===============================================
+    // [重大 Bug 修复] 健壮的重连逻辑
+    // 修复了 oldId === newId 时数据自我删除导致的手牌/分数归零问题
+    // ===============================================
     reconnectPlayer(oldId, newId) {
         if (this.disposed) return false;
         console.log(`[Game] Reconnecting ${oldId} -> ${newId}`);
+
+        // [核心修复] 如果 ID 没变 (可能因并发请求导致)，直接返回，防止自我删除
+        if (oldId === newId) {
+            console.log(`[Game] Reconnect ID same, skipping data migration to prevent self-deletion.`);
+            // 但需要确保状态正确，比如标记为在线
+            const player = this.players.find(p => p.id === newId);
+            if (player) {
+                player.isOffline = false;
+                player.isAutoPlay = false; 
+            }
+            return true;
+        }
         
+        // 1. 迁移大局分数 (Grand Scores)
         if (this.grandScores[oldId] !== undefined) {
             this.grandScores[newId] = this.grandScores[oldId];
             delete this.grandScores[oldId];
+        } else {
+             // 如果旧ID没有分数记录，初始化新ID为0，防止 undefined
+             if (this.grandScores[newId] === undefined) this.grandScores[newId] = 0;
         }
+
+        // 2. 迁移上轮赢家记录
         if (this.lastWinnerId === oldId) this.lastWinnerId = newId;
         
+        // 3. 迁移准备状态
         if (this.readyPlayers.has(oldId)) {
             this.readyPlayers.delete(oldId);
             this.readyPlayers.add(newId);
         }
 
+        // 4. 更新玩家列表中的对象 ID (双重保险，虽然 RoomHandler 可能改过了)
         let player = this.players.find(p => p.id === newId);
         if (!player) {
             player = this.players.find(p => p.id === oldId);
             if (player) player.id = newId;
         }
         if (player) {
-            // [注意] 重连回来后，如果是 AutoPlay，是否要自动取消？
-            // 现在的逻辑是：重连回来默认取消托管，让玩家自己打
+            // [注意] 重连回来后，取消托管，恢复在线状态
             player.isAutoPlay = false; 
-            player.isOffline = false; // [关键修复] 重连后标记为在线
+            player.isOffline = false; 
         }
 
-        // [功能保护] 确保游戏内状态无缝迁移
+        // 5. [功能保护] 迁移游戏内状态 (GameState)
         if (this.gameState) {
-            // 迁移手牌
+            // A. 迁移手牌
             if (this.gameState.hands && this.gameState.hands[oldId]) {
                 this.gameState.hands[newId] = this.gameState.hands[oldId];
-                delete this.gameState.hands[oldId];
+                delete this.gameState.hands[oldId]; // 安全删除
             } else if (this.gameState.hands) {
-                this.gameState.hands[newId] = [];
+                // 如果旧ID确实没手牌（或数据丢失），初始化空数组防止前端崩溃
+                if (!this.gameState.hands[newId]) this.gameState.hands[newId] = [];
             }
-            // 迁移当前小局得分
+
+            // B. 迁移当前小局得分
             if (this.gameState.roundPoints[oldId] !== undefined) {
                 this.gameState.roundPoints[newId] = this.gameState.roundPoints[oldId];
                 delete this.gameState.roundPoints[oldId];
             }
-            // 迁移出牌权记录
+
+            // C. 迁移出牌权记录
             if (this.gameState.roundWinnerId === oldId) this.gameState.roundWinnerId = newId;
-            // 迁移排名
+            
+            // D. 迁移排名
             const rankIdx = this.gameState.finishedRank.indexOf(oldId);
             if (rankIdx !== -1) {
                 this.gameState.finishedRank[rankIdx] = newId;
             }
         }
 
-        // 迁移历史战绩中的ID
+        // 6. 迁移历史战绩中的ID
         this.matchHistory.forEach(match => {
             if (match.scores[oldId] !== undefined) {
                 match.scores[newId] = match.scores[oldId];
@@ -795,8 +821,10 @@ class GameManager {
             if (match.winnerId === oldId) match.winnerId = newId;
         });
 
-        // 立即重置计时器，让重连回来的玩家有完整的时间操作
-        if (this.gameState && this.players[this.gameState.currentTurnIndex].id === newId) {
+        // 7. 立即重置计时器，让重连回来的玩家有完整的时间操作
+        if (this.gameState && 
+            this.players[this.gameState.currentTurnIndex] && 
+            this.players[this.gameState.currentTurnIndex].id === newId) {
             this._resetTimer();
         }
 

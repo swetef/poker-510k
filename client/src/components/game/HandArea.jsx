@@ -4,13 +4,15 @@ import css from './HandArea.module.css';
 import { Card } from '../BaseUI.jsx';
 import { calculateCardSpacing, sortHand } from '../../utils/cardLogic.js';
 import { useGame } from '../../context/GameContext.jsx';
+// [修复] 引入缺失的手势交互 Hook
 import { useHandGesture } from '../../hooks/useHandGesture.js';
 
 export const HandArea = () => {
     const { 
         myHand, selectedCards, handleMouseDown, handleMouseEnter, 
         playersInfo, mySocketId,
-        observedHands, isSpectator // [新增]
+        observedHands, isSpectator,
+        watchedPlayerId, players
     } = useGame();
     
     const myInfo = playersInfo[mySocketId] || {};
@@ -24,53 +26,74 @@ export const HandArea = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // [新增] 决定显示谁的手牌
-    let displayHand = myHand;
+    // 逻辑：确保显示的手牌数据源正确且有序
+    let displayHand = [];
     let isWatching = false;
     let watchingName = '';
 
-    // 如果我自己没牌了 (或者我是观众)，且有观察到的手牌
-    if ((myHand.length === 0 || isSpectator) && Object.keys(observedHands).length > 0) {
-        // 简单策略：显示第一个观察到的非空手牌
-        const targetId = Object.keys(observedHands).find(id => observedHands[id] && observedHands[id].length > 0);
-        if (targetId) {
-            // 对观察的手牌进行排序，确保显示整齐
-            displayHand = sortHand(observedHands[targetId], 'POINT'); 
-            isWatching = true;
-            // 尝试获取名字，需从 playersInfo 或 players 中找 (Context里 players可能没传进来)
-            // 这里简单用ID，或者稍微修改 Context 传入 players
-            // 假设我们只能拿到 ID，UI 显示 "正在观看队友" 即可
-        }
+    const canWatchOthers = (myHand.length === 0 || isSpectator);
+    
+    if (canWatchOthers && watchedPlayerId && observedHands[watchedPlayerId]) {
+        displayHand = sortHand(observedHands[watchedPlayerId], 'POINT');
+        isWatching = true;
+        const targetPlayer = players.find(p => p.id === watchedPlayerId);
+        watchingName = targetPlayer ? targetPlayer.name : '未知玩家';
+    } else {
+        displayHand = sortHand(myHand, 'POINT');
+        isWatching = false;
     }
 
     const cardSpacing = calculateCardSpacing(displayHand.length, dimensions.width);
-
-    // 只有操作自己的手牌才启用手势
-    const handContainerRef = useHandGesture({
-        myHand: isWatching ? [] : displayHand, // 观看模式下禁用交互
-        selectedCards: isWatching ? [] : selectedCards, 
-        cardSpacing, 
-        handleMouseDown, 
-        amIAutoPlay
-    });
 
     const containerClass = [
         css.handArea,
         amIAutoPlay ? css.autoPlayMode : ''
     ].join(' ');
 
+    const canInteract = !isWatching && !amIAutoPlay;
+
+    // [修复] 启用手势 Hook，绑定到容器上
+    // 这将接管点击和滑动手势，解决点击无反应的问题
+    const handRef = useHandGesture({
+        myHand: displayHand, // 传入当前显示的有序手牌，确保坐标计算准确
+        selectedCards,
+        cardSpacing,
+        handleMouseDown: (val) => {
+            // 再次校验权限，防止观战或托管时误触
+            if (canInteract && handleMouseDown) {
+                handleMouseDown(val);
+            }
+        },
+        amIAutoPlay
+    });
+
+    // 保持旧接口兼容（虽然主要靠 Hook 触发）
+    const onCardClick = (val) => {
+        if (canInteract && handleMouseDown) {
+            handleMouseDown(val);
+        }
+    };
+
+    const onCardEnter = (val) => {
+        if (canInteract && handleMouseEnter) {
+            handleMouseEnter(val);
+        }
+    };
+
     return (
-        <div ref={handContainerRef} className={containerClass}>
+        // [修复] 将 ref 绑定到容器 div，使手势监听生效
+        <div className={containerClass} ref={handRef}>
+            {/* 托管状态提示 */}
             {amIAutoPlay && !isWatching && (
                 <div className={css.autoPlayBadge}>
                     <Bot size={14} /> 系统代打中
                 </div>
             )}
 
-            {/* [新增] 观看模式提示 */}
+            {/* 观战模式提示 */}
             {isWatching && (
-                <div className={css.autoPlayBadge} style={{background: '#3498db'}}>
-                    <Eye size={14} /> 正在观看队友视角
+                <div className={css.autoPlayBadge} style={{background: '#3498db', gap: 8}}>
+                    <Eye size={14} /> 视角: {watchingName}
                 </div>
             )}
             
@@ -80,8 +103,8 @@ export const HandArea = () => {
                     cardVal={c} 
                     index={i} 
                     isSelected={!isWatching && selectedCards.includes(c)} 
-                    onClick={isWatching ? ()=>{} : handleMouseDown} 
-                    onMouseEnter={isWatching ? ()=>{} : handleMouseEnter} 
+                    onClick={() => onCardClick(c)} 
+                    onMouseEnter={() => onCardEnter(c)} 
                     spacing={cardSpacing} 
                 />
             ))}

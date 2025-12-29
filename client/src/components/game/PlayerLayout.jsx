@@ -1,9 +1,10 @@
 import React from 'react';
-import { Bot, Zap, CheckCircle } from 'lucide-react';
+import { Bot, Zap, CheckCircle, Eye } from 'lucide-react'; // [新增] 引入 Eye 图标
 import { PlayerAvatar } from '../BaseUI.jsx'; 
 import { useGame } from '../../context/GameContext.jsx'; 
 import { sortHand, getCardDisplay } from '../../utils/cardLogic.js';
 
+// [保持原样] 布局计算函数
 const calculateLayout = (otherPlayersCount) => {
     if (otherPlayersCount === 0) return { countT: 0, countR: 0, countL: 0 }; 
     if (otherPlayersCount === 1) return { countT: 1, countR: 0, countL: 0 }; 
@@ -22,29 +23,28 @@ const calculateLayout = (otherPlayersCount) => {
     };
 };
 
-// [修改] 改为左上角布局，与手牌逻辑一致
+// [保持原样] 小卡牌组件
 const CompactShowCard = ({ cardVal }) => {
     const { text, suit, color } = getCardDisplay(cardVal);
     return (
         <div style={{
-            background: 'linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%)', // 保持微渐变立体感
+            background: 'linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%)',
             border: '1px solid #999',
             borderRadius: 4,
             width: 38,
             height: 52,
-            position: 'relative', // 允许绝对定位
+            position: 'relative',
             color: color,
             boxShadow: '1px 2px 5px rgba(0,0,0,0.25)',
             userSelect: 'none'
         }}>
-            {/* 模拟手牌布局: 内容定位在左上角 */}
             <div style={{
                 position: 'absolute',
                 top: 2,
                 left: 2,
                 display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'center', // 数字和花色在小容器内居中
+                alignItems: 'center',
                 lineHeight: 0.9
             }}>
                 <div style={{fontSize: 16, fontWeight: '900', letterSpacing: -1}}>{text}</div>
@@ -59,7 +59,9 @@ export const PlayerLayout = () => {
         players, mySocketId, currentTurnId, playersInfo, playerScores, 
         roundPoints, roomConfig, turnRemaining, finishedRank, handCounts,
         isSpectator,
-        isRoundOver, roundOverData, readyPlayers
+        isRoundOver, roundOverData, readyPlayers,
+        // [新增] 获取观战相关状态
+        observedHands, watchedPlayerId, setWatchedPlayerId
     } = useGame();
 
     if (!players) return null;
@@ -92,7 +94,7 @@ export const PlayerLayout = () => {
 
     const layoutItems = [];
 
-    // 右侧玩家：摊牌在头像左侧
+    // [保持原样] 右侧玩家位置计算
     rightGroup.forEach((p, i) => {
         let topPos;
         if (countR === 1) {
@@ -106,20 +108,14 @@ export const PlayerLayout = () => {
             p, 
             pos: { top: topPos, right: 10, transform: 'translateY(-50%)' }, 
             timerPos: 'left',
-            // [新增] 摊牌样式
             handAreaStyle: {
-                position: 'absolute',
-                top: '50%',
-                right: '115%', // 稍微拉远一点，避免大卡片遮挡头像
-                transform: 'translateY(-50%)',
-                display: 'flex',
-                flexDirection: 'row-reverse', // 从右向左排，贴着头像
-                alignItems: 'center'
+                position: 'absolute', top: '50%', right: '115%', transform: 'translateY(-50%)',
+                display: 'flex', flexDirection: 'row-reverse', alignItems: 'center'
             }
         });
     });
 
-    // 上方玩家：摊牌在头像下方
+    // [保持原样] 上方玩家位置计算
     topGroup.forEach((p, i) => {
         let leftPos;
         if (countT === 1) {
@@ -133,20 +129,14 @@ export const PlayerLayout = () => {
             p, 
             pos: { top: '12%', left: leftPos, transform: 'translateX(-50%)' }, 
             timerPos: 'bottom',
-            // [新增] 摊牌样式
             handAreaStyle: {
-                position: 'absolute',
-                top: '125%', // 稍微拉远
-                left: '50%',
-                transform: 'translateX(-50%)',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'flex-start'
+                position: 'absolute', top: '125%', left: '50%', transform: 'translateX(-50%)',
+                display: 'flex', justifyContent: 'center', alignItems: 'flex-start'
             }
         });
     });
 
-    // 左侧玩家：摊牌在头像右侧
+    // [保持原样] 左侧玩家位置计算
     leftGroup.forEach((p, i) => {
         let topPos;
         if (countL === 1) {
@@ -160,20 +150,14 @@ export const PlayerLayout = () => {
             p, 
             pos: { top: topPos, left: 30, transform: 'translateY(-50%)' }, 
             timerPos: 'right',
-            // [新增] 摊牌样式
             handAreaStyle: {
-                position: 'absolute',
-                top: '50%',
-                left: '115%', // 稍微拉远
-                transform: 'translateY(-50%)',
-                display: 'flex',
-                flexDirection: 'row', // 从左向右排
-                alignItems: 'center'
+                position: 'absolute', top: '50%', left: '115%', transform: 'translateY(-50%)',
+                display: 'flex', flexDirection: 'row', alignItems: 'center'
             }
         });
     });
 
-    // 我（下方）：摊牌在头像上方
+    // [保持原样] 自己的位置
     const me = players[myIndex];
     if (me) {
         const isActuallyMe = me.id === mySocketId;
@@ -182,23 +166,16 @@ export const PlayerLayout = () => {
             pos: { bottom: 35, left: 20, zIndex: 100 }, 
             hideTimer: !isSpectator && isActuallyMe,
             timerPos: 'top',
-            // [新增] 摊牌样式
             handAreaStyle: {
-                position: 'absolute',
-                bottom: '125%', // 稍微拉远
-                left: '50%',
-                transform: 'translateX(-50%)',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'flex-end'
+                position: 'absolute', bottom: '125%', left: '50%', transform: 'translateX(-50%)',
+                display: 'flex', justifyContent: 'center', alignItems: 'flex-end'
             }
         };
         
-        if (!isSpectator || isActuallyMe) {
-            layoutItems.unshift(myItem);
-        } else {
-            layoutItems.unshift(myItem);
-        }
+        // 即使是观众模式，如果为了保持布局稳定，也可以把“自己”的位置留着（显示当前观看的对象或空着）
+        // 这里沿用原逻辑：如果在观战，我（作为观众）不在 players 列表中，myIndex 可能指向别人
+        // 但通常 spectator 模式下 myIndex 会处理好
+        layoutItems.unshift(myItem);
     }
 
     return (
@@ -221,16 +198,29 @@ export const PlayerLayout = () => {
                 }
                 const isReady = isRoundOver && readyPlayers.includes(p.id);
 
-                // [新增] 动态计算叠牌参数
+                // [新增] 观战状态判断
+                const canWatch = observedHands && observedHands[p.id] && observedHands[p.id].length > 0;
+                const isWatching = watchedPlayerId === p.id;
+
                 const cardCount = remainingCards.length;
-                // 默认叠牌间距 -24px (卡片宽38，露出14px)
-                // 如果牌很多，挤压更紧 (-28px, 露出10px)
                 let overlapMargin = -24; 
                 if (cardCount > 6) overlapMargin = -26;
                 if (cardCount > 12) overlapMargin = -28;
 
                 return (
-                    <div key={p.id} style={{...avatarStyleOverride, position: 'absolute', ...pos, transition: 'all 0.5s ease'}}> 
+                    <div 
+                        key={p.id} 
+                        style={{
+                            ...avatarStyleOverride, 
+                            position: 'absolute', 
+                            ...pos, 
+                            transition: 'all 0.5s ease',
+                            // [新增] 如果可观战，显示手型光标
+                            cursor: canWatch ? 'pointer' : 'default' 
+                        }}
+                        // [新增] 点击切换观战视角
+                        onClick={() => canWatch && setWatchedPlayerId(p.id)}
+                    > 
                         <PlayerAvatar 
                             player={p} 
                             isTurn={p.id === currentTurnId} 
@@ -246,24 +236,44 @@ export const PlayerLayout = () => {
                             showCardCountMode={roomConfig ? roomConfig.showCardCountMode : false} 
                             team={info.team} 
                         />
-                        <div style={{position: 'absolute', top: -10, right: -10, display: 'flex', gap: 5}}>
-                            {isBot && <div className="statusBadgeBot"><Bot size={12}/> AI</div>}
-                            {isAuto && <div className="statusBadgeAuto"><Zap size={12}/> 托管</div>}
+                        
+                        {/* 状态徽章区域 */}
+                        <div style={{position: 'absolute', top: -10, right: -10, display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end'}}>
+                            {/* [新增] 眼睛图标：表示可观战/正在观战 */}
+                            {canWatch && (
+                                <div style={{
+                                    background: isWatching ? '#3498db' : 'rgba(0,0,0,0.6)',
+                                    color: 'white',
+                                    borderRadius: '50%',
+                                    width: 20, height: 20,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    boxShadow: isWatching ? '0 0 10px #3498db' : 'none',
+                                    border: '1px solid rgba(255,255,255,0.3)',
+                                    transition: 'all 0.2s',
+                                    marginBottom: 2
+                                }}>
+                                    <Eye size={12} />
+                                </div>
+                            )}
+
+                            {/* 原有的状态图标 */}
+                            <div style={{display:'flex', gap:5}}>
+                                {isBot && <div className="statusBadgeBot"><Bot size={12}/> AI</div>}
+                                {isAuto && <div className="statusBadgeAuto"><Zap size={12}/> 托管</div>}
+                            </div>
                         </div>
 
-                        {/* [修改] 摊牌展示区域 */}
+                        {/* [保持原样] 摊牌展示 */}
                         {isRoundOver && remainingCards.length > 0 && (
                             <div style={{
                                 ...handAreaStyle,
-                                zIndex: 50, // 略高于头像
+                                zIndex: 50, 
                                 pointerEvents: 'none',
-                                padding: 5, // 增加padding防止阴影被切
+                                padding: 5, 
                             }}>
-                                {/* 剩余张数小标签 */}
                                 <div style={{
                                     position: 'absolute',
-                                    top: -24, // 配合大卡片上移
-                                    // 确保标签在正中间
+                                    top: -24, 
                                     left: '50%',
                                     transform: 'translateX(-50%)', 
                                     background: 'rgba(0,0,0,0.6)',
@@ -284,7 +294,6 @@ export const PlayerLayout = () => {
                                     {remainingCards.map((c, idx) => (
                                         <div key={idx} style={{
                                             position: 'relative',
-                                            // 动态间距
                                             marginLeft: idx === 0 ? 0 : overlapMargin,
                                             zIndex: idx, 
                                             transition: 'transform 0.2s',
@@ -296,6 +305,7 @@ export const PlayerLayout = () => {
                             </div>
                         )}
 
+                        {/* [保持原样] 准备状态 */}
                         {isReady && (
                             <div style={{
                                 position: 'absolute', top: -25, left: '50%', transform: 'translateX(-50%)',

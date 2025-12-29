@@ -33,21 +33,29 @@ const BotLogic = {
         candidates = candidates.filter(item => {
             const { type, level } = item.analysis;
 
-            // 过滤掉 510K (托管/Bot 不自动打出 510K)
+            // 过滤掉 510K (托管/Bot 不自动打出 510K，除非是绝杀或者为了凑分，这里简化处理)
             if (type === '510K_PURE' || type === '510K_MIXED') return false;
 
             const isBomb = level > 0;
+            const isKillShot = hand.length === item.cards.length; // 是否绝杀(出完即赢)
 
-            // 模式1: 智能模式 (默认) - 队友出的牌，不用炸弹管
+            // 模式1: 智能模式 (默认) - 队友出的牌，不用炸弹管，除非是绝杀
             if (mode === 'SMART' && isTeammate && isBomb) {
-                return false; 
+                // [优化] 如果这手牌出完就赢了(绝杀)，允许炸队友
+                if (!isKillShot) {
+                    return false; 
+                }
             }
 
-            // 模式2: 省钱模式 - 场上没分，不用炸弹管
-            if (mode === 'THRIFTY' && pendingScore === 0 && isBomb) {
-                // 如果是首出(lastPlayedCards为空)，通常允许出炸弹；这里限定为管牌阶段
-                if (lastPlayedCards && lastPlayedCards.length > 0) {
-                    return false;
+            // 模式2: 省钱模式 - 场上分数不足 50 分，不用炸弹管，除非是绝杀
+            // [优化] 阈值从 0 提升到 50
+            if (mode === 'THRIFTY' && pendingScore < 50 && isBomb) {
+                // 如果是绝杀，为了赢可以破例
+                if (!isKillShot) {
+                    // 如果是首出(lastPlayedCards为空)，通常允许出炸弹；这里限定为管牌阶段
+                    if (lastPlayedCards && lastPlayedCards.length > 0) {
+                        return false;
+                    }
                 }
             }
 
@@ -108,7 +116,7 @@ const BotLogic = {
             // --- C. 炸弹压制判断 ---
             if (isMoveBomb && !lastIsBomb && lastAnalysis) {
                 // 上家不是炸弹，我用炸弹管 -> 亏
-                if (hand.length === cards.length) cost = -9999999; // 绝杀
+                if (hand.length === cards.length) cost = -9999999; // 绝杀，优先级最高
                 else cost += 1000; 
             }
 

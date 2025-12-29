@@ -12,6 +12,9 @@ export const GameProvider = ({ children }) => {
 
   const [isSpectator, setIsSpectator] = useState(false);
   const [observedHands, setObservedHands] = useState({});
+  
+  // [新增] 当前正在观看的玩家 ID
+  const [watchedPlayerId, setWatchedPlayerId] = useState(null);
 
   // [新增] 结算与准备状态
   const [isRoundOver, setIsRoundOver] = useState(false);
@@ -44,16 +47,23 @@ export const GameProvider = ({ children }) => {
   useEffect(() => {
     // 只有当 Socket 重新连接上 (isConnected=true)，且本地有房间信息时，才尝试自动重连
     if (isConnected && socket && roomId && username) {
-        // 防止在登录页面（LOGIN状态）且未发起请求时误操作
-        // 但如果是在游戏状态下断线重连，gameState 可能还停留在 GAME，这时候需要重发 join
-        
         console.log(`[AutoRejoin] Socket restored. Attempting to rejoin room ${roomId}...`);
-        
-        // 只有当并未处于正常的“手动退出”流程时才重连
-        // 这里简单发一个 join_room，服务端会自动识别是重连还是新加
         socket.emit('join_room', { roomId, username });
     }
-  }, [isConnected, socket]); // 依赖 isConnected 变化
+  }, [isConnected, socket]); 
+
+  // [新增] 自动管理观看目标
+  // 当 observedHands 变化时，如果当前没有观看目标或目标失效，自动切到第一个
+  useEffect(() => {
+    const availableIds = Object.keys(observedHands);
+    if (availableIds.length > 0) {
+        if (!watchedPlayerId || !observedHands[watchedPlayerId]) {
+            setWatchedPlayerId(availableIds[0]);
+        }
+    } else {
+        setWatchedPlayerId(null);
+    }
+  }, [observedHands, watchedPlayerId]);
 
 
   useEffect(() => {
@@ -141,7 +151,6 @@ export const GameProvider = ({ children }) => {
 
       handleLeaveRoom: () => {
           if (window.confirm("确定要退出房间返回首页吗？")) {
-              // 清除本地状态以防自动重连误判
               localStorage.removeItem('poker_roomid');
               window.location.reload();
           }
@@ -176,7 +185,10 @@ export const GameProvider = ({ children }) => {
       toggleSort: battleLogic.toggleSort,
 
       isSpectator,
-      observedHands 
+      observedHands,
+      // [新增] 暴露观看状态
+      watchedPlayerId,
+      setWatchedPlayerId
   };
 
   return (

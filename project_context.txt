@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/28 16:06:08
+Project Context Generated at 2025/12/29 15:03:03
 
 
 ================================================================================
@@ -354,7 +354,7 @@ export default CountDownTimer;
 FILE PATH: client\src\components\game\GameActionBar.jsx
 ================================================================================
 import React, { useState, useEffect } from 'react';
-import { RotateCcw, Zap, Lightbulb, Clock, Loader2, AlertTriangle, Repeat, Shield, Coins, Coffee, Eye, ClipboardList, CheckCircle } from 'lucide-react';
+import { RotateCcw, Zap, Lightbulb, Clock, Loader2, AlertTriangle, Repeat, Shield, Coins, Coffee, Eye, ClipboardList, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import css from './GameActionBar.module.css';
 import { useGame } from '../../context/GameContext.jsx';
 import TimerComponent from '../CountDownTimer.jsx';
@@ -370,7 +370,9 @@ export const GameActionBar = ({ onShowSettlement }) => {
         isSubmitting, lastPlayerName,
         isSpectator, observedHands,
         // [新增]
-        isRoundOver, readyPlayers, handlePlayerReady
+        isRoundOver, readyPlayers, handlePlayerReady,
+        // [新增] 观看控制
+        watchedPlayerId, setWatchedPlayerId
     } = useGame();
 
     const [confirmState, setConfirmState] = useState(false);
@@ -378,6 +380,26 @@ export const GameActionBar = ({ onShowSettlement }) => {
     useEffect(() => {
         setConfirmState(false);
     }, [selectedCards, currentTurnId]);
+
+    // 切换观看对象
+    const cycleWatchedPlayer = (direction) => {
+        const availableIds = Object.keys(observedHands);
+        if (availableIds.length <= 1) return;
+        
+        const currentIndex = availableIds.indexOf(watchedPlayerId);
+        if (currentIndex === -1 && availableIds.length > 0) {
+            setWatchedPlayerId(availableIds[0]);
+            return;
+        }
+
+        let nextIndex;
+        if (direction === 'next') {
+            nextIndex = (currentIndex + 1) % availableIds.length;
+        } else {
+            nextIndex = (currentIndex - 1 + availableIds.length) % availableIds.length;
+        }
+        setWatchedPlayerId(availableIds[nextIndex]);
+    };
 
     // [新增] 结束状态的特殊 ActionBar
     // [修复] 增加 grandResult 判断：如果大局结束，不显示准备按钮（只允许查看战绩，重开需走结算窗）
@@ -417,8 +439,54 @@ export const GameActionBar = ({ onShowSettlement }) => {
 
     if (winner || roundResult || grandResult) return null;
 
-    if (isSpectator) {
+    // [修改] 统一处理观战状态 (纯观众 OR 已完赛玩家)
+    const myInfo = playersInfo[mySocketId] || {};
+    const amIAutoPlay = myInfo.isAutoPlay;
+    const currentMode = myInfo.autoPlayMode || 'SMART';
+    
+    // 是否处于观战状态 (纯观众 或 玩家已出完且有队友可看)
+    // 逻辑：如果我是观众(isSpectator)，或者我有观察权限且我自己没牌了(手牌数0)
+    // 注意：myInfo.handCount 可能有延迟，这里直接用 observedHands 和 myInfo 判断更准
+    // 但为了简化，如果 observedHands 有值且我不是正在打牌的人(或者我手牌空了)，就显示观战条
+    
+    const myHandCount = playersInfo[mySocketId] ? (playersInfo[mySocketId].handCount || 0) : 0;
+    // 如果我是观众，myHandCount通常为0或者undefined
+    // 只要有 observedHands，且 (是观众 OR 我手牌为0)，就显示切换条
+    
+    const isWatchingMode = isSpectator || (Object.keys(observedHands).length > 0 && myHandCount === 0);
+
+    if (isWatchingMode && Object.keys(observedHands).length > 0) {
+        const watchedName = players.find(p => p.id === watchedPlayerId)?.name || '未知';
+        const availableCount = Object.keys(observedHands).length;
+
         return (
+             <div className={css.actionBar}>
+                <div className={css.spectatorGroup}>
+                    {/* [修改] 将布局调整为： 左箭头 - 信息 - 右箭头 */}
+                    {availableCount > 1 && (
+                        <button className={css.spectatorBtn} onClick={() => cycleWatchedPlayer('prev')}>
+                            <ChevronLeft size={28} />
+                        </button>
+                    )}
+
+                    <div className={css.spectatorInfo}>
+                        <Eye size={18} style={{marginRight:5}}/> 
+                        <span>观看: <span style={{color: '#f1c40f'}}>{watchedName}</span></span>
+                    </div>
+
+                    {availableCount > 1 && (
+                        <button className={css.spectatorBtn} onClick={() => cycleWatchedPlayer('next')}>
+                            <ChevronRight size={28} />
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    }
+    
+    // 如果是纯观战但还没有手牌数据传过来 (刚进房间/没人出完)
+    if (isSpectator) {
+         return (
              <div className={css.actionBar}>
                 <div className={css.waitingBadge}>
                     <Eye size={20} /> 正在观战中...
@@ -427,21 +495,6 @@ export const GameActionBar = ({ onShowSettlement }) => {
         );
     }
 
-    const myInfo = playersInfo[mySocketId] || {};
-    const amIAutoPlay = myInfo.isAutoPlay;
-    const currentMode = myInfo.autoPlayMode || 'SMART';
-    
-    const isFinishedAndWatching = Object.keys(observedHands).length > 0;
-    if (isFinishedAndWatching) {
-        return (
-            <div className={css.actionBar}>
-                <div className={css.waitingBadge} style={{background: 'rgba(52, 152, 219, 0.4)'}}>
-                    <Eye size={20} /> 已完赛，观看队友中
-                </div>
-            </div>
-        );
-    }
-    
     const myTurn = currentTurnId === mySocketId;
     const currentTurnPlayer = players.find(p => p.id === currentTurnId);
     const waitingText = currentTurnPlayer ? `等待 ${currentTurnPlayer.name}...` : '等待中...';
@@ -602,6 +655,76 @@ FILE PATH: client\src\components\game\GameActionBar.module.css
     /* [修复] 显式开启点击事件并提升层级，防止被手牌遮罩层挡住 */
     pointer-events: auto;
     z-index: 101;
+}
+
+/* [新增] 观战模式控制条 */
+.spectatorGroup {
+    /* 继承基础样式，但不继承 border 和 background，我们在下面重写更极简的风格 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    
+    /* 极简半透明胶囊背景，只包裹文字部分 */
+    background: rgba(30, 39, 46, 0.85);
+    padding: 6px 15px;
+    border-radius: 50px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    backdrop-filter: blur(5px);
+    
+    pointer-events: auto;
+    z-index: 101;
+}
+
+.spectatorInfo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 14px;
+    font-weight: 500;
+    min-width: 100px;
+    justify-content: center;
+    /* 稍微给点垂直 padding 撑开高度 */
+    padding: 4px 0;
+}
+
+.spectatorName {
+    color: #f1c40f;
+    font-weight: bold;
+    font-size: 16px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+/* [修改] 纯箭头样式：完全去除背景，靠缩放和颜色反馈 */
+.spectatorBtn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.5); /* 默认稍暗 */
+    padding: 0;
+    width: 44px;  /* 加大点击区域 */
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); /* 弹性动画 */
+    border-radius: 50%;
+    
+    /* 负边距让箭头视觉上稍微“飞”出胶囊一点点（可选，这里先保持在流内） */
+}
+
+.spectatorBtn:hover {
+    background: rgba(255, 255, 255, 0.1); /* 极淡的圆形光晕 */
+    color: #f1c40f; /* 悬停变金色 */
+    transform: scale(1.2); /* 明显放大 */
+    text-shadow: 0 0 10px rgba(241, 196, 15, 0.5);
+}
+
+.spectatorBtn:active {
+    transform: scale(0.95);
+    color: #d4ac0d;
 }
 
 /* 模式切换按钮 */
@@ -1144,13 +1267,15 @@ import css from './HandArea.module.css';
 import { Card } from '../BaseUI.jsx';
 import { calculateCardSpacing, sortHand } from '../../utils/cardLogic.js';
 import { useGame } from '../../context/GameContext.jsx';
+// [修复] 引入缺失的手势交互 Hook
 import { useHandGesture } from '../../hooks/useHandGesture.js';
 
 export const HandArea = () => {
     const { 
         myHand, selectedCards, handleMouseDown, handleMouseEnter, 
         playersInfo, mySocketId,
-        observedHands, isSpectator // [新增]
+        observedHands, isSpectator,
+        watchedPlayerId, players
     } = useGame();
     
     const myInfo = playersInfo[mySocketId] || {};
@@ -1164,53 +1289,74 @@ export const HandArea = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // [新增] 决定显示谁的手牌
-    let displayHand = myHand;
+    // 逻辑：确保显示的手牌数据源正确且有序
+    let displayHand = [];
     let isWatching = false;
     let watchingName = '';
 
-    // 如果我自己没牌了 (或者我是观众)，且有观察到的手牌
-    if ((myHand.length === 0 || isSpectator) && Object.keys(observedHands).length > 0) {
-        // 简单策略：显示第一个观察到的非空手牌
-        const targetId = Object.keys(observedHands).find(id => observedHands[id] && observedHands[id].length > 0);
-        if (targetId) {
-            // 对观察的手牌进行排序，确保显示整齐
-            displayHand = sortHand(observedHands[targetId], 'POINT'); 
-            isWatching = true;
-            // 尝试获取名字，需从 playersInfo 或 players 中找 (Context里 players可能没传进来)
-            // 这里简单用ID，或者稍微修改 Context 传入 players
-            // 假设我们只能拿到 ID，UI 显示 "正在观看队友" 即可
-        }
+    const canWatchOthers = (myHand.length === 0 || isSpectator);
+    
+    if (canWatchOthers && watchedPlayerId && observedHands[watchedPlayerId]) {
+        displayHand = sortHand(observedHands[watchedPlayerId], 'POINT');
+        isWatching = true;
+        const targetPlayer = players.find(p => p.id === watchedPlayerId);
+        watchingName = targetPlayer ? targetPlayer.name : '未知玩家';
+    } else {
+        displayHand = sortHand(myHand, 'POINT');
+        isWatching = false;
     }
 
     const cardSpacing = calculateCardSpacing(displayHand.length, dimensions.width);
-
-    // 只有操作自己的手牌才启用手势
-    const handContainerRef = useHandGesture({
-        myHand: isWatching ? [] : displayHand, // 观看模式下禁用交互
-        selectedCards: isWatching ? [] : selectedCards, 
-        cardSpacing, 
-        handleMouseDown, 
-        amIAutoPlay
-    });
 
     const containerClass = [
         css.handArea,
         amIAutoPlay ? css.autoPlayMode : ''
     ].join(' ');
 
+    const canInteract = !isWatching && !amIAutoPlay;
+
+    // [修复] 启用手势 Hook，绑定到容器上
+    // 这将接管点击和滑动手势，解决点击无反应的问题
+    const handRef = useHandGesture({
+        myHand: displayHand, // 传入当前显示的有序手牌，确保坐标计算准确
+        selectedCards,
+        cardSpacing,
+        handleMouseDown: (val) => {
+            // 再次校验权限，防止观战或托管时误触
+            if (canInteract && handleMouseDown) {
+                handleMouseDown(val);
+            }
+        },
+        amIAutoPlay
+    });
+
+    // 保持旧接口兼容（虽然主要靠 Hook 触发）
+    const onCardClick = (val) => {
+        if (canInteract && handleMouseDown) {
+            handleMouseDown(val);
+        }
+    };
+
+    const onCardEnter = (val) => {
+        if (canInteract && handleMouseEnter) {
+            handleMouseEnter(val);
+        }
+    };
+
     return (
-        <div ref={handContainerRef} className={containerClass}>
+        // [修复] 将 ref 绑定到容器 div，使手势监听生效
+        <div className={containerClass} ref={handRef}>
+            {/* 托管状态提示 */}
             {amIAutoPlay && !isWatching && (
                 <div className={css.autoPlayBadge}>
                     <Bot size={14} /> 系统代打中
                 </div>
             )}
 
-            {/* [新增] 观看模式提示 */}
+            {/* 观战模式提示 */}
             {isWatching && (
-                <div className={css.autoPlayBadge} style={{background: '#3498db'}}>
-                    <Eye size={14} /> 正在观看队友视角
+                <div className={css.autoPlayBadge} style={{background: '#3498db', gap: 8}}>
+                    <Eye size={14} /> 视角: {watchingName}
                 </div>
             )}
             
@@ -1220,8 +1366,8 @@ export const HandArea = () => {
                     cardVal={c} 
                     index={i} 
                     isSelected={!isWatching && selectedCards.includes(c)} 
-                    onClick={isWatching ? ()=>{} : handleMouseDown} 
-                    onMouseEnter={isWatching ? ()=>{} : handleMouseEnter} 
+                    onClick={() => onCardClick(c)} 
+                    onMouseEnter={() => onCardEnter(c)} 
                     spacing={cardSpacing} 
                 />
             ))}
@@ -1284,11 +1430,12 @@ FILE PATH: client\src\components\game\HandArea.module.css
 FILE PATH: client\src\components\game\PlayerLayout.jsx
 ================================================================================
 import React from 'react';
-import { Bot, Zap, CheckCircle } from 'lucide-react';
+import { Bot, Zap, CheckCircle, Eye } from 'lucide-react'; // [新增] 引入 Eye 图标
 import { PlayerAvatar } from '../BaseUI.jsx'; 
 import { useGame } from '../../context/GameContext.jsx'; 
 import { sortHand, getCardDisplay } from '../../utils/cardLogic.js';
 
+// [保持原样] 布局计算函数
 const calculateLayout = (otherPlayersCount) => {
     if (otherPlayersCount === 0) return { countT: 0, countR: 0, countL: 0 }; 
     if (otherPlayersCount === 1) return { countT: 1, countR: 0, countL: 0 }; 
@@ -1307,29 +1454,28 @@ const calculateLayout = (otherPlayersCount) => {
     };
 };
 
-// [修改] 改为左上角布局，与手牌逻辑一致
+// [保持原样] 小卡牌组件
 const CompactShowCard = ({ cardVal }) => {
     const { text, suit, color } = getCardDisplay(cardVal);
     return (
         <div style={{
-            background: 'linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%)', // 保持微渐变立体感
+            background: 'linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%)',
             border: '1px solid #999',
             borderRadius: 4,
             width: 38,
             height: 52,
-            position: 'relative', // 允许绝对定位
+            position: 'relative',
             color: color,
             boxShadow: '1px 2px 5px rgba(0,0,0,0.25)',
             userSelect: 'none'
         }}>
-            {/* 模拟手牌布局: 内容定位在左上角 */}
             <div style={{
                 position: 'absolute',
                 top: 2,
                 left: 2,
                 display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'center', // 数字和花色在小容器内居中
+                alignItems: 'center',
                 lineHeight: 0.9
             }}>
                 <div style={{fontSize: 16, fontWeight: '900', letterSpacing: -1}}>{text}</div>
@@ -1344,7 +1490,9 @@ export const PlayerLayout = () => {
         players, mySocketId, currentTurnId, playersInfo, playerScores, 
         roundPoints, roomConfig, turnRemaining, finishedRank, handCounts,
         isSpectator,
-        isRoundOver, roundOverData, readyPlayers
+        isRoundOver, roundOverData, readyPlayers,
+        // [新增] 获取观战相关状态
+        observedHands, watchedPlayerId, setWatchedPlayerId
     } = useGame();
 
     if (!players) return null;
@@ -1377,7 +1525,7 @@ export const PlayerLayout = () => {
 
     const layoutItems = [];
 
-    // 右侧玩家：摊牌在头像左侧
+    // [保持原样] 右侧玩家位置计算
     rightGroup.forEach((p, i) => {
         let topPos;
         if (countR === 1) {
@@ -1391,20 +1539,14 @@ export const PlayerLayout = () => {
             p, 
             pos: { top: topPos, right: 10, transform: 'translateY(-50%)' }, 
             timerPos: 'left',
-            // [新增] 摊牌样式
             handAreaStyle: {
-                position: 'absolute',
-                top: '50%',
-                right: '115%', // 稍微拉远一点，避免大卡片遮挡头像
-                transform: 'translateY(-50%)',
-                display: 'flex',
-                flexDirection: 'row-reverse', // 从右向左排，贴着头像
-                alignItems: 'center'
+                position: 'absolute', top: '50%', right: '115%', transform: 'translateY(-50%)',
+                display: 'flex', flexDirection: 'row-reverse', alignItems: 'center'
             }
         });
     });
 
-    // 上方玩家：摊牌在头像下方
+    // [保持原样] 上方玩家位置计算
     topGroup.forEach((p, i) => {
         let leftPos;
         if (countT === 1) {
@@ -1418,20 +1560,14 @@ export const PlayerLayout = () => {
             p, 
             pos: { top: '12%', left: leftPos, transform: 'translateX(-50%)' }, 
             timerPos: 'bottom',
-            // [新增] 摊牌样式
             handAreaStyle: {
-                position: 'absolute',
-                top: '125%', // 稍微拉远
-                left: '50%',
-                transform: 'translateX(-50%)',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'flex-start'
+                position: 'absolute', top: '125%', left: '50%', transform: 'translateX(-50%)',
+                display: 'flex', justifyContent: 'center', alignItems: 'flex-start'
             }
         });
     });
 
-    // 左侧玩家：摊牌在头像右侧
+    // [保持原样] 左侧玩家位置计算
     leftGroup.forEach((p, i) => {
         let topPos;
         if (countL === 1) {
@@ -1445,20 +1581,14 @@ export const PlayerLayout = () => {
             p, 
             pos: { top: topPos, left: 30, transform: 'translateY(-50%)' }, 
             timerPos: 'right',
-            // [新增] 摊牌样式
             handAreaStyle: {
-                position: 'absolute',
-                top: '50%',
-                left: '115%', // 稍微拉远
-                transform: 'translateY(-50%)',
-                display: 'flex',
-                flexDirection: 'row', // 从左向右排
-                alignItems: 'center'
+                position: 'absolute', top: '50%', left: '115%', transform: 'translateY(-50%)',
+                display: 'flex', flexDirection: 'row', alignItems: 'center'
             }
         });
     });
 
-    // 我（下方）：摊牌在头像上方
+    // [保持原样] 自己的位置
     const me = players[myIndex];
     if (me) {
         const isActuallyMe = me.id === mySocketId;
@@ -1467,23 +1597,16 @@ export const PlayerLayout = () => {
             pos: { bottom: 35, left: 20, zIndex: 100 }, 
             hideTimer: !isSpectator && isActuallyMe,
             timerPos: 'top',
-            // [新增] 摊牌样式
             handAreaStyle: {
-                position: 'absolute',
-                bottom: '125%', // 稍微拉远
-                left: '50%',
-                transform: 'translateX(-50%)',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'flex-end'
+                position: 'absolute', bottom: '125%', left: '50%', transform: 'translateX(-50%)',
+                display: 'flex', justifyContent: 'center', alignItems: 'flex-end'
             }
         };
         
-        if (!isSpectator || isActuallyMe) {
-            layoutItems.unshift(myItem);
-        } else {
-            layoutItems.unshift(myItem);
-        }
+        // 即使是观众模式，如果为了保持布局稳定，也可以把“自己”的位置留着（显示当前观看的对象或空着）
+        // 这里沿用原逻辑：如果在观战，我（作为观众）不在 players 列表中，myIndex 可能指向别人
+        // 但通常 spectator 模式下 myIndex 会处理好
+        layoutItems.unshift(myItem);
     }
 
     return (
@@ -1506,16 +1629,29 @@ export const PlayerLayout = () => {
                 }
                 const isReady = isRoundOver && readyPlayers.includes(p.id);
 
-                // [新增] 动态计算叠牌参数
+                // [新增] 观战状态判断
+                const canWatch = observedHands && observedHands[p.id] && observedHands[p.id].length > 0;
+                const isWatching = watchedPlayerId === p.id;
+
                 const cardCount = remainingCards.length;
-                // 默认叠牌间距 -24px (卡片宽38，露出14px)
-                // 如果牌很多，挤压更紧 (-28px, 露出10px)
                 let overlapMargin = -24; 
                 if (cardCount > 6) overlapMargin = -26;
                 if (cardCount > 12) overlapMargin = -28;
 
                 return (
-                    <div key={p.id} style={{...avatarStyleOverride, position: 'absolute', ...pos, transition: 'all 0.5s ease'}}> 
+                    <div 
+                        key={p.id} 
+                        style={{
+                            ...avatarStyleOverride, 
+                            position: 'absolute', 
+                            ...pos, 
+                            transition: 'all 0.5s ease',
+                            // [新增] 如果可观战，显示手型光标
+                            cursor: canWatch ? 'pointer' : 'default' 
+                        }}
+                        // [新增] 点击切换观战视角
+                        onClick={() => canWatch && setWatchedPlayerId(p.id)}
+                    > 
                         <PlayerAvatar 
                             player={p} 
                             isTurn={p.id === currentTurnId} 
@@ -1531,24 +1667,44 @@ export const PlayerLayout = () => {
                             showCardCountMode={roomConfig ? roomConfig.showCardCountMode : false} 
                             team={info.team} 
                         />
-                        <div style={{position: 'absolute', top: -10, right: -10, display: 'flex', gap: 5}}>
-                            {isBot && <div className="statusBadgeBot"><Bot size={12}/> AI</div>}
-                            {isAuto && <div className="statusBadgeAuto"><Zap size={12}/> 托管</div>}
+                        
+                        {/* 状态徽章区域 */}
+                        <div style={{position: 'absolute', top: -10, right: -10, display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end'}}>
+                            {/* [新增] 眼睛图标：表示可观战/正在观战 */}
+                            {canWatch && (
+                                <div style={{
+                                    background: isWatching ? '#3498db' : 'rgba(0,0,0,0.6)',
+                                    color: 'white',
+                                    borderRadius: '50%',
+                                    width: 20, height: 20,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    boxShadow: isWatching ? '0 0 10px #3498db' : 'none',
+                                    border: '1px solid rgba(255,255,255,0.3)',
+                                    transition: 'all 0.2s',
+                                    marginBottom: 2
+                                }}>
+                                    <Eye size={12} />
+                                </div>
+                            )}
+
+                            {/* 原有的状态图标 */}
+                            <div style={{display:'flex', gap:5}}>
+                                {isBot && <div className="statusBadgeBot"><Bot size={12}/> AI</div>}
+                                {isAuto && <div className="statusBadgeAuto"><Zap size={12}/> 托管</div>}
+                            </div>
                         </div>
 
-                        {/* [修改] 摊牌展示区域 */}
+                        {/* [保持原样] 摊牌展示 */}
                         {isRoundOver && remainingCards.length > 0 && (
                             <div style={{
                                 ...handAreaStyle,
-                                zIndex: 50, // 略高于头像
+                                zIndex: 50, 
                                 pointerEvents: 'none',
-                                padding: 5, // 增加padding防止阴影被切
+                                padding: 5, 
                             }}>
-                                {/* 剩余张数小标签 */}
                                 <div style={{
                                     position: 'absolute',
-                                    top: -24, // 配合大卡片上移
-                                    // 确保标签在正中间
+                                    top: -24, 
                                     left: '50%',
                                     transform: 'translateX(-50%)', 
                                     background: 'rgba(0,0,0,0.6)',
@@ -1569,7 +1725,6 @@ export const PlayerLayout = () => {
                                     {remainingCards.map((c, idx) => (
                                         <div key={idx} style={{
                                             position: 'relative',
-                                            // 动态间距
                                             marginLeft: idx === 0 ? 0 : overlapMargin,
                                             zIndex: idx, 
                                             transition: 'transform 0.2s',
@@ -1581,6 +1736,7 @@ export const PlayerLayout = () => {
                             </div>
                         )}
 
+                        {/* [保持原样] 准备状态 */}
                         {isReady && (
                             <div style={{
                                 position: 'absolute', top: -25, left: '50%', transform: 'translateX(-50%)',
@@ -3307,6 +3463,9 @@ export const GameProvider = ({ children }) => {
 
   const [isSpectator, setIsSpectator] = useState(false);
   const [observedHands, setObservedHands] = useState({});
+  
+  // [新增] 当前正在观看的玩家 ID
+  const [watchedPlayerId, setWatchedPlayerId] = useState(null);
 
   // [新增] 结算与准备状态
   const [isRoundOver, setIsRoundOver] = useState(false);
@@ -3339,16 +3498,23 @@ export const GameProvider = ({ children }) => {
   useEffect(() => {
     // 只有当 Socket 重新连接上 (isConnected=true)，且本地有房间信息时，才尝试自动重连
     if (isConnected && socket && roomId && username) {
-        // 防止在登录页面（LOGIN状态）且未发起请求时误操作
-        // 但如果是在游戏状态下断线重连，gameState 可能还停留在 GAME，这时候需要重发 join
-        
         console.log(`[AutoRejoin] Socket restored. Attempting to rejoin room ${roomId}...`);
-        
-        // 只有当并未处于正常的“手动退出”流程时才重连
-        // 这里简单发一个 join_room，服务端会自动识别是重连还是新加
         socket.emit('join_room', { roomId, username });
     }
-  }, [isConnected, socket]); // 依赖 isConnected 变化
+  }, [isConnected, socket]); 
+
+  // [新增] 自动管理观看目标
+  // 当 observedHands 变化时，如果当前没有观看目标或目标失效，自动切到第一个
+  useEffect(() => {
+    const availableIds = Object.keys(observedHands);
+    if (availableIds.length > 0) {
+        if (!watchedPlayerId || !observedHands[watchedPlayerId]) {
+            setWatchedPlayerId(availableIds[0]);
+        }
+    } else {
+        setWatchedPlayerId(null);
+    }
+  }, [observedHands, watchedPlayerId]);
 
 
   useEffect(() => {
@@ -3436,7 +3602,6 @@ export const GameProvider = ({ children }) => {
 
       handleLeaveRoom: () => {
           if (window.confirm("确定要退出房间返回首页吗？")) {
-              // 清除本地状态以防自动重连误判
               localStorage.removeItem('poker_roomid');
               window.location.reload();
           }
@@ -3471,7 +3636,10 @@ export const GameProvider = ({ children }) => {
       toggleSort: battleLogic.toggleSort,
 
       isSpectator,
-      observedHands 
+      observedHands,
+      // [新增] 暴露观看状态
+      watchedPlayerId,
+      setWatchedPlayerId
   };
 
   return (
@@ -7527,21 +7695,29 @@ const BotLogic = {
         candidates = candidates.filter(item => {
             const { type, level } = item.analysis;
 
-            // 过滤掉 510K (托管/Bot 不自动打出 510K)
+            // 过滤掉 510K (托管/Bot 不自动打出 510K，除非是绝杀或者为了凑分，这里简化处理)
             if (type === '510K_PURE' || type === '510K_MIXED') return false;
 
             const isBomb = level > 0;
+            const isKillShot = hand.length === item.cards.length; // 是否绝杀(出完即赢)
 
-            // 模式1: 智能模式 (默认) - 队友出的牌，不用炸弹管
+            // 模式1: 智能模式 (默认) - 队友出的牌，不用炸弹管，除非是绝杀
             if (mode === 'SMART' && isTeammate && isBomb) {
-                return false; 
+                // [优化] 如果这手牌出完就赢了(绝杀)，允许炸队友
+                if (!isKillShot) {
+                    return false; 
+                }
             }
 
-            // 模式2: 省钱模式 - 场上没分，不用炸弹管
-            if (mode === 'THRIFTY' && pendingScore === 0 && isBomb) {
-                // 如果是首出(lastPlayedCards为空)，通常允许出炸弹；这里限定为管牌阶段
-                if (lastPlayedCards && lastPlayedCards.length > 0) {
-                    return false;
+            // 模式2: 省钱模式 - 场上分数不足 50 分，不用炸弹管，除非是绝杀
+            // [优化] 阈值从 0 提升到 50
+            if (mode === 'THRIFTY' && pendingScore < 50 && isBomb) {
+                // 如果是绝杀，为了赢可以破例
+                if (!isKillShot) {
+                    // 如果是首出(lastPlayedCards为空)，通常允许出炸弹；这里限定为管牌阶段
+                    if (lastPlayedCards && lastPlayedCards.length > 0) {
+                        return false;
+                    }
                 }
             }
 
@@ -7602,7 +7778,7 @@ const BotLogic = {
             // --- C. 炸弹压制判断 ---
             if (isMoveBomb && !lastIsBomb && lastAnalysis) {
                 // 上家不是炸弹，我用炸弹管 -> 亏
-                if (hand.length === cards.length) cost = -9999999; // 绝杀
+                if (hand.length === cards.length) cost = -9999999; // 绝杀，优先级最高
                 else cost += 1000; 
             }
 
@@ -7912,10 +8088,10 @@ class BotManager {
 
         player.isAutoPlay = !player.isAutoPlay;
         
-        // 开启时重置为默认模式 (SMART)，保持“功能保护”原则
-        if (player.isAutoPlay) {
-            player.autoPlayMode = 'SMART'; 
-        }
+        // [修改] 记忆模式：开启时保持上一次的选择，不再强制重置为 SMART
+        // if (player.isAutoPlay) {
+        //    player.autoPlayMode = 'SMART'; 
+        // }
         
         // 如果当前正好轮到该玩家，且开启了托管，立即触发机器人逻辑
         if (this.game.gameState && 
@@ -9593,58 +9769,84 @@ class GameManager {
         };
     }
 
-    // [功能保护] 健壮的重连逻辑，保留所有必要状态
+    // ===============================================
+    // [重大 Bug 修复] 健壮的重连逻辑
+    // 修复了 oldId === newId 时数据自我删除导致的手牌/分数归零问题
+    // ===============================================
     reconnectPlayer(oldId, newId) {
         if (this.disposed) return false;
         console.log(`[Game] Reconnecting ${oldId} -> ${newId}`);
+
+        // [核心修复] 如果 ID 没变 (可能因并发请求导致)，直接返回，防止自我删除
+        if (oldId === newId) {
+            console.log(`[Game] Reconnect ID same, skipping data migration to prevent self-deletion.`);
+            // 但需要确保状态正确，比如标记为在线
+            const player = this.players.find(p => p.id === newId);
+            if (player) {
+                player.isOffline = false;
+                player.isAutoPlay = false; 
+            }
+            return true;
+        }
         
+        // 1. 迁移大局分数 (Grand Scores)
         if (this.grandScores[oldId] !== undefined) {
             this.grandScores[newId] = this.grandScores[oldId];
             delete this.grandScores[oldId];
+        } else {
+             // 如果旧ID没有分数记录，初始化新ID为0，防止 undefined
+             if (this.grandScores[newId] === undefined) this.grandScores[newId] = 0;
         }
+
+        // 2. 迁移上轮赢家记录
         if (this.lastWinnerId === oldId) this.lastWinnerId = newId;
         
+        // 3. 迁移准备状态
         if (this.readyPlayers.has(oldId)) {
             this.readyPlayers.delete(oldId);
             this.readyPlayers.add(newId);
         }
 
+        // 4. 更新玩家列表中的对象 ID (双重保险，虽然 RoomHandler 可能改过了)
         let player = this.players.find(p => p.id === newId);
         if (!player) {
             player = this.players.find(p => p.id === oldId);
             if (player) player.id = newId;
         }
         if (player) {
-            // [注意] 重连回来后，如果是 AutoPlay，是否要自动取消？
-            // 现在的逻辑是：重连回来默认取消托管，让玩家自己打
+            // [注意] 重连回来后，取消托管，恢复在线状态
             player.isAutoPlay = false; 
-            player.isOffline = false; // [关键修复] 重连后标记为在线
+            player.isOffline = false; 
         }
 
-        // [功能保护] 确保游戏内状态无缝迁移
+        // 5. [功能保护] 迁移游戏内状态 (GameState)
         if (this.gameState) {
-            // 迁移手牌
+            // A. 迁移手牌
             if (this.gameState.hands && this.gameState.hands[oldId]) {
                 this.gameState.hands[newId] = this.gameState.hands[oldId];
-                delete this.gameState.hands[oldId];
+                delete this.gameState.hands[oldId]; // 安全删除
             } else if (this.gameState.hands) {
-                this.gameState.hands[newId] = [];
+                // 如果旧ID确实没手牌（或数据丢失），初始化空数组防止前端崩溃
+                if (!this.gameState.hands[newId]) this.gameState.hands[newId] = [];
             }
-            // 迁移当前小局得分
+
+            // B. 迁移当前小局得分
             if (this.gameState.roundPoints[oldId] !== undefined) {
                 this.gameState.roundPoints[newId] = this.gameState.roundPoints[oldId];
                 delete this.gameState.roundPoints[oldId];
             }
-            // 迁移出牌权记录
+
+            // C. 迁移出牌权记录
             if (this.gameState.roundWinnerId === oldId) this.gameState.roundWinnerId = newId;
-            // 迁移排名
+            
+            // D. 迁移排名
             const rankIdx = this.gameState.finishedRank.indexOf(oldId);
             if (rankIdx !== -1) {
                 this.gameState.finishedRank[rankIdx] = newId;
             }
         }
 
-        // 迁移历史战绩中的ID
+        // 6. 迁移历史战绩中的ID
         this.matchHistory.forEach(match => {
             if (match.scores[oldId] !== undefined) {
                 match.scores[newId] = match.scores[oldId];
@@ -9653,8 +9855,10 @@ class GameManager {
             if (match.winnerId === oldId) match.winnerId = newId;
         });
 
-        // 立即重置计时器，让重连回来的玩家有完整的时间操作
-        if (this.gameState && this.players[this.gameState.currentTurnIndex].id === newId) {
+        // 7. 立即重置计时器，让重连回来的玩家有完整的时间操作
+        if (this.gameState && 
+            this.players[this.gameState.currentTurnIndex] && 
+            this.players[this.gameState.currentTurnIndex].id === newId) {
             this._resetTimer();
         }
 
@@ -10422,7 +10626,11 @@ module.exports = (io, socket, rooms) => {
             }
 
             isReconnect = true;
-            oldSocketId = existingPlayer.id;
+            oldSocketId = existingPlayer.id; // 获取旧ID
+            
+            // [日志] 记录重连行为，方便排查
+            console.log(`[RoomHandler] Reconnect Attempt: User ${cleanName}, ${oldSocketId} -> ${socket.id}`);
+
             existingPlayer.id = socket.id;
             existingPlayer.online = true; 
 
@@ -10432,7 +10640,11 @@ module.exports = (io, socket, rooms) => {
                 room.destroyTimer = null;
             }
 
-            if (room.gameManager) room.gameManager.reconnectPlayer(oldSocketId, socket.id);
+            // [关键修改] 传递 oldSocketId 给 GameManager 执行数据迁移
+            if (room.gameManager) {
+                const success = room.gameManager.reconnectPlayer(oldSocketId, socket.id);
+                if (!success) console.warn(`[RoomHandler] GameManager Reconnect failed for ${cleanName}`);
+            }
             if (room.seatManager) room.seatManager.reconnectPlayer(oldSocketId, socket.id);
 
             socket.join(roomId);

@@ -14,10 +14,10 @@ class BotManager {
 
         player.isAutoPlay = !player.isAutoPlay;
         
-        // 开启时重置为默认模式 (SMART)，保持“功能保护”原则
-        if (player.isAutoPlay) {
-            player.autoPlayMode = 'SMART'; 
-        }
+        // [修改] 记忆模式：开启时保持上一次的选择，不再强制重置为 SMART
+        // if (player.isAutoPlay) {
+        //    player.autoPlayMode = 'SMART'; 
+        // }
         
         // 如果当前正好轮到该玩家，且开启了托管，立即触发机器人逻辑
         if (this.game.gameState && 

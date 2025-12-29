@@ -121,7 +121,11 @@ module.exports = (io, socket, rooms) => {
             }
 
             isReconnect = true;
-            oldSocketId = existingPlayer.id;
+            oldSocketId = existingPlayer.id; // 获取旧ID
+            
+            // [日志] 记录重连行为，方便排查
+            console.log(`[RoomHandler] Reconnect Attempt: User ${cleanName}, ${oldSocketId} -> ${socket.id}`);
+
             existingPlayer.id = socket.id;
             existingPlayer.online = true; 
 
@@ -131,7 +135,11 @@ module.exports = (io, socket, rooms) => {
                 room.destroyTimer = null;
             }
 
-            if (room.gameManager) room.gameManager.reconnectPlayer(oldSocketId, socket.id);
+            // [关键修改] 传递 oldSocketId 给 GameManager 执行数据迁移
+            if (room.gameManager) {
+                const success = room.gameManager.reconnectPlayer(oldSocketId, socket.id);
+                if (!success) console.warn(`[RoomHandler] GameManager Reconnect failed for ${cleanName}`);
+            }
             if (room.seatManager) room.seatManager.reconnectPlayer(oldSocketId, socket.id);
 
             socket.join(roomId);

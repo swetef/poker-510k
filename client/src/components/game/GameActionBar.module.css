@@ -31,6 +31,76 @@
     z-index: 101;
 }
 
+/* [新增] 观战模式控制条 */
+.spectatorGroup {
+    /* 继承基础样式，但不继承 border 和 background，我们在下面重写更极简的风格 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    
+    /* 极简半透明胶囊背景，只包裹文字部分 */
+    background: rgba(30, 39, 46, 0.85);
+    padding: 6px 15px;
+    border-radius: 50px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    backdrop-filter: blur(5px);
+    
+    pointer-events: auto;
+    z-index: 101;
+}
+
+.spectatorInfo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 14px;
+    font-weight: 500;
+    min-width: 100px;
+    justify-content: center;
+    /* 稍微给点垂直 padding 撑开高度 */
+    padding: 4px 0;
+}
+
+.spectatorName {
+    color: #f1c40f;
+    font-weight: bold;
+    font-size: 16px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+/* [修改] 纯箭头样式：完全去除背景，靠缩放和颜色反馈 */
+.spectatorBtn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.5); /* 默认稍暗 */
+    padding: 0;
+    width: 44px;  /* 加大点击区域 */
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); /* 弹性动画 */
+    border-radius: 50%;
+    
+    /* 负边距让箭头视觉上稍微“飞”出胶囊一点点（可选，这里先保持在流内） */
+}
+
+.spectatorBtn:hover {
+    background: rgba(255, 255, 255, 0.1); /* 极淡的圆形光晕 */
+    color: #f1c40f; /* 悬停变金色 */
+    transform: scale(1.2); /* 明显放大 */
+    text-shadow: 0 0 10px rgba(241, 196, 15, 0.5);
+}
+
+.spectatorBtn:active {
+    transform: scale(0.95);
+    color: #d4ac0d;
+}
+
 /* 模式切换按钮 */
 .btnModeSwitch {
     background: rgba(255,255,255,0.1);
