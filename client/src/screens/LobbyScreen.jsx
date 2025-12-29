@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Sparkles, Award, ChevronLeft } from 'lucide-react';
 import css from './LobbyScreen.module.css'; 
 import { useGame } from '../context/GameContext.jsx';
-import { RoomSettingsForm } from '../components/game/RoomSettingsForm.jsx';
+// [新增] 引入独立的设置弹窗组件
+import { SettingsModal } from '../components/modals/SettingsModal.jsx';
 
 export const LobbyScreen = () => {
     const { 
@@ -26,38 +27,16 @@ export const LobbyScreen = () => {
         handleUpdateConfig(newConfig);
     };
 
-    const renderSettingsModal = () => (
-        <div className={css.modalOverlay}>
-            <div className={css.modalContent} style={{textAlign:'left'}}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 20, borderBottom:'1px solid #eee', paddingBottom:10, width:'100%'}}>
-                    <div style={{display:'flex', alignItems:'center', gap:8, fontSize:18, fontWeight:'bold', color:'#2c3e50'}}>
-                        <Settings size={20}/> 房间规则设置
-                    </div>
-                    <button onClick={()=>setShowSettings(false)} style={{background:'none', border:'none', cursor:'pointer', padding:5}}>
-                        <X size={20} color="#999"/>
-                    </button>
-                </div>
-
-                <div style={{maxHeight: '60vh', overflowY:'auto', paddingRight: 5, width:'100%'}}>
-                    <RoomSettingsForm 
-                        config={roomConfig} 
-                        onChange={handleConfigChange} 
-                        readOnly={!amIHost} 
-                    />
-                </div>
-
-                <div style={{marginTop: 20, textAlign:'center', width:'100%'}}>
-                    <button className={css.primaryButton} style={{height: 50, fontSize: 16, marginTop:0}} onClick={() => setShowSettings(false)}>
-                        完成设置
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-
     return (
     <div className={css.lobbyContainer}>
-      {showSettings && renderSettingsModal()}
+      {/* [修改] 使用独立的设置弹窗组件 */}
+      <SettingsModal 
+          isOpen={showSettings} 
+          onClose={() => setShowSettings(false)}
+          config={roomConfig}
+          onChange={handleConfigChange}
+          readOnly={!amIHost}
+      />
 
       <div className={`${css.lobbyCard} mobile-layout-column`}>
           
@@ -66,14 +45,13 @@ export const LobbyScreen = () => {
             <div className={css.lobbyHeader}>
                 <div style={{display:'flex', alignItems:'center', gap: 10, flexWrap: 'wrap'}}>
                     
-                    {/* [修改] 退出按钮：改为向左的返回箭头，更加简洁 */}
                     <button 
                         onClick={handleLeaveRoom}
                         style={{
                             background: 'transparent',
                             border: '1px solid #e1e4e8', 
                             borderRadius: '8px', 
-                            padding: '6px 12px 6px 8px', // 左侧稍微少一点padding因为有箭头
+                            padding: '6px 12px 6px 8px', 
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             gap: 2,
                             cursor: 'pointer', 
@@ -126,7 +104,6 @@ export const LobbyScreen = () => {
                     </div>
 
                     {amIHost && (
-                        /* [修改] 设置按钮：纯齿轮图标，无背景，悬停旋转效果 */
                         <button 
                             onClick={() => setShowSettings(true)}
                             style={{
@@ -134,7 +111,7 @@ export const LobbyScreen = () => {
                                 border: 'none', 
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 cursor: 'pointer', 
-                                color: '#34495e', // 深色图标
+                                color: '#34495e', 
                                 padding: 8,
                                 transition: 'transform 0.3s ease'
                             }}

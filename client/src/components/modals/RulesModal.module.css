@@ -1,0 +1,121 @@
+.modalOverlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000; /* 最高层级 */
+    backdrop-filter: blur(5px);
+    padding: 20px;
+    animation: fadeIn 0.2s ease;
+    /* 允许点击穿透处理 */
+    pointer-events: auto;
+}
+
+.modalContent {
+    background: white;
+    width: 100%;
+    max-width: 500px;
+    max-height: 80vh;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    overflow: hidden;
+    cursor: default;
+}
+
+.modalHeader {
+    padding: 15px 20px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8f9fa;
+    flex-shrink: 0;
+}
+
+.closeBtn {
+    background: transparent;
+    border: none;
+    color: #95a5a6;
+    cursor: pointer;
+    padding: 5px;
+    display: flex;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.closeBtn:hover {
+    background: rgba(0,0,0,0.05);
+    color: #e74c3c;
+}
+
+.modalBody {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+    color: #34495e;
+    line-height: 1.6;
+    text-align: left;
+}
+
+.ruleSection {
+    margin-bottom: 20px;
+}
+
+.ruleSection h3 {
+    font-size: 16px;
+    color: #2c3e50;
+    margin-bottom: 10px;
+    border-left: 4px solid #27ae60;
+    padding-left: 10px;
+}
+
+.ruleSection p {
+    font-size: 14px;
+    color: #7f8c8d;
+    margin-bottom: 5px;
+}
+
+.ruleSection strong {
+    color: #2c3e50;
+}
+
+.modalFooter {
+    padding: 15px 20px;
+    border-top: 1px solid #eee;
+    text-align: center;
+    background: #fff;
+    flex-shrink: 0;
+}
+
+.confirmBtn {
+    background: #27ae60;
+    color: white;
+    border: none;
+    padding: 10px 30px;
+    border-radius: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+}
+
+.confirmBtn:hover {
+    background: #2ecc71;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(46, 204, 113, 0.3);
+}
+
+@keyframes popIn {
+    0% { transform: scale(0.95); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}

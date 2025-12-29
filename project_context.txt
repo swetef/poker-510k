@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/29 15:03:03
+Project Context Generated at 2025/12/29 15:55:59
 
 
 ================================================================================
@@ -152,9 +152,8 @@ FILE PATH: client\src\App.css
 FILE PATH: client\src\App.jsx
 ================================================================================
 import React from 'react';
-import { RefreshCw, AlertCircle, WifiOff } from 'lucide-react'; 
-// [修复] 修正导入路径，确保在 client/src/App.jsx 位置能正确引用
-import { useGame } from './context/GameContext'; // Vite 通常可以自动解析 .jsx，也可以显式写
+import { useGame } from './context/GameContext';
+import { LandscapeHint, DisconnectAlert } from './components/BaseUI';
 
 import { LoginScreen } from './screens/LoginScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
@@ -162,60 +161,15 @@ import { GameScreen } from './screens/GameScreen';
 import { DrawSeatScreen } from './screens/DrawSeatScreen';
 
 export default function App() {
-  const { gameState, isConnected } = useGame();
-
-  const renderLandscapeHint = () => (
-      <div className="landscape-hint">
-          <div className="phone-rotate-icon"></div>
-          <h3 style={{marginBottom: 10, fontSize: 18}}>建议使用横屏游玩</h3>
-          <p style={{fontSize: 14, opacity: 0.8, maxWidth: 250}}>
-              510K 需要较大的展示空间。<br/>
-              请旋转您的手机以获得最佳体验。
-          </p>
-          <button 
-            style={{marginTop: 20, padding: '8px 20px', background: 'rgba(255,255,255,0.2)', color:'white', border:'1px solid white'}}
-            onClick={(e) => { e.currentTarget.parentElement.style.display = 'none'; }}
-          >
-              我非要竖屏玩
-          </button>
-      </div>
-  );
-
-  // [修改] 优化后的断线重连提示
-  const renderDisconnectAlert = () => (
-      !isConnected && (
-          <div style={{
-              position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
-              background: 'rgba(231, 76, 60, 0.95)', color: 'white', padding: '8px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-              boxShadow: '0 2px 10px rgba(0,0,0,0.2)', backdropFilter: 'blur(5px)',
-              fontSize: 13, fontWeight: '500'
-          }}>
-              <WifiOff size={16} className="pulse-icon" />
-              <span>网络连接已断开，正在尝试自动恢复...</span>
-              
-              {/* 如果自动重连太久没反应，给个手动按钮 */}
-              <button 
-                onClick={() => window.location.reload()} 
-                style={{
-                    background: 'white', color: '#e74c3c', border: 'none', 
-                    borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 'bold',
-                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-                    marginLeft: 10
-                }}
-              >
-                  <RefreshCw size={12} /> 立即刷新
-              </button>
-              <style>{`.pulse-icon { animation: pulse 1.5s infinite; } @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }`}</style>
-          </div>
-      )
-  );
+  const { gameState } = useGame();
 
   return (
     <>
-      {renderDisconnectAlert()}
-      {renderLandscapeHint()}
+      {/* 系统级全局提示组件 */}
+      <DisconnectAlert />
+      <LandscapeHint />
       
+      {/* 核心页面路由状态机 */}
       {gameState === 'LOGIN' && <LoginScreen />}
       
       {gameState === 'LOBBY' && <LobbyScreen />}
@@ -230,13 +184,12 @@ export default function App() {
 ================================================================================
 FILE PATH: client\src\components\BaseUI.jsx
 ================================================================================
-// BaseUI.jsx 现在主要作为组件导出入口
-// 具体的组件逻辑已经拆分到 ui/ 目录下
-// 这样可以大幅减少单个文件的长度，便于 AI 阅读和维护
 
 export { Card, MiniCard } from './ui/Card.jsx';
 export { GameLogPanel } from './ui/GameLogPanel.jsx';
 export { PlayerAvatar } from './ui/PlayerAvatar.jsx';
+export { LandscapeHint, DisconnectAlert } from './ui/SystemHints.jsx';
+
 
 ================================================================================
 FILE PATH: client\src\components\CountDownTimer.jsx
@@ -2762,6 +2715,335 @@ FILE PATH: client\src\components\game\TableCenterArea.module.css
 }
 
 ================================================================================
+FILE PATH: client\src\components\modals\RulesModal.jsx
+================================================================================
+import React from 'react';
+import { BookOpen, X, Trophy, AlertTriangle, Zap } from 'lucide-react';
+import css from './RulesModal.module.css';
+
+export const RulesModal = ({ isOpen, onClose }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className={css.modalOverlay} onClick={onClose}>
+            <div className={css.modalContent} onClick={e => e.stopPropagation()}>
+                <div className={css.modalHeader}>
+                    <div style={{display:'flex', alignItems:'center', gap:8}}>
+                        <BookOpen size={20} color="#2c3e50"/>
+                        <span style={{fontSize: 18, fontWeight: 'bold', color:'#2c3e50'}}>游戏规则说明</span>
+                    </div>
+                    <button className={css.closeBtn} onClick={onClose}>
+                        <X size={20} />
+                    </button>
+                </div>
+                
+                <div className={css.modalBody}>
+                    <div className={css.ruleSection}>
+                        <h3 style={{color: '#2980b9'}}><Trophy size={16} style={{marginRight:5, verticalAlign:'text-bottom'}}/> 核心目标</h3>
+                        <p>这是一款<strong>抓分</strong>游戏，而非单纯的跑得快。</p>
+                        <p><strong>分牌：</strong><span style={{color:'#c0392b', fontWeight:'bold'}}>5</span> (5分)、<span style={{color:'#c0392b', fontWeight:'bold'}}>10</span> (10分)、<span style={{color:'#c0392b', fontWeight:'bold'}}>K</span> (10分)。</p>
+                        <p><strong>抓分机制：</strong>当一轮出牌结束（其他人均不要）时，桌面上的所有分牌归<strong>本轮赢家</strong>所有。</p>
+                        <div style={{background:'#f0f9ff', padding:'8px', borderRadius:'6px', fontSize:'13px', color:'#34495e', marginTop:'5px'}}>
+                            💡 <strong>最终得分</strong> = 桌面抓分 + 排名赏罚 + (对手剩余手牌分)
+                        </div>
+                    </div>
+
+                    <div className={css.ruleSection}>
+                        <h3 style={{color: '#e67e22'}}><AlertTriangle size={16} style={{marginRight:5, verticalAlign:'text-bottom'}}/> 牌型与大小</h3>
+                        <p><strong>点数：</strong>3 &lt; ... &lt; K &lt; A &lt; 2 &lt; 小王 &lt; 大王</p>
+                        <p><strong>普通牌型：</strong>单张、对子、三张、连对、飞机(三顺)。</p>
+                        
+                        <div style={{marginTop:'8px', borderLeft:'3px solid #e67e22', paddingLeft:'10px'}}>
+                            <div style={{fontWeight:'bold', marginBottom:'4px', color:'#d35400'}}>💣 炸弹等级 (从大到小)</div>
+                            <ul style={{margin:0, paddingLeft:'20px', fontSize:'13px', color:'#555'}}>
+
+                                <li><strong>至尊长炸：</strong>所有同点数牌齐出 (如4副牌16张3)。</li>
+                                <li><strong>天王炸：</strong>所有王牌齐出 (如4副牌需8张王)，无敌。</li>
+                                <li><strong>普通炸弹：</strong>4张起炸。<strong>张数越多越大</strong>；张数相同比点数。</li>
+                                <li><strong>纯色 510K：</strong>同花色的 5、10、K。</li>
+                                <li><strong>杂色 510K：</strong>花色不同的 5、10、K (最小炸弹)。</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div className={css.ruleSection}>
+                        <h3 style={{color: '#27ae60'}}><Zap size={16} style={{marginRight:5, verticalAlign:'text-bottom'}}/> 结算与惩罚</h3>
+                        <p><strong>接风规则：</strong>若上家出完牌且其他人都要不起，则由<strong>上家的队友</strong>(组队时)或<strong>下家</strong>(个人时)获得出牌权。</p>
+                        <p><strong>手牌罚分：</strong>游戏结束时，未出完牌的玩家，手中剩余的分牌将被没收，归<strong>头游</strong>(或赢家队伍)所有。</p>
+                        <p><strong>排名赏罚：</strong>启用后，末位玩家需向头游玩家进贡分数 (队友之间免罚)。</p>
+                    </div>
+                </div>
+                
+                <div className={css.modalFooter}>
+                    <button className={css.confirmBtn} onClick={onClose}>我已了解</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+================================================================================
+FILE PATH: client\src\components\modals\RulesModal.module.css
+================================================================================
+.modalOverlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000; /* 最高层级 */
+    backdrop-filter: blur(5px);
+    padding: 20px;
+    animation: fadeIn 0.2s ease;
+    /* 允许点击穿透处理 */
+    pointer-events: auto;
+}
+
+.modalContent {
+    background: white;
+    width: 100%;
+    max-width: 500px;
+    max-height: 80vh;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    overflow: hidden;
+    cursor: default;
+}
+
+.modalHeader {
+    padding: 15px 20px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8f9fa;
+    flex-shrink: 0;
+}
+
+.closeBtn {
+    background: transparent;
+    border: none;
+    color: #95a5a6;
+    cursor: pointer;
+    padding: 5px;
+    display: flex;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.closeBtn:hover {
+    background: rgba(0,0,0,0.05);
+    color: #e74c3c;
+}
+
+.modalBody {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+    color: #34495e;
+    line-height: 1.6;
+    text-align: left;
+}
+
+.ruleSection {
+    margin-bottom: 20px;
+}
+
+.ruleSection h3 {
+    font-size: 16px;
+    color: #2c3e50;
+    margin-bottom: 10px;
+    border-left: 4px solid #27ae60;
+    padding-left: 10px;
+}
+
+.ruleSection p {
+    font-size: 14px;
+    color: #7f8c8d;
+    margin-bottom: 5px;
+}
+
+.ruleSection strong {
+    color: #2c3e50;
+}
+
+.modalFooter {
+    padding: 15px 20px;
+    border-top: 1px solid #eee;
+    text-align: center;
+    background: #fff;
+    flex-shrink: 0;
+}
+
+.confirmBtn {
+    background: #27ae60;
+    color: white;
+    border: none;
+    padding: 10px 30px;
+    border-radius: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+}
+
+.confirmBtn:hover {
+    background: #2ecc71;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(46, 204, 113, 0.3);
+}
+
+@keyframes popIn {
+    0% { transform: scale(0.95); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+================================================================================
+FILE PATH: client\src\components\modals\SettingsModal.jsx
+================================================================================
+import React from 'react';
+import { Settings, X } from 'lucide-react';
+import { RoomSettingsForm } from '../game/RoomSettingsForm.jsx';
+import css from './SettingsModal.module.css';
+
+export const SettingsModal = ({ isOpen, onClose, config, onChange, readOnly }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className={css.modalOverlay}>
+            <div className={css.modalContent}>
+                <div className={css.modalHeader}>
+                    <div style={{display:'flex', alignItems:'center', gap:8, fontSize:18, fontWeight:'bold', color:'#2c3e50'}}>
+                        <Settings size={20}/> 房间规则设置
+                    </div>
+                    <button onClick={onClose} className={css.closeBtn}>
+                        <X size={20} color="#999"/>
+                    </button>
+                </div>
+
+                <div className={css.modalBody}>
+                    <RoomSettingsForm 
+                        config={config} 
+                        onChange={onChange} 
+                        readOnly={readOnly} 
+                    />
+                </div>
+
+                <div className={css.modalFooter}>
+                    <button className={css.primaryButton} onClick={onClose}>
+                        完成设置
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+================================================================================
+FILE PATH: client\src\components\modals\SettingsModal.module.css
+================================================================================
+.modalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 99;
+    backdrop-filter: blur(8px);
+    pointer-events: auto;
+}
+
+.modalContent {
+    background: white;
+    padding: 30px;
+    border-radius: 24px;
+    text-align: center;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+    animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    width: 90%;
+    max-width: 500px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+}
+
+.modalHeader {
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    margin-bottom: 20px; 
+    border-bottom: 1px solid #eee; 
+    padding-bottom: 10px; 
+    width: 100%;
+    flex-shrink: 0;
+}
+
+.closeBtn {
+    background: none; 
+    border: none; 
+    cursor: pointer; 
+    padding: 5px;
+}
+
+.modalBody {
+    max-height: 60vh; 
+    overflow-y: auto; 
+    padding-right: 5px; 
+    width: 100%;
+    flex: 1;
+    text-align: left;
+}
+
+.modalFooter {
+    margin-top: 20px; 
+    text-align: center; 
+    width: 100%;
+    flex-shrink: 0;
+}
+
+.primaryButton {
+    height: 50px; 
+    font-size: 16px; 
+    margin-top: 0;
+    width: 100%;
+    background: #2c3e50;
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.2s;
+    box-shadow: 0 10px 25px rgba(44, 62, 80, 0.25);
+}
+
+.primaryButton:hover {
+    background: #34495e;
+}
+
+@keyframes popIn {
+    0% { transform: scale(0.8); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+================================================================================
 FILE PATH: client\src\components\ScoreTable.jsx
 ================================================================================
 import React from 'react';
@@ -3445,6 +3727,72 @@ FILE PATH: client\src\components\ui\PlayerAvatar.module.css
     gap: 3px;
     margin-top: 1px;
 }
+
+================================================================================
+FILE PATH: client\src\components\ui\SystemHints.jsx
+================================================================================
+import React from 'react';
+import { RefreshCw, WifiOff } from 'lucide-react';
+import { useGame } from '../../context/GameContext';
+
+/**
+ * 横屏引导组件
+ * 纯展示组件，自身管理简单的显隐交互
+ */
+export const LandscapeHint = () => {
+    return (
+        <div className="landscape-hint">
+            <div className="phone-rotate-icon"></div>
+            <h3 style={{marginBottom: 10, fontSize: 18}}>建议使用横屏游玩</h3>
+            <p style={{fontSize: 14, opacity: 0.8, maxWidth: 250}}>
+                510K 需要较大的展示空间。<br/>
+                请旋转您的手机以获得最佳体验。
+            </p>
+            <button 
+                style={{marginTop: 20, padding: '8px 20px', background: 'rgba(255,255,255,0.2)', color:'white', border:'1px solid white'}}
+                onClick={(e) => { e.currentTarget.parentElement.style.display = 'none'; }}
+            >
+                我非要竖屏玩
+            </button>
+        </div>
+    );
+};
+
+/**
+ * 断线重连提示组件
+ * 直接消费 GameContext，即插即用
+ */
+export const DisconnectAlert = () => {
+    const { isConnected } = useGame();
+
+    if (isConnected) return null;
+
+    return (
+        <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+            background: 'rgba(231, 76, 60, 0.95)', color: 'white', padding: '8px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+            boxShadow: '0 2px 10px rgba(0,0,0,0.2)', backdropFilter: 'blur(5px)',
+            fontSize: 13, fontWeight: '500'
+        }}>
+            <WifiOff size={16} className="pulse-icon" />
+            <span>网络连接已断开，正在尝试自动恢复...</span>
+            
+            <button 
+                onClick={() => window.location.reload()} 
+                style={{
+                    background: 'white', color: '#e74c3c', border: 'none', 
+                    borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 'bold',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                    marginLeft: 10
+                }}
+            >
+                <RefreshCw size={12} /> 立即刷新
+            </button>
+            <style>{`.pulse-icon { animation: pulse 1.5s infinite; } @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }`}</style>
+        </div>
+    );
+};
 
 ================================================================================
 FILE PATH: client\src\context\GameContext.jsx
@@ -5449,7 +5797,8 @@ import React, { useState } from 'react';
 import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Sparkles, Award, ChevronLeft } from 'lucide-react';
 import css from './LobbyScreen.module.css'; 
 import { useGame } from '../context/GameContext.jsx';
-import { RoomSettingsForm } from '../components/game/RoomSettingsForm.jsx';
+// [新增] 引入独立的设置弹窗组件
+import { SettingsModal } from '../components/modals/SettingsModal.jsx';
 
 export const LobbyScreen = () => {
     const { 
@@ -5473,38 +5822,16 @@ export const LobbyScreen = () => {
         handleUpdateConfig(newConfig);
     };
 
-    const renderSettingsModal = () => (
-        <div className={css.modalOverlay}>
-            <div className={css.modalContent} style={{textAlign:'left'}}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 20, borderBottom:'1px solid #eee', paddingBottom:10, width:'100%'}}>
-                    <div style={{display:'flex', alignItems:'center', gap:8, fontSize:18, fontWeight:'bold', color:'#2c3e50'}}>
-                        <Settings size={20}/> 房间规则设置
-                    </div>
-                    <button onClick={()=>setShowSettings(false)} style={{background:'none', border:'none', cursor:'pointer', padding:5}}>
-                        <X size={20} color="#999"/>
-                    </button>
-                </div>
-
-                <div style={{maxHeight: '60vh', overflowY:'auto', paddingRight: 5, width:'100%'}}>
-                    <RoomSettingsForm 
-                        config={roomConfig} 
-                        onChange={handleConfigChange} 
-                        readOnly={!amIHost} 
-                    />
-                </div>
-
-                <div style={{marginTop: 20, textAlign:'center', width:'100%'}}>
-                    <button className={css.primaryButton} style={{height: 50, fontSize: 16, marginTop:0}} onClick={() => setShowSettings(false)}>
-                        完成设置
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-
     return (
     <div className={css.lobbyContainer}>
-      {showSettings && renderSettingsModal()}
+      {/* [修改] 使用独立的设置弹窗组件 */}
+      <SettingsModal 
+          isOpen={showSettings} 
+          onClose={() => setShowSettings(false)}
+          config={roomConfig}
+          onChange={handleConfigChange}
+          readOnly={!amIHost}
+      />
 
       <div className={`${css.lobbyCard} mobile-layout-column`}>
           
@@ -5513,14 +5840,13 @@ export const LobbyScreen = () => {
             <div className={css.lobbyHeader}>
                 <div style={{display:'flex', alignItems:'center', gap: 10, flexWrap: 'wrap'}}>
                     
-                    {/* [修改] 退出按钮：改为向左的返回箭头，更加简洁 */}
                     <button 
                         onClick={handleLeaveRoom}
                         style={{
                             background: 'transparent',
                             border: '1px solid #e1e4e8', 
                             borderRadius: '8px', 
-                            padding: '6px 12px 6px 8px', // 左侧稍微少一点padding因为有箭头
+                            padding: '6px 12px 6px 8px', 
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             gap: 2,
                             cursor: 'pointer', 
@@ -5573,7 +5899,6 @@ export const LobbyScreen = () => {
                     </div>
 
                     {amIHost && (
-                        /* [修改] 设置按钮：纯齿轮图标，无背景，悬停旋转效果 */
                         <button 
                             onClick={() => setShowSettings(true)}
                             style={{
@@ -5581,7 +5906,7 @@ export const LobbyScreen = () => {
                                 border: 'none', 
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 cursor: 'pointer', 
-                                color: '#34495e', // 深色图标
+                                color: '#34495e', 
                                 padding: 8,
                                 transition: 'transform 0.3s ease'
                             }}
@@ -6008,10 +6333,11 @@ FILE PATH: client\src\screens\LobbyScreen.module.css
 FILE PATH: client\src\screens\LoginScreen.jsx
 ================================================================================
 import React, { useState, useEffect } from 'react'; 
-// [修改] 引入 BookOpen 和 X 图标
-import { User, Monitor, RefreshCw, Plus, LogIn, Maximize, Minimize, Wifi, WifiOff, History, BookOpen, X, Trophy, AlertTriangle, Zap } from 'lucide-react'; 
+import { User, Monitor, RefreshCw, Plus, LogIn, Maximize, Minimize, Wifi, WifiOff, History, BookOpen } from 'lucide-react'; 
 import { useGame } from '../context/GameContext.jsx';
 import { RoomSettingsForm } from '../components/game/RoomSettingsForm.jsx';
+// [新增] 引入独立的规则弹窗组件
+import { RulesModal } from '../components/modals/RulesModal.jsx';
 
 import css from './LoginScreen.module.css';
 
@@ -6030,7 +6356,6 @@ export const LoginScreen = () => {
     } = useGame();
 
     const [isFullScreen, setIsFullScreen] = useState(false);
-    // [新增] 控制规则弹窗的状态
     const [showRules, setShowRules] = useState(false);
     
     const [lastSession, setLastSession] = useState(null);
@@ -6102,68 +6427,10 @@ export const LoginScreen = () => {
         borderColor: isConnected ? '#e1e4e8' : '#fadbd8'
     };
 
-    // [新增] 渲染规则弹窗
-    const renderRulesModal = () => (
-        <div className={css.modalOverlay} onClick={() => setShowRules(false)}>
-            <div className={css.modalContent} onClick={e => e.stopPropagation()}>
-                <div className={css.modalHeader}>
-                    <div style={{display:'flex', alignItems:'center', gap:8}}>
-                        <BookOpen size={20} color="#2c3e50"/>
-                        <span style={{fontSize: 18, fontWeight: 'bold', color:'#2c3e50'}}>游戏规则说明</span>
-                    </div>
-                    <button className={css.closeBtn} onClick={() => setShowRules(false)}>
-                        <X size={20} />
-                    </button>
-                </div>
-                
-                <div className={css.modalBody}>
-                    <div className={css.ruleSection}>
-                        <h3 style={{color: '#2980b9'}}><Trophy size={16} style={{marginRight:5, verticalAlign:'text-bottom'}}/> 核心目标</h3>
-                        <p>这是一款<strong>抓分</strong>游戏，而非单纯的跑得快。</p>
-                        <p><strong>分牌：</strong><span style={{color:'#c0392b', fontWeight:'bold'}}>5</span> (5分)、<span style={{color:'#c0392b', fontWeight:'bold'}}>10</span> (10分)、<span style={{color:'#c0392b', fontWeight:'bold'}}>K</span> (10分)。</p>
-                        <p><strong>抓分机制：</strong>当一轮出牌结束（其他人均不要）时，桌面上的所有分牌归<strong>本轮赢家</strong>所有。</p>
-                        <div style={{background:'#f0f9ff', padding:'8px', borderRadius:'6px', fontSize:'13px', color:'#34495e', marginTop:'5px'}}>
-                            💡 <strong>最终得分</strong> = 桌面抓分 + 排名赏罚 + (对手剩余手牌分)
-                        </div>
-                    </div>
-
-                    <div className={css.ruleSection}>
-                        <h3 style={{color: '#e67e22'}}><AlertTriangle size={16} style={{marginRight:5, verticalAlign:'text-bottom'}}/> 牌型与大小</h3>
-                        <p><strong>点数：</strong>3 &lt; ... &lt; K &lt; A &lt; 2 &lt; 小王 &lt; 大王</p>
-                        <p><strong>普通牌型：</strong>单张、对子、三张、连对、飞机(三顺)。</p>
-                        
-                        <div style={{marginTop:'8px', borderLeft:'3px solid #e67e22', paddingLeft:'10px'}}>
-                            <div style={{fontWeight:'bold', marginBottom:'4px', color:'#d35400'}}>💣 炸弹等级 (从大到小)</div>
-                            <ul style={{margin:0, paddingLeft:'20px', fontSize:'13px', color:'#555'}}>
-
-                                <li><strong>至尊长炸：</strong>所有同点数牌齐出 (如4副牌16张3)。</li>
-                                <li><strong>天王炸：</strong>所有王牌齐出 (如4副牌需8张王)，无敌。</li>
-                                <li><strong>普通炸弹：</strong>4张起炸。<strong>张数越多越大</strong>；张数相同比点数。</li>
-                                <li><strong>纯色 510K：</strong>同花色的 5、10、K。</li>
-                                <li><strong>杂色 510K：</strong>花色不同的 5、10、K (最小炸弹)。</li>
-                            </ul>
-                        </div>
-                    </div>
-
-                    <div className={css.ruleSection}>
-                        <h3 style={{color: '#27ae60'}}><Zap size={16} style={{marginRight:5, verticalAlign:'text-bottom'}}/> 结算与惩罚</h3>
-                        <p><strong>接风规则：</strong>若上家出完牌且其他人都要不起，则由<strong>上家的队友</strong>(组队时)或<strong>下家</strong>(个人时)获得出牌权。</p>
-                        <p><strong>手牌罚分：</strong>游戏结束时，未出完牌的玩家，手中剩余的分牌将被没收，归<strong>头游</strong>(或赢家队伍)所有。</p>
-                        <p><strong>排名赏罚：</strong>启用后，末位玩家需向头游玩家进贡分数 (队友之间免罚)。</p>
-                    </div>
-                </div>
-                
-                <div className={css.modalFooter}>
-                    <button className={css.confirmBtn} onClick={() => setShowRules(false)}>我已了解</button>
-                </div>
-            </div>
-        </div>
-    );
-
     return (
         <div className={css.container}>
-            {/* [新增] 规则弹窗渲染 */}
-            {showRules && renderRulesModal()}
+            {/* [修改] 使用独立的规则组件，代码更整洁 */}
+            <RulesModal isOpen={showRules} onClose={() => setShowRules(false)} />
 
             <div className={`${css.loginCard} mobile-layout-column`}>
                 
@@ -6193,7 +6460,6 @@ export const LoginScreen = () => {
                                 <span>{isFullScreen ? '退出' : '全屏'}</span>
                             </button>
                             
-                            {/* [新增] 规则说明按钮 */}
                             <button onClick={() => setShowRules(true)} className={css.rulesBtn}>
                                 <BookOpen size={14}/>
                                 <span>规则</span>
@@ -7662,181 +7928,241 @@ FILE PATH: server\game\BotLogic.js
 ================================================================================
 const CardRules = require('./CardRules');
 
+/**
+ * BotLogic - 游戏机器人与托管智能核心
+ * 包含：合法牌型查找、估值排序、战术决策
+ */
 const BotLogic = {
-    WEIGHTS: {
-        BREAK_BOMB_PENALTY: 100, // 拆炸弹惩罚(Bot决策用)
-        PLAY_TRASH_BONUS: 10,    // 出废牌奖励(Bot决策用)
+
+    /**
+     * [核心大脑] 决定出哪一手牌
+     * @param {Array} hand 手牌 (已排序)
+     * @param {Array} lastPlayedCards 上家出的牌
+     * @param {Number} deckCount 牌副数
+     * @param {Object} context 战局上下文 { mode: 'SMART'|'THRIFTY', pendingScore: 0, isTeammate: boolean }
+     * @returns {Array|null} 返回要出的牌数组，null 代表不要
+     */
+    decideMove: (hand, lastPlayedCards, deckCount, context = {}) => {
+        // 1. 获取所有符合规则的候选牌型，并按基础损耗(cost)排序
+        // 候选列表已由 getSortedHints 过滤了“为了出牌而拆炸弹”等极高Cost的选项
+        const candidates = BotLogic.getSortedHints(hand, lastPlayedCards, deckCount);
+        
+        // 如果没有合法出牌，直接过
+        if (!candidates || candidates.length === 0) return null;
+
+        // 默认选择 Cost 最小（即最不心疼）的一手
+        let bestMove = candidates[0];
+        const bestAnalysis = CardRules.analyze(bestMove, deckCount);
+
+        // 2. 引入战术层 (Strategy Layer) 进行过滤
+        const { isTeammate, pendingScore, mode } = context;
+        const isFreePlay = (!lastPlayedCards || lastPlayedCards.length === 0);
+
+        // --- 战术 A: 绝杀检测 ---
+        // 如果最好的一手牌打出去就赢了，无视所有保留逻辑，直接出！
+        if (bestMove.length === hand.length) {
+            return bestMove;
+        }
+
+        // --- 战术 B: 队友保护机制 (Teammate Guard) ---
+        if (!isFreePlay && isTeammate) {
+            const lastAnalysis = CardRules.analyze(lastPlayedCards, deckCount);
+            
+            // 如果队友出了炸弹，除非我能绝杀，否则坚决不炸队友
+            if (lastAnalysis.level > 0) return null;
+
+            // 如果队友出了大牌 (A, 2, 王)，默认他想上手，我不挡路
+            // (除非我有非常好的机会且不伤牌型，或者我快赢了)
+            if (lastAnalysis.val >= 14) {
+                // 如果我需要拆牌或者用炸弹才能管，那就PASS
+                if (bestAnalysis.level > 0 || bestMove.length > 1) return null;
+            }
+        }
+
+        // --- 战术 C: 模式与贪婪 (Aggression) ---
+        
+        // 躺平模式：只要不是绝杀，一律不要 (用于挂机)
+        if (mode === 'AFK') return null;
+
+        // 省钱模式：如果桌上没分，且需要用炸弹管，那就PASS，省下炸弹
+        if (mode === 'THRIFTY') {
+            if (bestAnalysis.level > 0 && pendingScore < 50) {
+                // 但如果这手炸弹是我最后几张牌，还是炸出去赢比较好
+                if (hand.length > 10) return null;
+            }
+        }
+
+        // 智能模式 (SMART)：根据分数动态调整
+        // 如果桌上分数极高 (>200)，即使稍微拆点牌或者炸一下也值得
+        if (pendingScore >= 200) {
+            // 可以在 candidates 里找一个最大的或者必胜的（当前逻辑简化为：允许出Cost稍高的牌）
+            // 但这里我们简单处理：只要有牌出就行
+        } else {
+            // 分数不高时，如果 BestMove 是炸弹，且上家不是炸弹（即我在用炸弹管散牌），慎重！
+            if (bestAnalysis.level > 0 && lastPlayedCards.length > 0) {
+                const lastLevel = CardRules.analyze(lastPlayedCards, deckCount).level || 0;
+                if (lastLevel === 0) {
+                    // 用炸弹管散牌？
+                    // 除非我手牌很好(剩余<10)，或者炸弹很多，否则保留
+                    if (hand.length > 10) return null;
+                }
+            }
+        }
+
+        return bestMove;
     },
 
     /**
-     * [核心优化] 获取经过智能排序的提示列表
-     * 优化点：引入 candidate 对象缓存 analyze 结果，避免重复计算，性能提升约 300%
+     * 获取经过智能排序的提示列表
      */
-    getSortedHints: (hand, lastPlayedCards, deckCount, context = {}) => {
-        const { mode = 'SMART', isTeammate = false, pendingScore = 0 } = context;
-
-        // --- 策略前置拦截 (躺平模式) ---
-        if (mode === 'AFK' && lastPlayedCards && lastPlayedCards.length > 0) {
-            return [];
-        }
-
+    getSortedHints: (hand, lastPlayedCards, deckCount = 2) => {
         // 1. 获取所有合法解
         const solutions = BotLogic.findAllSolutions(hand, lastPlayedCards, deckCount);
         if (!solutions || solutions.length === 0) return [];
 
-        // [优化] 预先分析并缓存结果，后续步骤直接使用缓存的 analysis
-        let candidates = solutions.map(sol => ({
-            cards: sol,
-            analysis: CardRules.analyze(sol, deckCount),
-            cost: 0
-        }));
-
-        // 2. 过滤阶段 (基于缓存的 analysis)
-        candidates = candidates.filter(item => {
-            const { type, level } = item.analysis;
-
-            // 过滤掉 510K (托管/Bot 不自动打出 510K，除非是绝杀或者为了凑分，这里简化处理)
-            if (type === '510K_PURE' || type === '510K_MIXED') return false;
-
-            const isBomb = level > 0;
-            const isKillShot = hand.length === item.cards.length; // 是否绝杀(出完即赢)
-
-            // 模式1: 智能模式 (默认) - 队友出的牌，不用炸弹管，除非是绝杀
-            if (mode === 'SMART' && isTeammate && isBomb) {
-                // [优化] 如果这手牌出完就赢了(绝杀)，允许炸队友
-                if (!isKillShot) {
-                    return false; 
-                }
-            }
-
-            // 模式2: 省钱模式 - 场上分数不足 50 分，不用炸弹管，除非是绝杀
-            // [优化] 阈值从 0 提升到 50
-            if (mode === 'THRIFTY' && pendingScore < 50 && isBomb) {
-                // 如果是绝杀，为了赢可以破例
-                if (!isKillShot) {
-                    // 如果是首出(lastPlayedCards为空)，通常允许出炸弹；这里限定为管牌阶段
-                    if (lastPlayedCards && lastPlayedCards.length > 0) {
-                        return false;
-                    }
-                }
-            }
-
-            return true;
-        });
-
-        if (candidates.length === 0) return [];
-
-        // 3. 预分析手牌中的炸弹（用于判断是否拆了炸弹）
-        // [优化] 这里的 findAllBombsInHand 也经过了重写，效率更高
+        // 预分析手牌中的炸弹，用于后续计算拆牌惩罚
         const myBombs = BotLogic.findAllBombsInHand(hand, deckCount);
         const bombCardsSet = new Set();
         myBombs.forEach(b => b.cards.forEach(c => bombCardsSet.add(c)));
 
-        // 4. 分析上家牌型 (仅分析一次)
-        const lastAnalysis = (lastPlayedCards && lastPlayedCards.length > 0)
-            ? CardRules.analyze(lastPlayedCards, deckCount)
-            : null;
-        const lastIsBomb = lastAnalysis ? lastAnalysis.level > 0 : false;
-
-        // 5. 统计手牌点数 (用于识别废牌)
+        // 统计手牌点数频率 (用于判断是否是“拆对子/拆三张”)
         const handCounts = {};
         hand.forEach(c => {
             const p = CardRules.getPoint(c);
             handCounts[p] = (handCounts[p] || 0) + 1;
         });
 
-        // 6. 计算 Cost (基于缓存)
+        // 预计算 analyze 结果，避免后续排序时重复计算
+        let candidates = solutions.map(sol => ({
+            cards: sol,
+            analysis: CardRules.analyze(sol, deckCount),
+            cost: 0
+        }));
+
+        // 2. 过滤基础不合理项
+        candidates = candidates.filter(item => {
+            const { type } = item.analysis;
+            if (type === 'INVALID') return false;
+            // 首出时不推荐主动打 510K (除非是为了跑牌，但一般510K算炸弹留着管牌)
+            if ((!lastPlayedCards || lastPlayedCards.length === 0) && (type === '510K_PURE' || type === '510K_MIXED')) {
+                 return false; 
+            }
+            return true;
+        });
+
+        if (candidates.length === 0) return [];
+
+        // 3. 分析上家牌型 (判断是否是管牌阶段)
+        const lastAnalysis = (lastPlayedCards && lastPlayedCards.length > 0)
+            ? CardRules.analyze(lastPlayedCards, deckCount)
+            : null;
+        const lastIsBomb = lastAnalysis ? lastAnalysis.level > 0 : false;
+
+        // 4. 核心评分逻辑 (Cost 越小越优先)
         candidates.forEach(item => {
             const { analysis, cards } = item;
             let cost = 0;
             
-            // --- A. 基础分 ---
+            // --- A. 基础分 (点数越小 Cost 越低) ---
             if (analysis.level > 0) {
-                // 炸弹：Level 权重 > Length 权重 > Value 权重
-                cost += analysis.level * 100000;
-                
-                if (analysis.type === 'BOMB_STD' || analysis.type === 'BOMB_MAX') {
-                    cost += analysis.len * 1000;
-                }
-                
+                // 炸弹惩罚：起手尽量不炸，保留实力
+                cost += analysis.level * 1000000; 
+                cost += analysis.len * 10000;
                 cost += analysis.val;
             } else {
-                // 普通牌：点数越小越好
                 cost += analysis.val;
             }
 
-            // --- B. 拆炸弹判断 ---
+            // --- B. 拆炸弹惩罚 (极高) ---
             const isMoveBomb = analysis.level > 0;
             if (!isMoveBomb) {
-                // 检查是否拆了炸弹
+                // 如果出的牌里包含了炸弹的组成牌，给予巨额惩罚
                 const breaksBomb = cards.some(c => bombCardsSet.has(c));
-                if (breaksBomb) {
-                    cost += 2000000; // Bot 严禁拆炸弹
-                }
+                if (breaksBomb) cost += 5000000; 
             }
 
-            // --- C. 炸弹压制判断 ---
-            if (isMoveBomb && !lastIsBomb && lastAnalysis) {
-                // 上家不是炸弹，我用炸弹管 -> 亏
-                if (hand.length === cards.length) cost = -9999999; // 绝杀，优先级最高
-                else cost += 1000; 
-            }
-
-            // --- D. 自由出牌 (首出) 偏好 ---
+            // --- C. 自由出牌 (First Play) 策略优化 ---
             if (!lastAnalysis) {
-                if (analysis.type === 'AIRPLANE') cost -= 200;
-                else if (analysis.type === 'LIANDUI') cost -= 150;
-                else if (analysis.type === 'TRIPLE') cost -= 100;
-                else if (analysis.type === 'PAIR') cost -= 50;
+                // 策略优先级：飞机 > 连对 > 纯废单张 > 纯对子 > 拆对单张 > ... > 炸弹
                 
-                // 单张逻辑细化 (废牌优先)
+                if (analysis.type === 'AIRPLANE') cost -= 8000; // 长牌难出，优先跑
+                else if (analysis.type === 'LIANDUI') cost -= 6000;
+                else if (analysis.type === 'TRIPLE') cost -= 1000; 
+                else if (analysis.type === 'PAIR') {
+                    // 如果手里正好只有2张，全部打出，优先级高
+                    if (handCounts[analysis.val] === 2) cost -= 2000;
+                    else cost += 500; // 拆三张/炸弹打对子，稍微惩罚
+                }
                 else if (analysis.type === 'SINGLE') {
                     const countInHand = handCounts[analysis.val] || 0;
                     if (countInHand === 1) {
-                        // 真正的废牌，Cost 比对子还低，优先打出
-                        cost -= 80;
+                        // [关键优化] 真正的单张废牌 (手里只有1张) -> 优先级大幅提升
+                        // 比普通对子更优先，旨在清理手中无法成型的牌
+                        cost -= 3000; 
+                    } else if (countInHand === 2) {
+                        // 拆对子打单张 -> 优先级低，不到万不得已不推荐
+                        cost += 2000;
+                    } else if (countInHand >= 3) {
+                        // 拆三张/炸弹打单张 -> 优先级极低
+                        cost += 3000;
                     }
                 }
-
-                // 炸弹尽量留到最后出
+                
+                // 炸弹如果不为了管牌，尽量留到最后
                 if (isMoveBomb) {
+                    cost += 9000000;
+                }
+            } else {
+                // --- 管牌阶段 (Beat It) ---
+                // 炸弹压制判断
+                if (isMoveBomb && !lastIsBomb) {
+                     // 对方不是炸弹，我用炸弹管 -> 除非绝杀(只剩这手牌)，否则尽量不炸
                     if (hand.length === cards.length) cost = -9999999;
-                    else cost += 8000; 
+                    else cost += 5000; 
                 }
             }
 
             item.cost = cost;
         });
 
-        // 7. 排序
+        // 5. 排序
         candidates.sort((a, b) => a.cost - b.cost);
 
-        // 返回纯卡牌数组
-        return candidates.map(item => item.cards);
-    },
-
-    // [决策入口]
-    decideMove: (hand, lastPlayedCards, deckCount, context = {}) => {
-        try {
-            // 如果只剩一手牌，直接梭哈
-            const analysis = CardRules.analyze(hand, deckCount);
-            if (analysis.type !== 'INVALID') {
-                if (!lastPlayedCards || lastPlayedCards.length === 0) return hand;
-                if (CardRules.canPlay(hand, lastPlayedCards, deckCount)) return hand;
+        // 6. [体验优化] 结果去重
+        // 比如手里有红桃3和黑桃3单张，Cost一样，没必要提示两次，只保留一个即可
+        const uniqueCandidates = [];
+        const seenKeys = new Set();
+        
+        candidates.forEach(c => {
+            const { type, val, len, level } = c.analysis;
+            // 炸弹不去重 (因为花色可能影响510K或凑同花)，普通牌型去重
+            if (level === 0) {
+                // 唯一标识：牌型_点数_长度
+                const key = `${type}_${val}_${len}`;
+                if (!seenKeys.has(key)) {
+                    seenKeys.add(key);
+                    uniqueCandidates.push(c);
+                }
+            } else {
+                uniqueCandidates.push(c);
             }
+        });
 
-            const solutions = BotLogic.getSortedHints(hand, lastPlayedCards, deckCount, context);
-            if (solutions.length === 0) return null;
-
-            // 取第一个最优解
-            return solutions[0];
-        } catch (e) {
-            console.error("[Bot Logic] decideMove error:", e);
-            return null;
-        }
+        return uniqueCandidates.map(i => i.cards);
     },
 
-    // [优化] 快速找出所有炸弹 (提取为独立核心方法，不再依赖 findAllSolutions)
+    /**
+     * [兜底策略] 获取手牌中最小的一张单牌
+     */
+    getFallbackMove: (hand) => {
+        if (!hand || hand.length === 0) return null;
+        // 按点数排序
+        const sortedHand = [...hand].sort((a,b) => CardRules.getPoint(a) - CardRules.getPoint(b));
+        // 返回最小的一张
+        return [sortedHand[0]];
+    },
+
+    // 辅助：快速找出所有炸弹
     findAllBombsInHand: (hand, deckCount) => {
         const grouped = {};
         const points = [];
@@ -7849,14 +8175,12 @@ const BotLogic = {
             grouped[p].push(c);
         });
         const uniquePoints = [...new Set(points)].sort((a, b) => a - b);
-
-        // 直接调用核心查找逻辑
+        
         return BotLogic.coreFindBombs(hand, grouped, uniquePoints, deckCount, 0, 0);
     },
 
     /**
-     * [核心] 炸弹查找算法
-     * 提取出来供 findAllSolutions 和 findAllBombsInHand 复用，避免重复分组代码
+     * [核心逻辑] 仅查找炸弹
      */
     coreFindBombs: (hand, grouped, uniquePoints, deckCount, minLevel = 0, minVal = 0) => {
         const bombList = [];
@@ -7882,9 +8206,7 @@ const BotLogic = {
                                 }
                             }
                         }
-                        if(foundPure) break;
                     }
-                    if(foundPure) break;
                 }
                 
                 if (!foundPure && minLevel <= 1) {
@@ -7897,15 +8219,12 @@ const BotLogic = {
         for (let p of uniquePoints) {
             const count = grouped[p].length;
             if (count >= 4) {
-                if (minLevel < 3 || (minLevel === 3 && p > minVal)) {
-                    // 判断是否是至尊长炸 (>= 4副牌的全部)
-                    const isMax = (count === deckCount * 4);
-                    const level = isMax ? 5 : 3;
-                    const type = isMax ? 'BOMB_MAX' : 'BOMB_STD';
-                    
-                    if (level > minLevel || (level === minLevel && p > minVal)) {
-                         bombList.push({ cards: grouped[p], level, val: p, type, len: count });
-                    }
+                const isMax = (count === deckCount * 4);
+                const level = isMax ? 5 : 3;
+                const type = isMax ? 'BOMB_MAX' : 'BOMB_STD';
+                
+                if (level > minLevel || (level === minLevel && p > minVal)) {
+                     bombList.push({ cards: grouped[p], level, val: p, type, len: count });
                 }
             }
         }
@@ -7942,50 +8261,78 @@ const BotLogic = {
 
             // --- 场景 1: 自由出牌 (First Play) ---
             if (!lastPlayedCards || lastPlayedCards.length === 0) {
-                // 1. 单张
-                if (uniquePoints.length > 0) solutions.push([grouped[uniquePoints[0]][0]]);
-                // 2. 对子
-                for (let p of uniquePoints) {
-                    if (grouped[p].length >= 2) {
-                        solutions.push(grouped[p].slice(0, 2));
+                // [优化] 引入“保护牌”与“自由牌”概念
+                // 1. 先找出所有炸弹/510K，这些牌尽量不拆
+                const bombs = BotLogic.coreFindBombs(hand, grouped, uniquePoints, deckCount, -1, -1);
+                const protectedCards = new Set();
+                bombs.forEach(b => b.cards.forEach(c => protectedCards.add(c)));
+
+                // 2. 识别“自由牌”（非保护牌）
+                const freeGrouped = {};
+                const freePoints = [];
+                hand.forEach(c => {
+                    if (!protectedCards.has(c)) {
+                        const p = CardRules.getPoint(c);
+                        if (!freeGrouped[p]) {
+                            freeGrouped[p] = [];
+                            freePoints.push(p);
+                        }
+                        freeGrouped[p].push(c);
+                    }
+                });
+                freePoints.sort((a, b) => a - b);
+
+                // --- 策略生成 (优先基于自由牌) ---
+                
+                // A. 连对 (在自由牌里找)
+                for(let i=0; i<freePoints.length-1; i++) {
+                    const p1 = freePoints[i];
+                    const p2 = freePoints[i+1];
+                    if (p2 === p1 + 1 && p2 < 15 && freeGrouped[p1].length >= 2 && freeGrouped[p2].length >= 2) {
+                         solutions.push([...freeGrouped[p1].slice(0,2), ...freeGrouped[p2].slice(0,2)]);
                     }
                 }
-                // 3. 三张
-                for (let p of uniquePoints) {
-                    if (grouped[p].length >= 3) {
-                        solutions.push(grouped[p].slice(0, 3));
+
+                // B. 飞机 (在自由牌里找)
+                for(let i=0; i<freePoints.length-1; i++) {
+                    const p1 = freePoints[i];
+                    const p2 = freePoints[i+1];
+                    if (p2 === p1 + 1 && p2 < 15 && freeGrouped[p1].length >= 3 && freeGrouped[p2].length >= 3) {
+                         solutions.push([...freeGrouped[p1].slice(0,3), ...freeGrouped[p2].slice(0,3)]);
                     }
+                }
+
+                // C. 三张 (自由牌)
+                for (let p of freePoints) {
+                    if (freeGrouped[p].length >= 3) {
+                        solutions.push(freeGrouped[p].slice(0, 3));
+                    }
+                }
+
+                // D. 对子 (自由牌)
+                for (let p of freePoints) {
+                    if (freeGrouped[p].length >= 2) {
+                        solutions.push(freeGrouped[p].slice(0, 2));
+                    }
+                }
+
+                // E. 单张 (所有自由牌的单张都可以出，这是废牌的主要来源)
+                for (let p of freePoints) {
+                     solutions.push([freeGrouped[p][0]]);
                 }
                 
-                // 4. 连对 (查找所有可能的2连对)
-                for(let i=0; i<uniquePoints.length-1; i++) {
-                    const p1 = uniquePoints[i];
-                    const p2 = uniquePoints[i+1];
-                    if (p2 === p1 + 1 && p2 < 15 && grouped[p1].length >= 2 && grouped[p2].length >= 2) {
-                         solutions.push([...grouped[p1].slice(0,2), ...grouped[p2].slice(0,2)]);
+                // F. 补充：如果自由牌方案很少，允许拆牌兜底
+                // (但会因为 Cost 高而被排在后面)
+                uniquePoints.forEach(p => {
+                    // 如果该点数不在自由牌里(即被保护了)，但也添加单张方案作为备选
+                    if (!freeGrouped[p]) {
+                         solutions.push([grouped[p][0]]);
                     }
-                }
+                });
 
-                // 5. 飞机 (查找所有可能的2连三张)
-                for(let i=0; i<uniquePoints.length-1; i++) {
-                    const p1 = uniquePoints[i];
-                    const p2 = uniquePoints[i+1];
-                    if (p2 === p1 + 1 && p2 < 15 && grouped[p1].length >= 3 && grouped[p2].length >= 3) {
-                         solutions.push([...grouped[p1].slice(0,3), ...grouped[p2].slice(0,3)]);
-                    }
-                }
-
-                // 6. 炸弹 (使用核心方法)
-                const bombs = BotLogic.coreFindBombs(hand, grouped, uniquePoints, deckCount, -1, -1);
+                // G. 炸弹 (起手也可以出炸弹)
                 bombs.forEach(b => solutions.push(b.cards));
                 
-                // 兜底：如果没找到合适的，把最小的几张单牌加入
-                if (solutions.length === 1 && solutions[0].length === 1) {
-                    for(let i=1; i<Math.min(uniquePoints.length, 3); i++) {
-                        solutions.push([grouped[uniquePoints[i]][0]]);
-                    }
-                }
-
                 return solutions;
             }
 
@@ -8088,11 +8435,6 @@ class BotManager {
 
         player.isAutoPlay = !player.isAutoPlay;
         
-        // [修改] 记忆模式：开启时保持上一次的选择，不再强制重置为 SMART
-        // if (player.isAutoPlay) {
-        //    player.autoPlayMode = 'SMART'; 
-        // }
-        
         // 如果当前正好轮到该玩家，且开启了托管，立即触发机器人逻辑
         if (this.game.gameState && 
             this.game.players[this.game.gameState.currentTurnIndex].id === playerId) {
@@ -8135,26 +8477,10 @@ class BotManager {
         // 如果是 AI，设置思考时间
         if (isAI && this.game.gameState.hands[currPlayer.id].length > 0) {
             
-            // [优化] 动态思考时间：牌越少越快，提升紧张感和响应速度
-            const handSize = this.game.gameState.hands[currPlayer.id].length;
-            let baseDelay = 1000;
-            let randomRange = 1000;
-
-            if (handSize <= 5) {
-                // 冲刺阶段：0.5s - 1.0s
-                baseDelay = 500;
-                randomRange = 500;
-            } else if (handSize <= 10) {
-                // 中后段：0.8s - 1.6s
-                baseDelay = 800;
-                randomRange = 800;
-            } else {
-                // 开局：1.0s - 2.0s
-                baseDelay = 1000;
-                randomRange = 1000;
-            }
-
-            const delay = baseDelay + Math.random() * randomRange;
+            // [性能优化] 极速出牌模式
+            // 将延迟压缩至 30ms。这几乎是人类感知的“瞬间”，
+            // 但保留了微小的 Node.js 事件循环缓冲，防止高并发下 socket 写入阻塞。
+            const delay = 30;
 
             this.timer = setTimeout(() => {
                 this.executeTurn(currPlayer);
@@ -8186,6 +8512,7 @@ class BotManager {
             const isNewRound = this.game.gameState.lastPlayedCards.length === 0;
             const cardsToBeat = isNewRound ? [] : this.game.gameState.lastPlayedCards;
 
+            // [性能敏感] 此处排序是必须的，decideMove 依赖有序输入
             const sortedHand = [...hand].sort((a,b) => CardRules.getPoint(a) - CardRules.getPoint(b));
             
             let cardsToPlay = null;
@@ -8208,7 +8535,7 @@ class BotManager {
             }
 
             try {
-                // 使用优化后的 BotLogic 决策
+                // [核心调用] 使用新的 decideMove
                 cardsToPlay = BotLogic.decideMove(sortedHand, cardsToBeat, this.game.config.deckCount, strategyContext);
             } catch (err) {
                 console.error("[Bot Error] Logic crashed:", err);
@@ -8234,6 +8561,7 @@ class BotManager {
                     this.game._broadcastUpdate(logText);
 
                     if (result.isRoundOver) {
+                        // [UI优化] 回合结束时给前端留3秒展示时间
                         setTimeout(() => {
                             if (!this.game.disposed) this.game._handleWin(result, botPlayer.id);
                         }, 3000);
@@ -8259,10 +8587,18 @@ class BotManager {
         }
     }
 
-    // 内部辅助：出一张最小的牌
+    // [优化] 内部辅助：出一张最小的牌
     _playMinCard(botPlayer, sortedHand) {
         if (this.game.disposed) return;
-        const minCard = [sortedHand[0]];
+        
+        // [架构修正] 恢复调用 BotLogic，确保逻辑分层统一。
+        const minCard = BotLogic.getFallbackMove(sortedHand);
+        
+        if (!minCard) {
+             this._forcePass(botPlayer);
+             return;
+        }
+
         const result = this.game.playCards(botPlayer.id, minCard);
         if (result.success) {
             if (!botPlayer.isBot) this.game.io.to(botPlayer.id).emit('hand_update', this.game.gameState.hands[botPlayer.id]);
@@ -8295,9 +8631,11 @@ class BotManager {
             this.game._broadcastUpdate(`${botPlayer.name}: 不要`);
         } else {
             console.error("[Bot Critical] Failed to pass turn:", result.error);
+            // 极罕见情况：无法过牌（例如已经是首出但没牌），强制推进
             this.game._advanceTurn();
             this.game._broadcastUpdate();
             this.game._resetTimer();
+            // [Fix] 修正为 this.checkAndRun()，保持与原代码一致
             this.checkAndRun();
         }
     }
@@ -8308,7 +8646,7 @@ module.exports = BotManager;
 ================================================================================
 FILE PATH: server\game\CardRules.js
 ================================================================================
-// 纯规则计算 (510K 逻辑、比大小)
+// 纯规则计算 (510K 逻辑、比大小、手牌操作)
 
 const CardRules = {
     // 1. 基础映射
@@ -8482,7 +8820,6 @@ const CardRules = {
         // Level 3: 普通炸弹
         if (uniquePoints.length === 1 && len >= 4) {
             if (len === deckCount * 4) {
-                 // [修复] 补全 len 字段
                  return { type: 'BOMB_MAX', val: points[0], len: len, level: 5 };
             }
             return { type: 'BOMB_STD', val: points[0], len: len, level: 3 };
@@ -8549,6 +8886,43 @@ const CardRules = {
         }
 
         return false;
+    },
+
+    // --- [新增] 手牌操作辅助方法 ---
+
+    /**
+     * 检查手牌中是否包含指定的一组牌
+     * @param {number[]} hand - 玩家当前手牌
+     * @param {number[]} cardsToCheck - 想要打出的牌
+     * @returns {boolean}
+     */
+    checkHandContains: (hand, cardsToCheck) => {
+        if (!hand || !Array.isArray(hand)) return false;
+        if (!cardsToCheck || !Array.isArray(cardsToCheck)) return false;
+        
+        const tempHand = [...hand];
+        for (let c of cardsToCheck) {
+            const idx = tempHand.indexOf(c);
+            if (idx === -1) return false;
+            tempHand.splice(idx, 1);
+        }
+        return true;
+    },
+
+    /**
+     * 从手牌中移除指定的牌，返回新的手牌数组（纯函数）
+     * @param {number[]} hand - 原始手牌
+     * @param {number[]} cardsToRemove - 要移除的牌
+     * @returns {number[]} - 移除后的新数组
+     */
+    getHandAfterRemoval: (hand, cardsToRemove) => {
+        if (!hand) return [];
+        const newHand = [...hand];
+        for (let c of cardsToRemove) {
+            const idx = newHand.indexOf(c);
+            if (idx !== -1) newHand.splice(idx, 1);
+        }
+        return newHand;
     }
 };
 
@@ -9388,16 +9762,20 @@ class GameManager {
         if (currPlayer.id !== playerId) return { success: false, error: '还没轮到你' };
 
         const playerHand = this.gameState.hands[playerId];
-        // 验证手牌合法性
-        if (!this._handContainsCards(playerHand, cards)) return { success: false, error: '手牌不足或数据不同步' };
+        
+        // [优化] 使用 CardRules 检查手牌合法性
+        if (!CardRules.checkHandContains(playerHand, cards)) {
+            return { success: false, error: '手牌不足或数据不同步' };
+        }
 
         // 验证牌型规则
         const isNewRound = this.gameState.lastPlayedCards.length === 0;
         const cardsToBeat = isNewRound ? [] : this.gameState.lastPlayedCards;
         if (!CardRules.canPlay(cards, cardsToBeat, this.config.deckCount)) return { success: false, error: '牌型不符或管不上' };
 
-        // 执行出牌
-        this._removeCardsFromHand(playerId, cards);
+        // [优化] 使用 CardRules 移除手牌 (纯函数更新)
+        this.gameState.hands[playerId] = CardRules.getHandAfterRemoval(playerHand, cards);
+        
         this.collectedCards.push(...cards);
         
         // 分数计算（如5/10/K）
@@ -9887,27 +10265,6 @@ class GameManager {
 
     getSettlementData() {
         return this.lastSettlementData;
-    }
-
-    _handContainsCards(hand, cardsToPlay) {
-        if (!hand) return false;
-        const tempHand = [...hand];
-        for (let c of cardsToPlay) {
-            const idx = tempHand.indexOf(c);
-            if (idx === -1) return false;
-            tempHand.splice(idx, 1);
-        }
-        return true;
-    }
-
-    _removeCardsFromHand(playerId, cards) {
-        if (!this.gameState.hands[playerId]) return;
-        const newHand = [...this.gameState.hands[playerId]];
-        for (let c of cards) {
-            const idx = newHand.indexOf(c);
-            if (idx !== -1) newHand.splice(idx, 1);
-        }
-        this.gameState.hands[playerId] = newHand;
     }
 
     _concludeRound() {

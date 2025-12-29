@@ -14,11 +14,6 @@ class BotManager {
 
         player.isAutoPlay = !player.isAutoPlay;
         
-        // [修改] 记忆模式：开启时保持上一次的选择，不再强制重置为 SMART
-        // if (player.isAutoPlay) {
-        //    player.autoPlayMode = 'SMART'; 
-        // }
-        
         // 如果当前正好轮到该玩家，且开启了托管，立即触发机器人逻辑
         if (this.game.gameState && 
             this.game.players[this.game.gameState.currentTurnIndex].id === playerId) {
@@ -61,26 +56,10 @@ class BotManager {
         // 如果是 AI，设置思考时间
         if (isAI && this.game.gameState.hands[currPlayer.id].length > 0) {
             
-            // [优化] 动态思考时间：牌越少越快，提升紧张感和响应速度
-            const handSize = this.game.gameState.hands[currPlayer.id].length;
-            let baseDelay = 1000;
-            let randomRange = 1000;
-
-            if (handSize <= 5) {
-                // 冲刺阶段：0.5s - 1.0s
-                baseDelay = 500;
-                randomRange = 500;
-            } else if (handSize <= 10) {
-                // 中后段：0.8s - 1.6s
-                baseDelay = 800;
-                randomRange = 800;
-            } else {
-                // 开局：1.0s - 2.0s
-                baseDelay = 1000;
-                randomRange = 1000;
-            }
-
-            const delay = baseDelay + Math.random() * randomRange;
+            // [性能优化] 极速出牌模式
+            // 将延迟压缩至 30ms。这几乎是人类感知的“瞬间”，
+            // 但保留了微小的 Node.js 事件循环缓冲，防止高并发下 socket 写入阻塞。
+            const delay = 30;
 
             this.timer = setTimeout(() => {
                 this.executeTurn(currPlayer);
@@ -112,6 +91,7 @@ class BotManager {
             const isNewRound = this.game.gameState.lastPlayedCards.length === 0;
             const cardsToBeat = isNewRound ? [] : this.game.gameState.lastPlayedCards;
 
+            // [性能敏感] 此处排序是必须的，decideMove 依赖有序输入
             const sortedHand = [...hand].sort((a,b) => CardRules.getPoint(a) - CardRules.getPoint(b));
             
             let cardsToPlay = null;
@@ -134,7 +114,7 @@ class BotManager {
             }
 
             try {
-                // 使用优化后的 BotLogic 决策
+                // [核心调用] 使用新的 decideMove
                 cardsToPlay = BotLogic.decideMove(sortedHand, cardsToBeat, this.game.config.deckCount, strategyContext);
             } catch (err) {
                 console.error("[Bot Error] Logic crashed:", err);
@@ -160,6 +140,7 @@ class BotManager {
                     this.game._broadcastUpdate(logText);
 
                     if (result.isRoundOver) {
+                        // [UI优化] 回合结束时给前端留3秒展示时间
                         setTimeout(() => {
                             if (!this.game.disposed) this.game._handleWin(result, botPlayer.id);
                         }, 3000);
@@ -185,10 +166,18 @@ class BotManager {
         }
     }
 
-    // 内部辅助：出一张最小的牌
+    // [优化] 内部辅助：出一张最小的牌
     _playMinCard(botPlayer, sortedHand) {
         if (this.game.disposed) return;
-        const minCard = [sortedHand[0]];
+        
+        // [架构修正] 恢复调用 BotLogic，确保逻辑分层统一。
+        const minCard = BotLogic.getFallbackMove(sortedHand);
+        
+        if (!minCard) {
+             this._forcePass(botPlayer);
+             return;
+        }
+
         const result = this.game.playCards(botPlayer.id, minCard);
         if (result.success) {
             if (!botPlayer.isBot) this.game.io.to(botPlayer.id).emit('hand_update', this.game.gameState.hands[botPlayer.id]);
@@ -221,9 +210,11 @@ class BotManager {
             this.game._broadcastUpdate(`${botPlayer.name}: 不要`);
         } else {
             console.error("[Bot Critical] Failed to pass turn:", result.error);
+            // 极罕见情况：无法过牌（例如已经是首出但没牌），强制推进
             this.game._advanceTurn();
             this.game._broadcastUpdate();
             this.game._resetTimer();
+            // [Fix] 修正为 this.checkAndRun()，保持与原代码一致
             this.checkAndRun();
         }
     }

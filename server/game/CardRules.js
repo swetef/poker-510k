@@ -1,4 +1,4 @@
-// 纯规则计算 (510K 逻辑、比大小)
+// 纯规则计算 (510K 逻辑、比大小、手牌操作)
 
 const CardRules = {
     // 1. 基础映射
@@ -172,7 +172,6 @@ const CardRules = {
         // Level 3: 普通炸弹
         if (uniquePoints.length === 1 && len >= 4) {
             if (len === deckCount * 4) {
-                 // [修复] 补全 len 字段
                  return { type: 'BOMB_MAX', val: points[0], len: len, level: 5 };
             }
             return { type: 'BOMB_STD', val: points[0], len: len, level: 3 };
@@ -239,6 +238,43 @@ const CardRules = {
         }
 
         return false;
+    },
+
+    // --- [新增] 手牌操作辅助方法 ---
+
+    /**
+     * 检查手牌中是否包含指定的一组牌
+     * @param {number[]} hand - 玩家当前手牌
+     * @param {number[]} cardsToCheck - 想要打出的牌
+     * @returns {boolean}
+     */
+    checkHandContains: (hand, cardsToCheck) => {
+        if (!hand || !Array.isArray(hand)) return false;
+        if (!cardsToCheck || !Array.isArray(cardsToCheck)) return false;
+        
+        const tempHand = [...hand];
+        for (let c of cardsToCheck) {
+            const idx = tempHand.indexOf(c);
+            if (idx === -1) return false;
+            tempHand.splice(idx, 1);
+        }
+        return true;
+    },
+
+    /**
+     * 从手牌中移除指定的牌，返回新的手牌数组（纯函数）
+     * @param {number[]} hand - 原始手牌
+     * @param {number[]} cardsToRemove - 要移除的牌
+     * @returns {number[]} - 移除后的新数组
+     */
+    getHandAfterRemoval: (hand, cardsToRemove) => {
+        if (!hand) return [];
+        const newHand = [...hand];
+        for (let c of cardsToRemove) {
+            const idx = newHand.indexOf(c);
+            if (idx !== -1) newHand.splice(idx, 1);
+        }
+        return newHand;
     }
 };
 

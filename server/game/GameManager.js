@@ -354,16 +354,20 @@ class GameManager {
         if (currPlayer.id !== playerId) return { success: false, error: '还没轮到你' };
 
         const playerHand = this.gameState.hands[playerId];
-        // 验证手牌合法性
-        if (!this._handContainsCards(playerHand, cards)) return { success: false, error: '手牌不足或数据不同步' };
+        
+        // [优化] 使用 CardRules 检查手牌合法性
+        if (!CardRules.checkHandContains(playerHand, cards)) {
+            return { success: false, error: '手牌不足或数据不同步' };
+        }
 
         // 验证牌型规则
         const isNewRound = this.gameState.lastPlayedCards.length === 0;
         const cardsToBeat = isNewRound ? [] : this.gameState.lastPlayedCards;
         if (!CardRules.canPlay(cards, cardsToBeat, this.config.deckCount)) return { success: false, error: '牌型不符或管不上' };
 
-        // 执行出牌
-        this._removeCardsFromHand(playerId, cards);
+        // [优化] 使用 CardRules 移除手牌 (纯函数更新)
+        this.gameState.hands[playerId] = CardRules.getHandAfterRemoval(playerHand, cards);
+        
         this.collectedCards.push(...cards);
         
         // 分数计算（如5/10/K）
@@ -853,27 +857,6 @@ class GameManager {
 
     getSettlementData() {
         return this.lastSettlementData;
-    }
-
-    _handContainsCards(hand, cardsToPlay) {
-        if (!hand) return false;
-        const tempHand = [...hand];
-        for (let c of cardsToPlay) {
-            const idx = tempHand.indexOf(c);
-            if (idx === -1) return false;
-            tempHand.splice(idx, 1);
-        }
-        return true;
-    }
-
-    _removeCardsFromHand(playerId, cards) {
-        if (!this.gameState.hands[playerId]) return;
-        const newHand = [...this.gameState.hands[playerId]];
-        for (let c of cards) {
-            const idx = newHand.indexOf(c);
-            if (idx !== -1) newHand.splice(idx, 1);
-        }
-        this.gameState.hands[playerId] = newHand;
     }
 
     _concludeRound() {
