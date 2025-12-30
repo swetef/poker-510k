@@ -39,7 +39,9 @@ export const HandArea = () => {
         const targetPlayer = players.find(p => p.id === watchedPlayerId);
         watchingName = targetPlayer ? targetPlayer.name : '未知玩家';
     } else {
-        displayHand = sortHand(myHand, 'POINT');
+        // [修复] 直接使用 myHand，因为 Logic 层(useBattleLogic)已经根据 sortMode 对其进行了排序
+        // 原代码强制 sortHand(myHand, 'POINT') 导致理牌按钮的排序效果被覆盖
+        displayHand = myHand;
         isWatching = false;
     }
 
