@@ -12,11 +12,8 @@ export const GameProvider = ({ children }) => {
 
   const [isSpectator, setIsSpectator] = useState(false);
   const [observedHands, setObservedHands] = useState({});
-  
-  // [新增] 当前正在观看的玩家 ID
   const [watchedPlayerId, setWatchedPlayerId] = useState(null);
 
-  // [新增] 结算与准备状态
   const [isRoundOver, setIsRoundOver] = useState(false);
   const [roundOverData, setRoundOverData] = useState(null); 
   const [readyPlayers, setReadyPlayers] = useState([]); 
@@ -27,7 +24,6 @@ export const GameProvider = ({ children }) => {
       handleRoomAction, handleUpdateConfig
   } = roomLogic;
 
-  // [修改] 传递 Setters 给 useGameData
   const gameData = useGameData(socket, setIsLoading, {
       setIsRoundOver, setRoundOverData, setReadyPlayers
   });
@@ -43,17 +39,13 @@ export const GameProvider = ({ children }) => {
   const deckCount = activeRoomConfig ? activeRoomConfig.deckCount : 2;
   const battleLogic = useBattleLogic(socket, username, mySocketId, roomId, deckCount);
 
-  // --- [核心修复] 切后台断线后的自动重连逻辑 ---
   useEffect(() => {
-    // 只有当 Socket 重新连接上 (isConnected=true)，且本地有房间信息时，才尝试自动重连
     if (isConnected && socket && roomId && username) {
         console.log(`[AutoRejoin] Socket restored. Attempting to rejoin room ${roomId}...`);
         socket.emit('join_room', { roomId, username });
     }
   }, [isConnected, socket]); 
 
-  // [新增] 自动管理观看目标
-  // 当 observedHands 变化时，如果当前没有观看目标或目标失效，自动切到第一个
   useEffect(() => {
     const availableIds = Object.keys(observedHands);
     if (availableIds.length > 0) {
@@ -119,8 +111,9 @@ export const GameProvider = ({ children }) => {
       handlePass: () => battleLogic.handlePass(roomId),
       handlePlayCards: () => battleLogic.handlePlayCards(roomId),
       handleRequestHint: () => battleLogic.handleRequestHint(roomId),
+      // [新增] 包装发送消息
+      handleSendQuickChat: (msg) => battleLogic.handleSendQuickChat(roomId, msg),
 
-      // [新增] 玩家准备
       handlePlayerReady: () => {
           if (socket) socket.emit('player_ready', { roomId });
       },
@@ -170,7 +163,6 @@ export const GameProvider = ({ children }) => {
       gameState, 
       players, 
       
-      // [新增] 暴露给 UI 的状态
       isRoundOver,
       roundOverData,
       readyPlayers,
@@ -186,9 +178,11 @@ export const GameProvider = ({ children }) => {
 
       isSpectator,
       observedHands,
-      // [新增] 暴露观看状态
       watchedPlayerId,
-      setWatchedPlayerId
+      setWatchedPlayerId,
+      
+      // [新增] 暴露聊天数据
+      chatMessages: battleLogic.chatMessages
   };
 
   return (

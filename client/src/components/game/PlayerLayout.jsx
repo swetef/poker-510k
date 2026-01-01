@@ -1,8 +1,9 @@
 import React from 'react';
-import { Bot, Zap, CheckCircle, Eye } from 'lucide-react'; // [新增] 引入 Eye 图标
+import { Bot, Zap, CheckCircle, Eye } from 'lucide-react'; 
 import { PlayerAvatar } from '../BaseUI.jsx'; 
 import { useGame } from '../../context/GameContext.jsx'; 
 import { sortHand, getCardDisplay } from '../../utils/cardLogic.js';
+import { ChatBubble } from '../ui/ChatBubble.jsx'; // [新增]
 
 // [保持原样] 布局计算函数
 const calculateLayout = (otherPlayersCount) => {
@@ -23,7 +24,6 @@ const calculateLayout = (otherPlayersCount) => {
     };
 };
 
-// [保持原样] 小卡牌组件
 const CompactShowCard = ({ cardVal }) => {
     const { text, suit, color } = getCardDisplay(cardVal);
     return (
@@ -60,8 +60,8 @@ export const PlayerLayout = () => {
         roundPoints, roomConfig, turnRemaining, finishedRank, handCounts,
         isSpectator,
         isRoundOver, roundOverData, readyPlayers,
-        // [新增] 获取观战相关状态
-        observedHands, watchedPlayerId, setWatchedPlayerId
+        observedHands, watchedPlayerId, setWatchedPlayerId,
+        chatMessages // [新增]
     } = useGame();
 
     if (!players) return null;
@@ -171,10 +171,6 @@ export const PlayerLayout = () => {
                 display: 'flex', justifyContent: 'center', alignItems: 'flex-end'
             }
         };
-        
-        // 即使是观众模式，如果为了保持布局稳定，也可以把“自己”的位置留着（显示当前观看的对象或空着）
-        // 这里沿用原逻辑：如果在观战，我（作为观众）不在 players 列表中，myIndex 可能指向别人
-        // 但通常 spectator 模式下 myIndex 会处理好
         layoutItems.unshift(myItem);
     }
 
@@ -198,14 +194,15 @@ export const PlayerLayout = () => {
                 }
                 const isReady = isRoundOver && readyPlayers.includes(p.id);
 
-                // [新增] 观战状态判断
                 const canWatch = observedHands && observedHands[p.id] && observedHands[p.id].length > 0;
                 const isWatching = watchedPlayerId === p.id;
-
-                const cardCount = remainingCards.length;
+                const cardCount = handCounts[p.id] || 0;
                 let overlapMargin = -24; 
-                if (cardCount > 6) overlapMargin = -26;
-                if (cardCount > 12) overlapMargin = -28;
+                if (remainingCards.length > 6) overlapMargin = -26;
+                if (remainingCards.length > 12) overlapMargin = -28;
+
+                // [新增] 获取该玩家的聊天消息
+                const chatMsg = chatMessages[p.id]?.message;
 
                 return (
                     <div 
@@ -215,12 +212,13 @@ export const PlayerLayout = () => {
                             position: 'absolute', 
                             ...pos, 
                             transition: 'all 0.5s ease',
-                            // [新增] 如果可观战，显示手型光标
                             cursor: canWatch ? 'pointer' : 'default' 
                         }}
-                        // [新增] 点击切换观战视角
                         onClick={() => canWatch && setWatchedPlayerId(p.id)}
                     > 
+                        {/* [新增] 气泡组件，显示在头像上方 */}
+                        <ChatBubble message={chatMsg} />
+
                         <PlayerAvatar 
                             player={p} 
                             isTurn={p.id === currentTurnId} 
@@ -232,14 +230,12 @@ export const PlayerLayout = () => {
                             rank={finishedRankVal}
                             timerPosition={timerPos}
                             hideTimer={hideTimer} 
-                            cardCount={handCounts[p.id] || 0}
+                            cardCount={cardCount}
                             showCardCountMode={roomConfig ? roomConfig.showCardCountMode : false} 
                             team={info.team} 
                         />
                         
-                        {/* 状态徽章区域 */}
                         <div style={{position: 'absolute', top: -10, right: -10, display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end'}}>
-                            {/* [新增] 眼睛图标：表示可观战/正在观战 */}
                             {canWatch && (
                                 <div style={{
                                     background: isWatching ? '#3498db' : 'rgba(0,0,0,0.6)',
@@ -256,14 +252,12 @@ export const PlayerLayout = () => {
                                 </div>
                             )}
 
-                            {/* 原有的状态图标 */}
                             <div style={{display:'flex', gap:5}}>
                                 {isBot && <div className="statusBadgeBot"><Bot size={12}/> AI</div>}
                                 {isAuto && <div className="statusBadgeAuto"><Zap size={12}/> 托管</div>}
                             </div>
                         </div>
 
-                        {/* [保持原样] 摊牌展示 */}
                         {isRoundOver && remainingCards.length > 0 && (
                             <div style={{
                                 ...handAreaStyle,
@@ -287,7 +281,7 @@ export const PlayerLayout = () => {
                                     boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
                                     zIndex: 100
                                 }}>
-                                    余 {cardCount}
+                                    余 {remainingCards.length}
                                 </div>
 
                                 <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
@@ -305,7 +299,6 @@ export const PlayerLayout = () => {
                             </div>
                         )}
 
-                        {/* [保持原样] 准备状态 */}
                         {isReady && (
                             <div style={{
                                 position: 'absolute', top: -25, left: '50%', transform: 'translateX(-50%)',

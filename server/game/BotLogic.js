@@ -11,12 +11,22 @@ const BotLogic = {
      * @param {Array} hand 手牌 (已排序)
      * @param {Array} lastPlayedCards 上家出的牌
      * @param {Number} deckCount 牌副数
-     * @param {Object} context 战局上下文 { mode: 'SMART'|'THRIFTY', pendingScore: 0, isTeammate: boolean }
+     * @param {Object} context 战局上下文 { mode: 'SMART'|'THRIFTY'|'AFK', pendingScore: 0, isTeammate: boolean }
      * @returns {Array|null} 返回要出的牌数组，null 代表不要
      */
     decideMove: (hand, lastPlayedCards, deckCount, context = {}) => {
+        // [调整] 提取上下文
+        const { isTeammate, pendingScore, mode } = context;
+        const isFreePlay = (!lastPlayedCards || lastPlayedCards.length === 0);
+
+        // [关键修改] 躺平模式 (AFK) 优先级最高
+        // 逻辑：只要不是必须出牌（首出阶段），一律返回 null (不要)。
+        // 这样可以屏蔽后续的“绝杀检测”，防止在 AFK 模式下因为手牌能一次出完而自动出牌。
+        if (mode === 'AFK' && !isFreePlay) {
+            return null;
+        }
+
         // 1. 获取所有符合规则的候选牌型，并按基础损耗(cost)排序
-        // 候选列表已由 getSortedHints 过滤了“为了出牌而拆炸弹”等极高Cost的选项
         const candidates = BotLogic.getSortedHints(hand, lastPlayedCards, deckCount);
         
         // 如果没有合法出牌，直接过
@@ -25,10 +35,6 @@ const BotLogic = {
         // 默认选择 Cost 最小（即最不心疼）的一手
         let bestMove = candidates[0];
         const bestAnalysis = CardRules.analyze(bestMove, deckCount);
-
-        // 2. 引入战术层 (Strategy Layer) 进行过滤
-        const { isTeammate, pendingScore, mode } = context;
-        const isFreePlay = (!lastPlayedCards || lastPlayedCards.length === 0);
 
         // --- 战术 A: 绝杀检测 ---
         // 如果最好的一手牌打出去就赢了，无视所有保留逻辑，直接出！
@@ -53,9 +59,6 @@ const BotLogic = {
 
         // --- 战术 C: 模式与贪婪 (Aggression) ---
         
-        // 躺平模式：只要不是绝杀，一律不要 (用于挂机)
-        if (mode === 'AFK') return null;
-
         // 省钱模式：如果桌上没分，且需要用炸弹管，那就PASS，省下炸弹
         if (mode === 'THRIFTY') {
             if (bestAnalysis.level > 0 && pendingScore < 50) {

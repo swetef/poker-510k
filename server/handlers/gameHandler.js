@@ -3,6 +3,7 @@ const GameManager = require('../game/GameManager');
 
 module.exports = (io, socket, rooms) => {
 
+    // 广播游戏状态（公共视角）
     const broadcastGameState = (roomId, room, infoText = null) => {
         if (!room.gameManager) return;
         const publicState = room.gameManager.getPublicState();
@@ -11,8 +12,10 @@ module.exports = (io, socket, rooms) => {
         io.to(roomId).emit('game_state_update', publicState);
     };
 
+    // 广播房间信息（玩家列表、总分等）
     const broadcastRoomInfo = (roomId, room) => {
         const currentGrandScores = room.gameManager ? room.gameManager.grandScores : {};
+        // 如果没有分数记录，初始化为0
         if (Object.keys(currentGrandScores).length === 0) {
             room.players.forEach(p => {
                 if (currentGrandScores[p.id] === undefined) currentGrandScores[p.id] = 0;
@@ -30,16 +33,19 @@ module.exports = (io, socket, rooms) => {
         });
     };
 
+    // 处理游戏开始（包括第一局和后续轮次）
     const handleGameStart = (roomId, isNextRound) => {
         const room = rooms[roomId];
         if (!room) return;
 
+        // 如果是新的一轮且已有 GameManager，重用它；否则创建新的
         if (!isNextRound || !room.gameManager) {
             room.gameManager = new GameManager(room.config, room.players, io, roomId);
         }
 
         const startInfo = room.gameManager.startRound(isNextRound);
 
+        // 给每个玩家发送手牌
         room.players.forEach((p) => {
             if (!p.isBot) { 
                 const hand = startInfo.hands[p.id];
@@ -51,10 +57,11 @@ module.exports = (io, socket, rooms) => {
             }
         });
 
+        // 给观战者发送信息
         if (room.spectators) {
             room.spectators.forEach(s => {
                 io.to(s.id).emit('game_started', {
-                    hand: [],
+                    hand: [], // 观战者没有手牌
                     startPlayerId: startInfo.startPlayerId,
                     grandScores: room.gameManager.grandScores,
                     handCounts: room.gameManager.getPublicState().handCounts,
@@ -71,7 +78,9 @@ module.exports = (io, socket, rooms) => {
         broadcastGameState(roomId, room, msg);
     };
 
-    // 1. 开始游戏
+    // --- Socket 事件监听 ---
+
+    // 开始游戏请求（房主触发）
     socket.on('start_game', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room) return;
@@ -80,13 +89,14 @@ module.exports = (io, socket, rooms) => {
         if (!player || !player.isHost) return socket.emit('error_msg', '只有房主可以开始游戏');
         if (room.players.length < 2) return socket.emit('error_msg', '人数不足');
 
+        // 清理旧的游戏管理器
         if (room.gameManager) {
-            // [Bug修复] 显式调用 dispose 方法，杀死旧实例
             if (room.gameManager.dispose) room.gameManager.dispose();
             if (room.gameManager._clearTimer) room.gameManager._clearTimer();
             room.gameManager = null;
         }
         
+        // 检查组队模式人数
         if (room.config.isTeamMode && room.players.length % 2 !== 0) {
             room.config.isTeamMode = false;
             io.to(roomId).emit('error_msg', '人数为奇数，已自动关闭组队模式');
@@ -95,9 +105,11 @@ module.exports = (io, socket, rooms) => {
 
         const isTeamMode = room.config.isTeamMode && (room.players.length % 2 === 0);
         
+        // 进入抽座次阶段
         room.seatManager = new SeatManager(io, roomId, room.players, isTeamMode);
         io.to(roomId).emit('enter_draw_phase', { totalCards: room.players.length });
         
+        // 处理机器人的抽牌逻辑
         const bots = room.players.filter(p => p.isBot);
         bots.forEach((bot, i) => {
             setTimeout(() => {
@@ -113,6 +125,7 @@ module.exports = (io, socket, rooms) => {
                                 playerId: bot.id,
                                 name: bot.name
                             });
+                            // 如果抽牌结束
                             if (res.isFinished) {
                                 setTimeout(() => {
                                     if (!rooms[roomId]) return;
@@ -130,6 +143,7 @@ module.exports = (io, socket, rooms) => {
         });
     });
 
+    // 玩家抽取座位牌
     socket.on('draw_seat_card', ({ roomId, cardIndex }) => {
         const room = rooms[roomId];
         if (!room || !room.seatManager) return;
@@ -163,18 +177,18 @@ module.exports = (io, socket, rooms) => {
         }
     });
 
-    // 3. 下一局 (保留给房主强制开始，但正常流程走准备)
+    // 下一轮
     socket.on('next_round', ({ roomId }) => handleGameStart(roomId, true));
 
-    // [新增] 玩家准备
+    // 玩家准备
     socket.on('player_ready', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
         
         room.gameManager.handlePlayerReady(socket.id);
-        // handlePlayerReady 内部会广播 ready_state_update
     });
 
+    // 出牌
     socket.on('play_cards', ({ roomId, cards }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -183,6 +197,7 @@ module.exports = (io, socket, rooms) => {
 
         if (!result.success) return socket.emit('play_error', result.error);
 
+        // 更新出牌玩家的手牌
         const currentHand = room.gameManager.gameState.hands[socket.id];
         io.to(socket.id).emit('hand_update', currentHand);
 
@@ -191,17 +206,13 @@ module.exports = (io, socket, rooms) => {
                  broadcastGameState(roomId, room, result.logText);
             }
 
+            // 延迟结算，让玩家看清最后出的牌
             setTimeout(() => {
                 if (!rooms[roomId]) return;
-                // [Bug修复] 确保在异步回调中，GameManager 还是有效的
                 if (room.gameManager && !room.gameManager.disposed) {
                     room.gameManager._handleWin(result, socket.id);
-
-                    if (result.roundResult.isGrandOver) {
-                        // 大局结束，保留 gameManager 供查看战绩，但已标记 isGrandOverState
-                        // 此时不应设为 null，否则无法查看战绩
-                    } else {
-                        // 小局结束
+                    // 如果大局没结束，更新一下状态
+                    if (!result.roundResult.isGrandOver) {
                         broadcastGameState(roomId, room);
                     }
                 }
@@ -211,6 +222,7 @@ module.exports = (io, socket, rooms) => {
         }
     });
 
+    // 不要/过牌
     socket.on('pass_turn', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -225,10 +237,7 @@ module.exports = (io, socket, rooms) => {
                 if (!rooms[roomId]) return;
                 if (room.gameManager && !room.gameManager.disposed) {
                     room.gameManager._handleWin(result, socket.id);
-                    
-                    if (result.roundResult && result.roundResult.isGrandOver) {
-                         // grand over
-                    } else {
+                    if (!result.roundResult || !result.roundResult.isGrandOver) {
                         broadcastGameState(roomId, room);
                     }
                 }
@@ -238,6 +247,7 @@ module.exports = (io, socket, rooms) => {
         }
     });
 
+    // 托管开关
     socket.on('toggle_auto_play', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -246,6 +256,7 @@ module.exports = (io, socket, rooms) => {
         broadcastGameState(roomId, room);
     });
 
+    // 切换托管模式
     socket.on('switch_autoplay_mode', ({ roomId, mode }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -254,10 +265,31 @@ module.exports = (io, socket, rooms) => {
         broadcastGameState(roomId, room);
     });
 
+    // 请求提示
     socket.on('request_hint', ({ roomId }) => {
         const room = rooms[roomId];
         if (room && room.gameManager) {
-            // 需要实现 getHint，这里简化处理，通常前端自己算或者后端算好发回
+            // 提示逻辑主要在前端，这里服务端可能只需记录日志或辅助验证
+            // 目前主要逻辑由前端 SmartHint 完成
         }
+    });
+
+    // [新增] 快捷消息转发
+    socket.on('send_chat', ({ roomId, message }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+        
+        // 简单验证玩家是否在房间内
+        const isPlayer = room.players.some(p => p.id === socket.id);
+        const isSpectator = room.spectators && room.spectators.some(s => s.id === socket.id);
+
+        if (!isPlayer && !isSpectator) return;
+
+        // 广播给房间所有人（包括自己，方便统一处理回显）
+        io.to(roomId).emit('chat_broadcast', {
+            senderId: socket.id,
+            message: message,
+            timestamp: Date.now()
+        });
     });
 };

@@ -184,4 +184,42 @@ const GameRules = {
     }
 };
 
+// === [关键修改] 新增命名导出，解决 smartHint.js 的引用报错 ===
+export const CARD_TYPES = {
+    // 基础牌型
+    SINGLE: 'SINGLE',
+    SOLO: 'SINGLE', // 兼容 smartHint 别名
+    PAIR: 'PAIR',
+    TRIPLE: 'TRIPLE',
+    
+    // 连对/飞机
+    LIANDUI: 'LIANDUI',
+    PAIR_STRAIGHT: 'LIANDUI', // 兼容 smartHint 别名
+    AIRPLANE: 'AIRPLANE',
+    
+    // 暂未实现但 smartHint 引用的牌型 (保留键名防止报错)
+    TRIPLE_W_SOLO: 'TRIPLE_W_SOLO',
+    TRIPLE_W_PAIR: 'TRIPLE_W_PAIR',
+    STRAIGHT: 'STRAIGHT',
+    
+    // 炸弹相关
+    BOMB_STD: 'BOMB_STD',
+    BOMB_MAX: 'BOMB_MAX',
+    '510K_PURE': '510K_PURE',
+    '510K_MIXED': '510K_MIXED',
+    BOMB_KING: 'BOMB_KING',
+    ROCKET: 'BOMB_KING', // 兼容 smartHint 别名
+    
+    // 炸弹判断常量 (smartHint 用)
+    BOMB: 'BOMB', 
+    
+    INVALID: 'INVALID',
+    EMPTY: 'EMPTY'
+};
+
+export const analyze = GameRules.analyze;
+export const getPoint = GameRules.getPoint;
+export const getSuit = GameRules.getSuit;
+export const canPlay = GameRules.canPlay;
+
 export default GameRules;

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { RotateCcw, Zap, Lightbulb, Clock, Loader2, AlertTriangle, Repeat, Shield, Coins, Coffee, Eye, ClipboardList, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { RotateCcw, Zap, Lightbulb, Clock, Loader2, AlertTriangle, Repeat, Shield, Coins, Coffee, Eye, ClipboardList, CheckCircle, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
 import css from './GameActionBar.module.css';
 import { useGame } from '../../context/GameContext.jsx';
 import TimerComponent from '../CountDownTimer.jsx';
 import { isBomb } from '../../utils/cardLogic.js';
+import { QuickChatPanel } from './QuickChatPanel.jsx'; // [新增]
 
-// [修改] 接收回调
 export const GameActionBar = ({ onShowSettlement }) => {
     const { 
         winner, roundResult, grandResult, selectedCards, 
@@ -14,19 +14,17 @@ export const GameActionBar = ({ onShowSettlement }) => {
         handlePass, handleRequestHint, handlePlayCards,
         isSubmitting, lastPlayerName,
         isSpectator, observedHands,
-        // [新增]
         isRoundOver, readyPlayers, handlePlayerReady,
-        // [新增] 观看控制
         watchedPlayerId, setWatchedPlayerId
     } = useGame();
 
     const [confirmState, setConfirmState] = useState(false);
+    const [showChat, setShowChat] = useState(false); // [新增]
 
     useEffect(() => {
         setConfirmState(false);
     }, [selectedCards, currentTurnId]);
 
-    // 切换观看对象
     const cycleWatchedPlayer = (direction) => {
         const availableIds = Object.keys(observedHands);
         if (availableIds.length <= 1) return;
@@ -46,58 +44,64 @@ export const GameActionBar = ({ onShowSettlement }) => {
         setWatchedPlayerId(availableIds[nextIndex]);
     };
 
-    // [新增] 结束状态的特殊 ActionBar
-    // [修复] 增加 grandResult 判断：如果大局结束，不显示准备按钮（只允许查看战绩，重开需走结算窗）
+    // [修改] 始终渲染聊天面板
+    const renderChatPanel = () => showChat && <QuickChatPanel onClose={() => setShowChat(false)} />;
+    
+    // [新增] 聊天按钮
+    const renderChatButton = () => (
+        <button 
+            className={css.btnSecondary} 
+            style={{padding: '8px', minWidth: '40px'}}
+            onClick={() => setShowChat(!showChat)}
+        >
+            <MessageCircle size={20} />
+        </button>
+    );
+
     if (isRoundOver) {
         const isReady = readyPlayers.includes(mySocketId);
         return (
-            <div className={css.actionBar}>
-                <div className={css.buttonGroup}>
-                    {/* 查看战绩 */}
-                    <button 
-                        className={css.btnSecondary}
-                        onClick={onShowSettlement}
-                        style={{background: '#34495e', padding: '10px 20px'}}
-                    >
-                        <ClipboardList size={18} style={{marginRight:5}} /> 查看战绩
-                    </button>
-
-                    {/* 准备按钮：仅当大局未结束时显示 */}
-                    {!grandResult && (
+            <>
+                {renderChatPanel()}
+                <div className={css.actionBar}>
+                    <div className={css.buttonGroup}>
+                        {renderChatButton()} {/* [插入] */}
+                        
                         <button 
-                            className={isReady ? css.btnSecondary : css.btnPlay}
-                            onClick={handlePlayerReady}
-                            disabled={isReady} // 准备后不可取消
-                            style={isReady ? {background: '#27ae60', opacity: 0.8, cursor: 'default'} : {padding: '10px 30px'}}
+                            className={css.btnSecondary}
+                            onClick={onShowSettlement}
+                            style={{background: '#34495e', padding: '10px 20px'}}
                         >
-                            {isReady ? (
-                                <><CheckCircle size={18} style={{marginRight:5}} /> 已准备</>
-                            ) : (
-                                '准备下一局'
-                            )}
+                            <ClipboardList size={18} style={{marginRight:5}} /> 查看战绩
                         </button>
-                    )}
+
+                        {!grandResult && (
+                            <button 
+                                className={isReady ? css.btnSecondary : css.btnPlay}
+                                onClick={handlePlayerReady}
+                                disabled={isReady} 
+                                style={isReady ? {background: '#27ae60', opacity: 0.8, cursor: 'default'} : {padding: '10px 30px'}}
+                            >
+                                {isReady ? (
+                                    <><CheckCircle size={18} style={{marginRight:5}} /> 已准备</>
+                                ) : (
+                                    '准备下一局'
+                                )}
+                            </button>
+                        )}
+                    </div>
                 </div>
-            </div>
+            </>
         );
     }
 
     if (winner || roundResult || grandResult) return null;
 
-    // [修改] 统一处理观战状态 (纯观众 OR 已完赛玩家)
     const myInfo = playersInfo[mySocketId] || {};
     const amIAutoPlay = myInfo.isAutoPlay;
     const currentMode = myInfo.autoPlayMode || 'SMART';
     
-    // 是否处于观战状态 (纯观众 或 玩家已出完且有队友可看)
-    // 逻辑：如果我是观众(isSpectator)，或者我有观察权限且我自己没牌了(手牌数0)
-    // 注意：myInfo.handCount 可能有延迟，这里直接用 observedHands 和 myInfo 判断更准
-    // 但为了简化，如果 observedHands 有值且我不是正在打牌的人(或者我手牌空了)，就显示观战条
-    
     const myHandCount = playersInfo[mySocketId] ? (playersInfo[mySocketId].handCount || 0) : 0;
-    // 如果我是观众，myHandCount通常为0或者undefined
-    // 只要有 observedHands，且 (是观众 OR 我手牌为0)，就显示切换条
-    
     const isWatchingMode = isSpectator || (Object.keys(observedHands).length > 0 && myHandCount === 0);
 
     if (isWatchingMode && Object.keys(observedHands).length > 0) {
@@ -105,9 +109,12 @@ export const GameActionBar = ({ onShowSettlement }) => {
         const availableCount = Object.keys(observedHands).length;
 
         return (
+             <>
+             {renderChatPanel()}
              <div className={css.actionBar}>
                 <div className={css.spectatorGroup}>
-                    {/* [修改] 将布局调整为： 左箭头 - 信息 - 右箭头 */}
+                    {renderChatButton()} {/* [插入] 观战也可以聊天 */}
+                    
                     {availableCount > 1 && (
                         <button className={css.spectatorBtn} onClick={() => cycleWatchedPlayer('prev')}>
                             <ChevronLeft size={28} />
@@ -126,17 +133,23 @@ export const GameActionBar = ({ onShowSettlement }) => {
                     )}
                 </div>
             </div>
+            </>
         );
     }
     
-    // 如果是纯观战但还没有手牌数据传过来 (刚进房间/没人出完)
     if (isSpectator) {
          return (
+             <>
+             {renderChatPanel()}
              <div className={css.actionBar}>
-                <div className={css.waitingBadge}>
-                    <Eye size={20} /> 正在观战中...
+                <div style={{display:'flex', gap:10}}>
+                    {renderChatButton()}
+                    <div className={css.waitingBadge}>
+                        <Eye size={20} /> 正在观战中...
+                    </div>
                 </div>
             </div>
+            </>
         );
     }
 
@@ -187,8 +200,13 @@ export const GameActionBar = ({ onShowSettlement }) => {
     const modeInfo = getModeLabel(currentMode);
 
     return (
+        <>
+        {renderChatPanel()}
         <div className={css.actionBar}>
             <div className={css.buttonGroup}>
+                {/* [插入] 聊天按钮放在最左边 */}
+                {renderChatButton()}
+
                 {selectedCards.length > 0 && (
                     <button 
                         className={css.btnReset}
@@ -263,5 +281,6 @@ export const GameActionBar = ({ onShowSettlement }) => {
                 )}
             </div>
         </div>
+        </>
     );
 };

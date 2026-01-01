@@ -1,0 +1,91 @@
+.overlay {
+    position: absolute;
+    bottom: 80px; /* Action Bar 上方 */
+    right: 10px;  /* 靠右 */
+    width: 320px;
+    max-height: 400px;
+    background: rgba(30, 39, 46, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: slideUp 0.2s ease-out;
+    
+    /* [关键修复] 显式开启点击事件，因为父容器 gameSafeArea 设置了 none */
+    pointer-events: auto;
+}
+
+.header {
+    display: flex;
+    background: rgba(0,0,0,0.3);
+    padding: 5px;
+    gap: 5px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    flex-shrink: 0;
+}
+
+.tab {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #95a5a6;
+    padding: 8px 0;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.tabActive {
+    composes: tab;
+    background: rgba(255, 255, 255, 0.1);
+    color: #f1c40f;
+}
+
+.content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    /* 优化移动端滚动 */
+    -webkit-overflow-scrolling: touch;
+}
+
+.msgBtn {
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    color: #ecf0f1;
+    padding: 10px 15px;
+    text-align: left;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-left: 3px solid transparent;
+}
+
+.msgBtn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-left-color: #2ecc71;
+    transform: translateX(2px);
+}
+
+.closeArea {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 1999;
+    /* [关键修复] 遮罩层也需要开启交互，否则无法点击空白处关闭 */
+    pointer-events: auto;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}

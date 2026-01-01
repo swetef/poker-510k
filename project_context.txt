@@ -1,4 +1,4 @@
-Project Context Generated at 2025/12/30 19:17:13
+Project Context Generated at 2026/1/1 17:36:46
 
 
 ================================================================================
@@ -307,13 +307,13 @@ export default CountDownTimer;
 FILE PATH: client\src\components\game\GameActionBar.jsx
 ================================================================================
 import React, { useState, useEffect } from 'react';
-import { RotateCcw, Zap, Lightbulb, Clock, Loader2, AlertTriangle, Repeat, Shield, Coins, Coffee, Eye, ClipboardList, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { RotateCcw, Zap, Lightbulb, Clock, Loader2, AlertTriangle, Repeat, Shield, Coins, Coffee, Eye, ClipboardList, CheckCircle, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
 import css from './GameActionBar.module.css';
 import { useGame } from '../../context/GameContext.jsx';
 import TimerComponent from '../CountDownTimer.jsx';
 import { isBomb } from '../../utils/cardLogic.js';
+import { QuickChatPanel } from './QuickChatPanel.jsx'; // [新增]
 
-// [修改] 接收回调
 export const GameActionBar = ({ onShowSettlement }) => {
     const { 
         winner, roundResult, grandResult, selectedCards, 
@@ -322,19 +322,17 @@ export const GameActionBar = ({ onShowSettlement }) => {
         handlePass, handleRequestHint, handlePlayCards,
         isSubmitting, lastPlayerName,
         isSpectator, observedHands,
-        // [新增]
         isRoundOver, readyPlayers, handlePlayerReady,
-        // [新增] 观看控制
         watchedPlayerId, setWatchedPlayerId
     } = useGame();
 
     const [confirmState, setConfirmState] = useState(false);
+    const [showChat, setShowChat] = useState(false); // [新增]
 
     useEffect(() => {
         setConfirmState(false);
     }, [selectedCards, currentTurnId]);
 
-    // 切换观看对象
     const cycleWatchedPlayer = (direction) => {
         const availableIds = Object.keys(observedHands);
         if (availableIds.length <= 1) return;
@@ -354,58 +352,64 @@ export const GameActionBar = ({ onShowSettlement }) => {
         setWatchedPlayerId(availableIds[nextIndex]);
     };
 
-    // [新增] 结束状态的特殊 ActionBar
-    // [修复] 增加 grandResult 判断：如果大局结束，不显示准备按钮（只允许查看战绩，重开需走结算窗）
+    // [修改] 始终渲染聊天面板
+    const renderChatPanel = () => showChat && <QuickChatPanel onClose={() => setShowChat(false)} />;
+    
+    // [新增] 聊天按钮
+    const renderChatButton = () => (
+        <button 
+            className={css.btnSecondary} 
+            style={{padding: '8px', minWidth: '40px'}}
+            onClick={() => setShowChat(!showChat)}
+        >
+            <MessageCircle size={20} />
+        </button>
+    );
+
     if (isRoundOver) {
         const isReady = readyPlayers.includes(mySocketId);
         return (
-            <div className={css.actionBar}>
-                <div className={css.buttonGroup}>
-                    {/* 查看战绩 */}
-                    <button 
-                        className={css.btnSecondary}
-                        onClick={onShowSettlement}
-                        style={{background: '#34495e', padding: '10px 20px'}}
-                    >
-                        <ClipboardList size={18} style={{marginRight:5}} /> 查看战绩
-                    </button>
-
-                    {/* 准备按钮：仅当大局未结束时显示 */}
-                    {!grandResult && (
+            <>
+                {renderChatPanel()}
+                <div className={css.actionBar}>
+                    <div className={css.buttonGroup}>
+                        {renderChatButton()} {/* [插入] */}
+                        
                         <button 
-                            className={isReady ? css.btnSecondary : css.btnPlay}
-                            onClick={handlePlayerReady}
-                            disabled={isReady} // 准备后不可取消
-                            style={isReady ? {background: '#27ae60', opacity: 0.8, cursor: 'default'} : {padding: '10px 30px'}}
+                            className={css.btnSecondary}
+                            onClick={onShowSettlement}
+                            style={{background: '#34495e', padding: '10px 20px'}}
                         >
-                            {isReady ? (
-                                <><CheckCircle size={18} style={{marginRight:5}} /> 已准备</>
-                            ) : (
-                                '准备下一局'
-                            )}
+                            <ClipboardList size={18} style={{marginRight:5}} /> 查看战绩
                         </button>
-                    )}
+
+                        {!grandResult && (
+                            <button 
+                                className={isReady ? css.btnSecondary : css.btnPlay}
+                                onClick={handlePlayerReady}
+                                disabled={isReady} 
+                                style={isReady ? {background: '#27ae60', opacity: 0.8, cursor: 'default'} : {padding: '10px 30px'}}
+                            >
+                                {isReady ? (
+                                    <><CheckCircle size={18} style={{marginRight:5}} /> 已准备</>
+                                ) : (
+                                    '准备下一局'
+                                )}
+                            </button>
+                        )}
+                    </div>
                 </div>
-            </div>
+            </>
         );
     }
 
     if (winner || roundResult || grandResult) return null;
 
-    // [修改] 统一处理观战状态 (纯观众 OR 已完赛玩家)
     const myInfo = playersInfo[mySocketId] || {};
     const amIAutoPlay = myInfo.isAutoPlay;
     const currentMode = myInfo.autoPlayMode || 'SMART';
     
-    // 是否处于观战状态 (纯观众 或 玩家已出完且有队友可看)
-    // 逻辑：如果我是观众(isSpectator)，或者我有观察权限且我自己没牌了(手牌数0)
-    // 注意：myInfo.handCount 可能有延迟，这里直接用 observedHands 和 myInfo 判断更准
-    // 但为了简化，如果 observedHands 有值且我不是正在打牌的人(或者我手牌空了)，就显示观战条
-    
     const myHandCount = playersInfo[mySocketId] ? (playersInfo[mySocketId].handCount || 0) : 0;
-    // 如果我是观众，myHandCount通常为0或者undefined
-    // 只要有 observedHands，且 (是观众 OR 我手牌为0)，就显示切换条
-    
     const isWatchingMode = isSpectator || (Object.keys(observedHands).length > 0 && myHandCount === 0);
 
     if (isWatchingMode && Object.keys(observedHands).length > 0) {
@@ -413,9 +417,12 @@ export const GameActionBar = ({ onShowSettlement }) => {
         const availableCount = Object.keys(observedHands).length;
 
         return (
+             <>
+             {renderChatPanel()}
              <div className={css.actionBar}>
                 <div className={css.spectatorGroup}>
-                    {/* [修改] 将布局调整为： 左箭头 - 信息 - 右箭头 */}
+                    {renderChatButton()} {/* [插入] 观战也可以聊天 */}
+                    
                     {availableCount > 1 && (
                         <button className={css.spectatorBtn} onClick={() => cycleWatchedPlayer('prev')}>
                             <ChevronLeft size={28} />
@@ -434,17 +441,23 @@ export const GameActionBar = ({ onShowSettlement }) => {
                     )}
                 </div>
             </div>
+            </>
         );
     }
     
-    // 如果是纯观战但还没有手牌数据传过来 (刚进房间/没人出完)
     if (isSpectator) {
          return (
+             <>
+             {renderChatPanel()}
              <div className={css.actionBar}>
-                <div className={css.waitingBadge}>
-                    <Eye size={20} /> 正在观战中...
+                <div style={{display:'flex', gap:10}}>
+                    {renderChatButton()}
+                    <div className={css.waitingBadge}>
+                        <Eye size={20} /> 正在观战中...
+                    </div>
                 </div>
             </div>
+            </>
         );
     }
 
@@ -495,8 +508,13 @@ export const GameActionBar = ({ onShowSettlement }) => {
     const modeInfo = getModeLabel(currentMode);
 
     return (
+        <>
+        {renderChatPanel()}
         <div className={css.actionBar}>
             <div className={css.buttonGroup}>
+                {/* [插入] 聊天按钮放在最左边 */}
+                {renderChatButton()}
+
                 {selectedCards.length > 0 && (
                     <button 
                         className={css.btnReset}
@@ -571,6 +589,7 @@ export const GameActionBar = ({ onShowSettlement }) => {
                 )}
             </div>
         </div>
+        </>
     );
 };
 
@@ -1385,10 +1404,11 @@ FILE PATH: client\src\components\game\HandArea.module.css
 FILE PATH: client\src\components\game\PlayerLayout.jsx
 ================================================================================
 import React from 'react';
-import { Bot, Zap, CheckCircle, Eye } from 'lucide-react'; // [新增] 引入 Eye 图标
+import { Bot, Zap, CheckCircle, Eye } from 'lucide-react'; 
 import { PlayerAvatar } from '../BaseUI.jsx'; 
 import { useGame } from '../../context/GameContext.jsx'; 
 import { sortHand, getCardDisplay } from '../../utils/cardLogic.js';
+import { ChatBubble } from '../ui/ChatBubble.jsx'; // [新增]
 
 // [保持原样] 布局计算函数
 const calculateLayout = (otherPlayersCount) => {
@@ -1409,7 +1429,6 @@ const calculateLayout = (otherPlayersCount) => {
     };
 };
 
-// [保持原样] 小卡牌组件
 const CompactShowCard = ({ cardVal }) => {
     const { text, suit, color } = getCardDisplay(cardVal);
     return (
@@ -1446,8 +1465,8 @@ export const PlayerLayout = () => {
         roundPoints, roomConfig, turnRemaining, finishedRank, handCounts,
         isSpectator,
         isRoundOver, roundOverData, readyPlayers,
-        // [新增] 获取观战相关状态
-        observedHands, watchedPlayerId, setWatchedPlayerId
+        observedHands, watchedPlayerId, setWatchedPlayerId,
+        chatMessages // [新增]
     } = useGame();
 
     if (!players) return null;
@@ -1557,10 +1576,6 @@ export const PlayerLayout = () => {
                 display: 'flex', justifyContent: 'center', alignItems: 'flex-end'
             }
         };
-        
-        // 即使是观众模式，如果为了保持布局稳定，也可以把“自己”的位置留着（显示当前观看的对象或空着）
-        // 这里沿用原逻辑：如果在观战，我（作为观众）不在 players 列表中，myIndex 可能指向别人
-        // 但通常 spectator 模式下 myIndex 会处理好
         layoutItems.unshift(myItem);
     }
 
@@ -1584,14 +1599,15 @@ export const PlayerLayout = () => {
                 }
                 const isReady = isRoundOver && readyPlayers.includes(p.id);
 
-                // [新增] 观战状态判断
                 const canWatch = observedHands && observedHands[p.id] && observedHands[p.id].length > 0;
                 const isWatching = watchedPlayerId === p.id;
-
-                const cardCount = remainingCards.length;
+                const cardCount = handCounts[p.id] || 0;
                 let overlapMargin = -24; 
-                if (cardCount > 6) overlapMargin = -26;
-                if (cardCount > 12) overlapMargin = -28;
+                if (remainingCards.length > 6) overlapMargin = -26;
+                if (remainingCards.length > 12) overlapMargin = -28;
+
+                // [新增] 获取该玩家的聊天消息
+                const chatMsg = chatMessages[p.id]?.message;
 
                 return (
                     <div 
@@ -1601,12 +1617,13 @@ export const PlayerLayout = () => {
                             position: 'absolute', 
                             ...pos, 
                             transition: 'all 0.5s ease',
-                            // [新增] 如果可观战，显示手型光标
                             cursor: canWatch ? 'pointer' : 'default' 
                         }}
-                        // [新增] 点击切换观战视角
                         onClick={() => canWatch && setWatchedPlayerId(p.id)}
                     > 
+                        {/* [新增] 气泡组件，显示在头像上方 */}
+                        <ChatBubble message={chatMsg} />
+
                         <PlayerAvatar 
                             player={p} 
                             isTurn={p.id === currentTurnId} 
@@ -1618,14 +1635,12 @@ export const PlayerLayout = () => {
                             rank={finishedRankVal}
                             timerPosition={timerPos}
                             hideTimer={hideTimer} 
-                            cardCount={handCounts[p.id] || 0}
+                            cardCount={cardCount}
                             showCardCountMode={roomConfig ? roomConfig.showCardCountMode : false} 
                             team={info.team} 
                         />
                         
-                        {/* 状态徽章区域 */}
                         <div style={{position: 'absolute', top: -10, right: -10, display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end'}}>
-                            {/* [新增] 眼睛图标：表示可观战/正在观战 */}
                             {canWatch && (
                                 <div style={{
                                     background: isWatching ? '#3498db' : 'rgba(0,0,0,0.6)',
@@ -1642,14 +1657,12 @@ export const PlayerLayout = () => {
                                 </div>
                             )}
 
-                            {/* 原有的状态图标 */}
                             <div style={{display:'flex', gap:5}}>
                                 {isBot && <div className="statusBadgeBot"><Bot size={12}/> AI</div>}
                                 {isAuto && <div className="statusBadgeAuto"><Zap size={12}/> 托管</div>}
                             </div>
                         </div>
 
-                        {/* [保持原样] 摊牌展示 */}
                         {isRoundOver && remainingCards.length > 0 && (
                             <div style={{
                                 ...handAreaStyle,
@@ -1673,7 +1686,7 @@ export const PlayerLayout = () => {
                                     boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
                                     zIndex: 100
                                 }}>
-                                    余 {cardCount}
+                                    余 {remainingCards.length}
                                 </div>
 
                                 <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
@@ -1691,7 +1704,6 @@ export const PlayerLayout = () => {
                             </div>
                         )}
 
-                        {/* [保持原样] 准备状态 */}
                         {isReady && (
                             <div style={{
                                 position: 'absolute', top: -25, left: '50%', transform: 'translateX(-50%)',
@@ -1709,6 +1721,148 @@ export const PlayerLayout = () => {
         </>
     );
 };
+
+================================================================================
+FILE PATH: client\src\components\game\QuickChatPanel.jsx
+================================================================================
+import React, { useState } from 'react';
+import css from './QuickChatPanel.module.css';
+import { CHAT_CATEGORIES } from '../../utils/chatConfig.js';
+import { useGame } from '../../context/GameContext.jsx';
+
+export const QuickChatPanel = ({ onClose }) => {
+    const { handleSendQuickChat } = useGame();
+    const [activeTab, setActiveTab] = useState(CHAT_CATEGORIES[0].id);
+
+    const onSend = (msg) => {
+        handleSendQuickChat(msg);
+        onClose();
+    };
+
+    const currentCategory = CHAT_CATEGORIES.find(c => c.id === activeTab);
+
+    return (
+        <>
+            <div className={css.closeArea} onClick={onClose}></div>
+            <div className={css.overlay}>
+                <div className={css.header}>
+                    {CHAT_CATEGORIES.map(cat => (
+                        <button
+                            key={cat.id}
+                            className={activeTab === cat.id ? css.tabActive : css.tab}
+                            onClick={() => setActiveTab(cat.id)}
+                        >
+                            {cat.label}
+                        </button>
+                    ))}
+                </div>
+                
+                <div className={css.content}>
+                    {currentCategory.messages.map((msg, i) => (
+                        <button key={i} className={css.msgBtn} onClick={() => onSend(msg)}>
+                            {msg}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </>
+    );
+};
+
+================================================================================
+FILE PATH: client\src\components\game\QuickChatPanel.module.css
+================================================================================
+.overlay {
+    position: absolute;
+    bottom: 80px; /* Action Bar 上方 */
+    right: 10px;  /* 靠右 */
+    width: 320px;
+    max-height: 400px;
+    background: rgba(30, 39, 46, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: slideUp 0.2s ease-out;
+    
+    /* [关键修复] 显式开启点击事件，因为父容器 gameSafeArea 设置了 none */
+    pointer-events: auto;
+}
+
+.header {
+    display: flex;
+    background: rgba(0,0,0,0.3);
+    padding: 5px;
+    gap: 5px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    flex-shrink: 0;
+}
+
+.tab {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #95a5a6;
+    padding: 8px 0;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.tabActive {
+    composes: tab;
+    background: rgba(255, 255, 255, 0.1);
+    color: #f1c40f;
+}
+
+.content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    /* 优化移动端滚动 */
+    -webkit-overflow-scrolling: touch;
+}
+
+.msgBtn {
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    color: #ecf0f1;
+    padding: 10px 15px;
+    text-align: left;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-left: 3px solid transparent;
+}
+
+.msgBtn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-left-color: #2ecc71;
+    transform: translateX(2px);
+}
+
+.closeArea {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 1999;
+    /* [关键修复] 遮罩层也需要开启交互，否则无法点击空白处关闭 */
+    pointer-events: auto;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
 
 ================================================================================
 FILE PATH: client\src\components\game\RoomSettingsForm.jsx
@@ -3382,6 +3536,74 @@ FILE PATH: client\src\components\ui\Card.module.css
 }
 
 ================================================================================
+FILE PATH: client\src\components\ui\ChatBubble.jsx
+================================================================================
+import React from 'react';
+import css from './ChatBubble.module.css';
+
+export const ChatBubble = ({ message }) => {
+    if (!message) return null;
+
+    return (
+        <div className={css.bubbleContainer}>
+            <div className={css.bubbleBody}>
+                {message}
+                <div className={css.bubbleArrow}></div>
+            </div>
+        </div>
+    );
+};
+
+================================================================================
+FILE PATH: client\src\components\ui\ChatBubble.module.css
+================================================================================
+.bubbleContainer {
+    position: absolute;
+    z-index: 200;
+    pointer-events: none;
+    /* 默认在头像上方 */
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 10px;
+    width: max-content;
+    max-width: 200px;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.bubbleBody {
+    background: #fff;
+    color: #2c3e50;
+    padding: 8px 14px;
+    border-radius: 12px;
+    border-bottom-left-radius: 2px; /* 漫画气泡风格 */
+    font-size: 14px;
+    font-weight: bold;
+    line-height: 1.4;
+    text-align: center;
+    position: relative;
+    border: 2px solid #2c3e50;
+}
+
+.bubbleArrow {
+    position: absolute;
+    bottom: -6px;
+    left: 10px;
+    width: 10px;
+    height: 10px;
+    background: #fff;
+    border-right: 2px solid #2c3e50;
+    border-bottom: 2px solid #2c3e50;
+    transform: rotate(45deg);
+}
+
+@keyframes popIn {
+    0% { opacity: 0; transform: translateX(-50%) scale(0.5) translateY(20px); }
+    100% { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); }
+}
+
+================================================================================
 FILE PATH: client\src\components\ui\GameLogPanel.jsx
 ================================================================================
 import React, { useEffect, useRef, useState } from 'react'; 
@@ -3813,11 +4035,8 @@ export const GameProvider = ({ children }) => {
 
   const [isSpectator, setIsSpectator] = useState(false);
   const [observedHands, setObservedHands] = useState({});
-  
-  // [新增] 当前正在观看的玩家 ID
   const [watchedPlayerId, setWatchedPlayerId] = useState(null);
 
-  // [新增] 结算与准备状态
   const [isRoundOver, setIsRoundOver] = useState(false);
   const [roundOverData, setRoundOverData] = useState(null); 
   const [readyPlayers, setReadyPlayers] = useState([]); 
@@ -3828,7 +4047,6 @@ export const GameProvider = ({ children }) => {
       handleRoomAction, handleUpdateConfig
   } = roomLogic;
 
-  // [修改] 传递 Setters 给 useGameData
   const gameData = useGameData(socket, setIsLoading, {
       setIsRoundOver, setRoundOverData, setReadyPlayers
   });
@@ -3844,17 +4062,13 @@ export const GameProvider = ({ children }) => {
   const deckCount = activeRoomConfig ? activeRoomConfig.deckCount : 2;
   const battleLogic = useBattleLogic(socket, username, mySocketId, roomId, deckCount);
 
-  // --- [核心修复] 切后台断线后的自动重连逻辑 ---
   useEffect(() => {
-    // 只有当 Socket 重新连接上 (isConnected=true)，且本地有房间信息时，才尝试自动重连
     if (isConnected && socket && roomId && username) {
         console.log(`[AutoRejoin] Socket restored. Attempting to rejoin room ${roomId}...`);
         socket.emit('join_room', { roomId, username });
     }
   }, [isConnected, socket]); 
 
-  // [新增] 自动管理观看目标
-  // 当 observedHands 变化时，如果当前没有观看目标或目标失效，自动切到第一个
   useEffect(() => {
     const availableIds = Object.keys(observedHands);
     if (availableIds.length > 0) {
@@ -3920,8 +4134,9 @@ export const GameProvider = ({ children }) => {
       handlePass: () => battleLogic.handlePass(roomId),
       handlePlayCards: () => battleLogic.handlePlayCards(roomId),
       handleRequestHint: () => battleLogic.handleRequestHint(roomId),
+      // [新增] 包装发送消息
+      handleSendQuickChat: (msg) => battleLogic.handleSendQuickChat(roomId, msg),
 
-      // [新增] 玩家准备
       handlePlayerReady: () => {
           if (socket) socket.emit('player_ready', { roomId });
       },
@@ -3971,7 +4186,6 @@ export const GameProvider = ({ children }) => {
       gameState, 
       players, 
       
-      // [新增] 暴露给 UI 的状态
       isRoundOver,
       roundOverData,
       readyPlayers,
@@ -3987,9 +4201,11 @@ export const GameProvider = ({ children }) => {
 
       isSpectator,
       observedHands,
-      // [新增] 暴露观看状态
       watchedPlayerId,
-      setWatchedPlayerId
+      setWatchedPlayerId,
+      
+      // [新增] 暴露聊天数据
+      chatMessages: battleLogic.chatMessages
   };
 
   return (
@@ -4013,7 +4229,7 @@ FILE PATH: client\src\hooks\game\useBattleLogic.js
 import { useState, useEffect, useRef } from 'react';
 import { sortHand } from '../../utils/cardLogic.js';
 import SoundManager from '../../utils/SoundManager.js';
-import SmartHint from '../../utils/smartHint.js'; // 引入本地智能提示
+import SmartHint from '../../utils/smartHint.js'; 
 
 export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount = 2) => {
     // --- 局内状态 ---
@@ -4043,8 +4259,11 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
     const [availableHints, setAvailableHints] = useState([]); 
     const [hintIndex, setHintIndex] = useState(0);            
     
-    // [新增] 提交防抖状态
+    // 提交防抖状态
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // [新增] 聊天消息状态 { [playerId]: { message, id, time } }
+    const [chatMessages, setChatMessages] = useState({});
 
     // 交互 Ref
     const isDragging = useRef(false); 
@@ -4075,8 +4294,6 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
     // --- 自动计算提示 (当轮到我出牌时) ---
     useEffect(() => {
         if (currentTurnId === mySocketId && myHand.length > 0) {
-            // 本地计算，实时性更高
-            // 注意：lastPlayed 需要是最新的
             const hints = SmartHint.getSortedHints(myHand, lastPlayed, deckCount);
             setAvailableHints(hints);
             setHintIndex(0);
@@ -4109,39 +4326,45 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
             if (data.handCounts) setHandCounts(data.handCounts);
             
             backupHandRef.current = []; 
+            setChatMessages({}); // 清空聊天
         };
 
-        const onGameStateUpdate = (data) => {
+ const onGameStateUpdate = (data) => {
             setCurrentTurnId(data.currentTurnId);
             
             if (data.turnRemaining !== undefined) setTurnRemaining(data.turnRemaining);
 
             if (data.lastPlayed && data.lastPlayed.length > 0) {
                 if (data.lastPlayerName !== username) {
-                    SoundManager.play('play'); 
+                    SoundManager.play('play');
                 }
-            }
-            if (data.currentTurnId === mySocketId) {
-                SoundManager.play('alert');
+                
+                // [新增] 播放牌型语音 (所有人出的牌都读，增加临场感)
+                // 延迟 100ms 避免和扑克声混在一起
+                setTimeout(() => {
+                    SoundManager.playCardVoice(data.lastPlayed);
+                }, 100);
             }
 
-            if (data.lastPlayerName === username) {
-                 setIsSubmitting(false); 
+            if (data.currentTurnId === mySocketId) {
+                SoundManager.play('alert');
+                // [修复] 轮到自己时强制解除锁定，防止上一轮操作的防抖延时(3s)导致按钮不可点
+                setIsSubmitting(false);
             }
+            // ... (中间省略代码) ...
 
             if (data.lastPlayed) setLastPlayed(sortHand(data.lastPlayed, sortModeRef.current));
             setLastPlayerName(data.lastPlayerName || '');
             
             if (data.infoText) {
+                // [修改] 触发 'pass' 音效，SoundManager 内部会自动 speak("不要")
                 if (data.infoText.includes('不要')) {
                     SoundManager.play('pass');
                 }
                 
                 if (data.infoText !== 'PASS') {
-                    // [修改] 延长停留时间至 3.5s，配合 CSS 动画
                     setInfoMessage(data.infoText); 
                     setTimeout(() => setInfoMessage(''), 3500);
-                    
                     setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: data.infoText }]);
                 }
             }
@@ -4189,12 +4412,41 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
              }, 1000);
         };
 
+        // [新增] 聊天监听
+        const onChatBroadcast = (data) => {
+            const { senderId, message, timestamp } = data;
+            
+            // [修改] 播放消息提示音 + 朗读内容
+            SoundManager.play('tick'); 
+            SoundManager.speak(message); // 核心：直接朗读收到的消息内容
+
+            setChatMessages(prev => ({
+                ...prev,
+                [senderId]: { message, timestamp, id: Math.random() }
+            }));
+
+            // 4秒后自动移除该玩家的消息
+            setTimeout(() => {
+                setChatMessages(prev => {
+                    const current = prev[senderId];
+                    // 如果消息没变（没有发新消息），才移除
+                    if (current && current.timestamp === timestamp) {
+                        const newState = { ...prev };
+                        delete newState[senderId];
+                        return newState;
+                    }
+                    return prev;
+                });
+            }, 4000);
+        };
+
         socket.on('game_started', onGameStarted);
         socket.on('game_state_update', onGameStateUpdate);
         socket.on('hand_update', onHandUpdate);
         socket.on('play_error', onPlayError);
         socket.on('round_over', onRoundOver);
         socket.on('grand_game_over', onGrandGameOver);
+        socket.on('chat_broadcast', onChatBroadcast); // [新增]
 
         return () => {
             socket.off('game_started', onGameStarted);
@@ -4203,6 +4455,7 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
             socket.off('play_error', onPlayError);
             socket.off('round_over', onRoundOver);
             socket.off('grand_game_over', onGrandGameOver);
+            socket.off('chat_broadcast', onChatBroadcast); // [新增]
         };
     }, [socket, username, mySocketId]); 
 
@@ -4215,17 +4468,13 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
     });
     
     const handleToggleAutoPlay = (roomId) => socket.emit('toggle_auto_play', { roomId });
-
-    // [新增] 切换托管模式
     const handleSwitchAutoPlayMode = (roomId, mode) => socket.emit('switch_autoplay_mode', { roomId, mode });
 
     const handlePass = (roomId) => {
         if (isSubmitting) return; 
         setIsSubmitting(true);    
-
         socket.emit('pass_turn', { roomId });
         setSelectedCards([]);
-
         setTimeout(() => setIsSubmitting(false), 500); 
     };
     
@@ -4255,39 +4504,34 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
     const handlePlayCards = (roomId) => {
         if (isSubmitting) return; 
         if (selectedCards.length === 0) return alert("请先选牌");
-        
         setIsSubmitting(true); 
-        
         const cardsToPlay = [...selectedCards];
-        
         backupHandRef.current = [...myHand];
         const nextHand = myHand.filter(c => !cardsToPlay.includes(c));
         setMyHand(nextHand);
-        
         setLastPlayed(sortHand(cardsToPlay, sortModeRef.current));
         setLastPlayerName(username); 
         setSelectedCards([]); 
-        
         SoundManager.play('play');
         socket.emit('play_cards', { roomId, cards: cardsToPlay });
-
         setTimeout(() => setIsSubmitting(false), 3000);
     };
 
-    // [修改] 提示按钮点击逻辑：循环切换候选牌型
     const handleRequestHint = (roomId) => {
         if (availableHints.length > 0) {
-            // 当前选中的提示索引
             const targetHint = availableHints[hintIndex]; 
             setSelectedCards(targetHint);
-            
-            // 移动指针到下一个，为下次点击做准备
             setHintIndex((hintIndex + 1) % availableHints.length);
         } else {
             setInfoMessage('没有打得过的牌');
             setTimeout(()=>setInfoMessage(''), 1000);
             SoundManager.play('pass'); 
         }
+    };
+
+    // [新增] 发送聊天
+    const handleSendQuickChat = (roomId, message) => {
+        socket.emit('send_chat', { roomId, message });
     };
 
     return {
@@ -4298,17 +4542,20 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
         playersInfo, finishedRank, pendingPoints, gameLogs,
         sortMode, turnRemaining, handCounts,
         isSubmitting, 
+        
+        chatMessages, // [新增]
 
         // Actions
         toggleSort, 
         handleToggleAutoPlay,
-        handleSwitchAutoPlayMode, // [新增] 导出该方法
+        handleSwitchAutoPlayMode, 
         handlePass, 
         handlePlayCards,
         handleRequestHint,
         handleMouseDown, 
         handleMouseEnter,
-        handleClearSelection
+        handleClearSelection,
+        handleSendQuickChat // [新增]
     };
 };
 
@@ -7183,6 +7430,51 @@ export const isBomb = (cards) => {
 };
 
 ================================================================================
+FILE PATH: client\src\utils\chatConfig.js
+================================================================================
+export const CHAT_CATEGORIES = [
+    {
+        id: 'taunt',
+        label: '得瑟',
+        messages: [
+            "优势在我",
+            "全体起立",
+            "遥遥领先",
+            "给阿姨倒一杯卡布奇诺",
+            "17张牌你能秒我？",
+            "打击范围覆盖全球",
+            "Are you ok？"
+        ]
+    },
+    {
+        id: 'despair',
+        label: '破防',
+        messages: [
+            "根本赢不了",
+            "MAN！",
+            "What can i say",
+            "不讲武德",
+            "蒜鸟蒜鸟",
+            "耗子尾汁",
+            "凯哥我点了",
+            "我以为减速带呢"
+        ]
+    },
+    {
+        id: 'tactics',
+        label: '战术',
+        messages: [
+            "单走一个6",
+            "快点啊我等到花都谢了",
+            "你是MM还是GG",
+            "伞兵一号准备就绪",
+            "红警自爆卡车",
+            "跟我的保险说去吧"
+        ]
+    }
+];
+
+================================================================================
 FILE PATH: client\src\utils\constants.js
 ================================================================================
 
@@ -7375,6 +7667,44 @@ const GameRules = {
         return false;
     }
 };
+
+// === [关键修改] 新增命名导出，解决 smartHint.js 的引用报错 ===
+export const CARD_TYPES = {
+    // 基础牌型
+    SINGLE: 'SINGLE',
+    SOLO: 'SINGLE', // 兼容 smartHint 别名
+    PAIR: 'PAIR',
+    TRIPLE: 'TRIPLE',
+    
+    // 连对/飞机
+    LIANDUI: 'LIANDUI',
+    PAIR_STRAIGHT: 'LIANDUI', // 兼容 smartHint 别名
+    AIRPLANE: 'AIRPLANE',
+    
+    // 暂未实现但 smartHint 引用的牌型 (保留键名防止报错)
+    TRIPLE_W_SOLO: 'TRIPLE_W_SOLO',
+    TRIPLE_W_PAIR: 'TRIPLE_W_PAIR',
+    STRAIGHT: 'STRAIGHT',
+    
+    // 炸弹相关
+    BOMB_STD: 'BOMB_STD',
+    BOMB_MAX: 'BOMB_MAX',
+    '510K_PURE': '510K_PURE',
+    '510K_MIXED': '510K_MIXED',
+    BOMB_KING: 'BOMB_KING',
+    ROCKET: 'BOMB_KING', // 兼容 smartHint 别名
+    
+    // 炸弹判断常量 (smartHint 用)
+    BOMB: 'BOMB', 
+    
+    INVALID: 'INVALID',
+    EMPTY: 'EMPTY'
+};
+
+export const analyze = GameRules.analyze;
+export const getPoint = GameRules.getPoint;
+export const getSuit = GameRules.getSuit;
+export const canPlay = GameRules.canPlay;
 
 export default GameRules;
 
@@ -7780,16 +8110,107 @@ export default SmartHint;
 FILE PATH: client\src\utils\SoundManager.js
 ================================================================================
 /**
- * 简易 Web Audio API 音效管理器
+ * Web Audio API 音效管理器 + TTS 语音合成
+ * [升级] 支持文字转语音 (TTS) 播报牌型和消息
  */
+import GameRules from './gameRules.js'; // 引入规则用于分析牌型
+
 const SoundManager = {
     ctx: null,
+    enabled: true, // 全局静音开关
 
     init: () => {
         if (!SoundManager.ctx) {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             SoundManager.ctx = new AudioContext();
         }
+    },
+
+    /**
+     * 核心：文字转语音 (TTS)
+     * @param {string} text 要朗读的文本
+     * @param {number} rate 语速 (0.1 - 10)
+     */
+    speak: (text, rate = 1.4) => {
+        if (!SoundManager.enabled || !text) return;
+
+        // 如果浏览器支持语音合成
+        if ('speechSynthesis' in window) {
+            // 打断当前正在说的（防止消息堆积）
+            window.speechSynthesis.cancel();
+            
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = rate; 
+            utterance.pitch = 1.1; // 稍微高一点的音调更像游戏语音
+            utterance.lang = 'zh-CN';
+            
+            // 尝试选择中文女声 (不同浏览器实现不同，尽量优选)
+            const voices = window.speechSynthesis.getVoices();
+            const cnVoice = voices.find(v => v.lang.includes('zh') && v.name.includes('Google'));
+            if (cnVoice) utterance.voice = cnVoice;
+
+            window.speechSynthesis.speak(utterance);
+        }
+    },
+
+    /**
+     * [新增] 智能分析牌型并朗读
+     */
+    playCardVoice: (cards) => {
+        if (!cards || cards.length === 0) return;
+        
+        // 1. 分析牌型 (deckCount 传2即可，主要为了识别结构)
+        const analysis = GameRules.analyze(cards, 2); 
+        const ptText = SoundManager._getPointVoiceText(analysis.val);
+
+        let voiceText = '';
+
+        switch (analysis.type) {
+            case 'SINGLE': 
+                voiceText = ptText; 
+                break;
+            case 'PAIR': 
+                voiceText = `对${ptText}`; 
+                break;
+            case 'TRIPLE': 
+                voiceText = `三个${ptText}`; 
+                break;
+            case 'LIANDUI': 
+                voiceText = "连对"; 
+                break;
+            case 'AIRPLANE': 
+                voiceText = "飞机"; 
+                break;
+            case '510K_MIXED': 
+            case '510K_PURE': 
+                voiceText = "五十K"; 
+                break;
+            case 'BOMB_STD': 
+            case 'BOMB_MAX': 
+                voiceText = "炸弹"; 
+                break;
+            case 'BOMB_KING': 
+                voiceText = "王炸"; 
+                break;
+            default: 
+                break;
+        }
+
+        if (voiceText) SoundManager.speak(voiceText);
+    },
+
+    // 将数字转换为口语读法
+    _getPointVoiceText: (val) => {
+        // 3-13, 14(A), 15(2), 16(小王), 17(大王)
+        if (val <= 10) return val.toString();
+        if (val === 11) return '勾';
+        if (val === 12) return '圈';
+        if (val === 13) return '凯';
+        if (val === 14) return '尖';
+        if (val === 15) return '二';
+        if (val === 16) return '小王';
+        if (val === 17) return '大王';
+        return '';
     },
 
     play: (type) => {
@@ -7799,6 +8220,7 @@ const SoundManager = {
             }
             if (!SoundManager.ctx) SoundManager.init();
 
+            // 播放原有的 beep 音效作为背景音
             switch (type) {
                 case 'deal': 
                     SoundManager.beep(800, 0.05, 'sine');
@@ -7808,9 +8230,11 @@ const SoundManager = {
                     break;
                 case 'win': 
                     SoundManager.arpeggio([523.25, 659.25, 783.99, 1046.50], 0.1);
+                    SoundManager.speak("胜利", 1.0); // 加上语音
                     break;
                 case 'lose': 
                     SoundManager.beep(150, 0.3, 'sawtooth');
+                    SoundManager.speak("遗憾", 1.0); // 加上语音
                     break;
                 case 'alert': 
                     SoundManager.beep(880, 0.1, 'square');
@@ -7821,6 +8245,7 @@ const SoundManager = {
                     break;
                 case 'pass': 
                     SoundManager.beep(200, 0.15, 'triangle');
+                    SoundManager.speak("不要"); // [关键修改] 不要时触发语音
                     break;
                 default:
                     break;
@@ -7830,7 +8255,9 @@ const SoundManager = {
         }
     },
 
+    // (保留原有的音效生成函数)
     beep: (freq, duration, type = 'sine') => {
+        if (!SoundManager.enabled) return;
         const ctx = SoundManager.ctx;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -7845,6 +8272,7 @@ const SoundManager = {
     },
 
     noise: (duration) => {
+        if (!SoundManager.enabled) return;
         const ctx = SoundManager.ctx;
         const bufferSize = ctx.sampleRate * duration;
         const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
@@ -7863,6 +8291,7 @@ const SoundManager = {
     },
 
     arpeggio: (freqs, interval) => {
+        if (!SoundManager.enabled) return;
         freqs.forEach((f, i) => {
             setTimeout(() => SoundManager.beep(f, 0.2, 'triangle'), i * interval * 1000);
         });
@@ -7946,12 +8375,22 @@ const BotLogic = {
      * @param {Array} hand 手牌 (已排序)
      * @param {Array} lastPlayedCards 上家出的牌
      * @param {Number} deckCount 牌副数
-     * @param {Object} context 战局上下文 { mode: 'SMART'|'THRIFTY', pendingScore: 0, isTeammate: boolean }
+     * @param {Object} context 战局上下文 { mode: 'SMART'|'THRIFTY'|'AFK', pendingScore: 0, isTeammate: boolean }
      * @returns {Array|null} 返回要出的牌数组，null 代表不要
      */
     decideMove: (hand, lastPlayedCards, deckCount, context = {}) => {
+        // [调整] 提取上下文
+        const { isTeammate, pendingScore, mode } = context;
+        const isFreePlay = (!lastPlayedCards || lastPlayedCards.length === 0);
+
+        // [关键修改] 躺平模式 (AFK) 优先级最高
+        // 逻辑：只要不是必须出牌（首出阶段），一律返回 null (不要)。
+        // 这样可以屏蔽后续的“绝杀检测”，防止在 AFK 模式下因为手牌能一次出完而自动出牌。
+        if (mode === 'AFK' && !isFreePlay) {
+            return null;
+        }
+
         // 1. 获取所有符合规则的候选牌型，并按基础损耗(cost)排序
-        // 候选列表已由 getSortedHints 过滤了“为了出牌而拆炸弹”等极高Cost的选项
         const candidates = BotLogic.getSortedHints(hand, lastPlayedCards, deckCount);
         
         // 如果没有合法出牌，直接过
@@ -7960,10 +8399,6 @@ const BotLogic = {
         // 默认选择 Cost 最小（即最不心疼）的一手
         let bestMove = candidates[0];
         const bestAnalysis = CardRules.analyze(bestMove, deckCount);
-
-        // 2. 引入战术层 (Strategy Layer) 进行过滤
-        const { isTeammate, pendingScore, mode } = context;
-        const isFreePlay = (!lastPlayedCards || lastPlayedCards.length === 0);
 
         // --- 战术 A: 绝杀检测 ---
         // 如果最好的一手牌打出去就赢了，无视所有保留逻辑，直接出！
@@ -7988,9 +8423,6 @@ const BotLogic = {
 
         // --- 战术 C: 模式与贪婪 (Aggression) ---
         
-        // 躺平模式：只要不是绝杀，一律不要 (用于挂机)
-        if (mode === 'AFK') return null;
-
         // 省钱模式：如果桌上没分，且需要用炸弹管，那就PASS，省下炸弹
         if (mode === 'THRIFTY') {
             if (bestAnalysis.level > 0 && pendingScore < 50) {
@@ -10605,6 +11037,7 @@ const GameManager = require('../game/GameManager');
 
 module.exports = (io, socket, rooms) => {
 
+    // 广播游戏状态（公共视角）
     const broadcastGameState = (roomId, room, infoText = null) => {
         if (!room.gameManager) return;
         const publicState = room.gameManager.getPublicState();
@@ -10613,8 +11046,10 @@ module.exports = (io, socket, rooms) => {
         io.to(roomId).emit('game_state_update', publicState);
     };
 
+    // 广播房间信息（玩家列表、总分等）
     const broadcastRoomInfo = (roomId, room) => {
         const currentGrandScores = room.gameManager ? room.gameManager.grandScores : {};
+        // 如果没有分数记录，初始化为0
         if (Object.keys(currentGrandScores).length === 0) {
             room.players.forEach(p => {
                 if (currentGrandScores[p.id] === undefined) currentGrandScores[p.id] = 0;
@@ -10632,16 +11067,19 @@ module.exports = (io, socket, rooms) => {
         });
     };
 
+    // 处理游戏开始（包括第一局和后续轮次）
     const handleGameStart = (roomId, isNextRound) => {
         const room = rooms[roomId];
         if (!room) return;
 
+        // 如果是新的一轮且已有 GameManager，重用它；否则创建新的
         if (!isNextRound || !room.gameManager) {
             room.gameManager = new GameManager(room.config, room.players, io, roomId);
         }
 
         const startInfo = room.gameManager.startRound(isNextRound);
 
+        // 给每个玩家发送手牌
         room.players.forEach((p) => {
             if (!p.isBot) { 
                 const hand = startInfo.hands[p.id];
@@ -10653,10 +11091,11 @@ module.exports = (io, socket, rooms) => {
             }
         });
 
+        // 给观战者发送信息
         if (room.spectators) {
             room.spectators.forEach(s => {
                 io.to(s.id).emit('game_started', {
-                    hand: [],
+                    hand: [], // 观战者没有手牌
                     startPlayerId: startInfo.startPlayerId,
                     grandScores: room.gameManager.grandScores,
                     handCounts: room.gameManager.getPublicState().handCounts,
@@ -10673,7 +11112,9 @@ module.exports = (io, socket, rooms) => {
         broadcastGameState(roomId, room, msg);
     };
 
-    // 1. 开始游戏
+    // --- Socket 事件监听 ---
+
+    // 开始游戏请求（房主触发）
     socket.on('start_game', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room) return;
@@ -10682,13 +11123,14 @@ module.exports = (io, socket, rooms) => {
         if (!player || !player.isHost) return socket.emit('error_msg', '只有房主可以开始游戏');
         if (room.players.length < 2) return socket.emit('error_msg', '人数不足');
 
+        // 清理旧的游戏管理器
         if (room.gameManager) {
-            // [Bug修复] 显式调用 dispose 方法，杀死旧实例
             if (room.gameManager.dispose) room.gameManager.dispose();
             if (room.gameManager._clearTimer) room.gameManager._clearTimer();
             room.gameManager = null;
         }
         
+        // 检查组队模式人数
         if (room.config.isTeamMode && room.players.length % 2 !== 0) {
             room.config.isTeamMode = false;
             io.to(roomId).emit('error_msg', '人数为奇数，已自动关闭组队模式');
@@ -10697,9 +11139,11 @@ module.exports = (io, socket, rooms) => {
 
         const isTeamMode = room.config.isTeamMode && (room.players.length % 2 === 0);
         
+        // 进入抽座次阶段
         room.seatManager = new SeatManager(io, roomId, room.players, isTeamMode);
         io.to(roomId).emit('enter_draw_phase', { totalCards: room.players.length });
         
+        // 处理机器人的抽牌逻辑
         const bots = room.players.filter(p => p.isBot);
         bots.forEach((bot, i) => {
             setTimeout(() => {
@@ -10715,6 +11159,7 @@ module.exports = (io, socket, rooms) => {
                                 playerId: bot.id,
                                 name: bot.name
                             });
+                            // 如果抽牌结束
                             if (res.isFinished) {
                                 setTimeout(() => {
                                     if (!rooms[roomId]) return;
@@ -10732,6 +11177,7 @@ module.exports = (io, socket, rooms) => {
         });
     });
 
+    // 玩家抽取座位牌
     socket.on('draw_seat_card', ({ roomId, cardIndex }) => {
         const room = rooms[roomId];
         if (!room || !room.seatManager) return;
@@ -10765,18 +11211,18 @@ module.exports = (io, socket, rooms) => {
         }
     });
 
-    // 3. 下一局 (保留给房主强制开始，但正常流程走准备)
+    // 下一轮
     socket.on('next_round', ({ roomId }) => handleGameStart(roomId, true));
 
-    // [新增] 玩家准备
+    // 玩家准备
     socket.on('player_ready', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
         
         room.gameManager.handlePlayerReady(socket.id);
-        // handlePlayerReady 内部会广播 ready_state_update
     });
 
+    // 出牌
     socket.on('play_cards', ({ roomId, cards }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -10785,6 +11231,7 @@ module.exports = (io, socket, rooms) => {
 
         if (!result.success) return socket.emit('play_error', result.error);
 
+        // 更新出牌玩家的手牌
         const currentHand = room.gameManager.gameState.hands[socket.id];
         io.to(socket.id).emit('hand_update', currentHand);
 
@@ -10793,17 +11240,13 @@ module.exports = (io, socket, rooms) => {
                  broadcastGameState(roomId, room, result.logText);
             }
 
+            // 延迟结算，让玩家看清最后出的牌
             setTimeout(() => {
                 if (!rooms[roomId]) return;
-                // [Bug修复] 确保在异步回调中，GameManager 还是有效的
                 if (room.gameManager && !room.gameManager.disposed) {
                     room.gameManager._handleWin(result, socket.id);
-
-                    if (result.roundResult.isGrandOver) {
-                        // 大局结束，保留 gameManager 供查看战绩，但已标记 isGrandOverState
-                        // 此时不应设为 null，否则无法查看战绩
-                    } else {
-                        // 小局结束
+                    // 如果大局没结束，更新一下状态
+                    if (!result.roundResult.isGrandOver) {
                         broadcastGameState(roomId, room);
                     }
                 }
@@ -10813,6 +11256,7 @@ module.exports = (io, socket, rooms) => {
         }
     });
 
+    // 不要/过牌
     socket.on('pass_turn', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -10827,10 +11271,7 @@ module.exports = (io, socket, rooms) => {
                 if (!rooms[roomId]) return;
                 if (room.gameManager && !room.gameManager.disposed) {
                     room.gameManager._handleWin(result, socket.id);
-                    
-                    if (result.roundResult && result.roundResult.isGrandOver) {
-                         // grand over
-                    } else {
+                    if (!result.roundResult || !result.roundResult.isGrandOver) {
                         broadcastGameState(roomId, room);
                     }
                 }
@@ -10840,6 +11281,7 @@ module.exports = (io, socket, rooms) => {
         }
     });
 
+    // 托管开关
     socket.on('toggle_auto_play', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -10848,6 +11290,7 @@ module.exports = (io, socket, rooms) => {
         broadcastGameState(roomId, room);
     });
 
+    // 切换托管模式
     socket.on('switch_autoplay_mode', ({ roomId, mode }) => {
         const room = rooms[roomId];
         if (!room || !room.gameManager) return;
@@ -10856,11 +11299,32 @@ module.exports = (io, socket, rooms) => {
         broadcastGameState(roomId, room);
     });
 
+    // 请求提示
     socket.on('request_hint', ({ roomId }) => {
         const room = rooms[roomId];
         if (room && room.gameManager) {
-            // 需要实现 getHint，这里简化处理，通常前端自己算或者后端算好发回
+            // 提示逻辑主要在前端，这里服务端可能只需记录日志或辅助验证
+            // 目前主要逻辑由前端 SmartHint 完成
         }
+    });
+
+    // [新增] 快捷消息转发
+    socket.on('send_chat', ({ roomId, message }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+        
+        // 简单验证玩家是否在房间内
+        const isPlayer = room.players.some(p => p.id === socket.id);
+        const isSpectator = room.spectators && room.spectators.some(s => s.id === socket.id);
+
+        if (!isPlayer && !isSpectator) return;
+
+        // 广播给房间所有人（包括自己，方便统一处理回显）
+        io.to(roomId).emit('chat_broadcast', {
+            senderId: socket.id,
+            message: message,
+            timestamp: Date.now()
+        });
     });
 };
 

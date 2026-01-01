@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { sortHand } from '../../utils/cardLogic.js';
 import SoundManager from '../../utils/SoundManager.js';
-import SmartHint from '../../utils/smartHint.js'; // 引入本地智能提示
+import SmartHint from '../../utils/smartHint.js'; 
 
 export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount = 2) => {
     // --- 局内状态 ---
@@ -31,8 +31,11 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
     const [availableHints, setAvailableHints] = useState([]); 
     const [hintIndex, setHintIndex] = useState(0);            
     
-    // [新增] 提交防抖状态
+    // 提交防抖状态
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // [新增] 聊天消息状态 { [playerId]: { message, id, time } }
+    const [chatMessages, setChatMessages] = useState({});
 
     // 交互 Ref
     const isDragging = useRef(false); 
@@ -63,8 +66,6 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
     // --- 自动计算提示 (当轮到我出牌时) ---
     useEffect(() => {
         if (currentTurnId === mySocketId && myHand.length > 0) {
-            // 本地计算，实时性更高
-            // 注意：lastPlayed 需要是最新的
             const hints = SmartHint.getSortedHints(myHand, lastPlayed, deckCount);
             setAvailableHints(hints);
             setHintIndex(0);
@@ -97,39 +98,45 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
             if (data.handCounts) setHandCounts(data.handCounts);
             
             backupHandRef.current = []; 
+            setChatMessages({}); // 清空聊天
         };
 
-        const onGameStateUpdate = (data) => {
+ const onGameStateUpdate = (data) => {
             setCurrentTurnId(data.currentTurnId);
             
             if (data.turnRemaining !== undefined) setTurnRemaining(data.turnRemaining);
 
             if (data.lastPlayed && data.lastPlayed.length > 0) {
                 if (data.lastPlayerName !== username) {
-                    SoundManager.play('play'); 
+                    SoundManager.play('play');
                 }
-            }
-            if (data.currentTurnId === mySocketId) {
-                SoundManager.play('alert');
+                
+                // [新增] 播放牌型语音 (所有人出的牌都读，增加临场感)
+                // 延迟 100ms 避免和扑克声混在一起
+                setTimeout(() => {
+                    SoundManager.playCardVoice(data.lastPlayed);
+                }, 100);
             }
 
-            if (data.lastPlayerName === username) {
-                 setIsSubmitting(false); 
+            if (data.currentTurnId === mySocketId) {
+                SoundManager.play('alert');
+                // [修复] 轮到自己时强制解除锁定，防止上一轮操作的防抖延时(3s)导致按钮不可点
+                setIsSubmitting(false);
             }
+            // ... (中间省略代码) ...
 
             if (data.lastPlayed) setLastPlayed(sortHand(data.lastPlayed, sortModeRef.current));
             setLastPlayerName(data.lastPlayerName || '');
             
             if (data.infoText) {
+                // [修改] 触发 'pass' 音效，SoundManager 内部会自动 speak("不要")
                 if (data.infoText.includes('不要')) {
                     SoundManager.play('pass');
                 }
                 
                 if (data.infoText !== 'PASS') {
-                    // [修改] 延长停留时间至 3.5s，配合 CSS 动画
                     setInfoMessage(data.infoText); 
                     setTimeout(() => setInfoMessage(''), 3500);
-                    
                     setGameLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: data.infoText }]);
                 }
             }
@@ -177,12 +184,41 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
              }, 1000);
         };
 
+        // [新增] 聊天监听
+        const onChatBroadcast = (data) => {
+            const { senderId, message, timestamp } = data;
+            
+            // [修改] 播放消息提示音 + 朗读内容
+            SoundManager.play('tick'); 
+            SoundManager.speak(message); // 核心：直接朗读收到的消息内容
+
+            setChatMessages(prev => ({
+                ...prev,
+                [senderId]: { message, timestamp, id: Math.random() }
+            }));
+
+            // 4秒后自动移除该玩家的消息
+            setTimeout(() => {
+                setChatMessages(prev => {
+                    const current = prev[senderId];
+                    // 如果消息没变（没有发新消息），才移除
+                    if (current && current.timestamp === timestamp) {
+                        const newState = { ...prev };
+                        delete newState[senderId];
+                        return newState;
+                    }
+                    return prev;
+                });
+            }, 4000);
+        };
+
         socket.on('game_started', onGameStarted);
         socket.on('game_state_update', onGameStateUpdate);
         socket.on('hand_update', onHandUpdate);
         socket.on('play_error', onPlayError);
         socket.on('round_over', onRoundOver);
         socket.on('grand_game_over', onGrandGameOver);
+        socket.on('chat_broadcast', onChatBroadcast); // [新增]
 
         return () => {
             socket.off('game_started', onGameStarted);
@@ -191,6 +227,7 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
             socket.off('play_error', onPlayError);
             socket.off('round_over', onRoundOver);
             socket.off('grand_game_over', onGrandGameOver);
+            socket.off('chat_broadcast', onChatBroadcast); // [新增]
         };
     }, [socket, username, mySocketId]); 
 
@@ -203,17 +240,13 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
     });
     
     const handleToggleAutoPlay = (roomId) => socket.emit('toggle_auto_play', { roomId });
-
-    // [新增] 切换托管模式
     const handleSwitchAutoPlayMode = (roomId, mode) => socket.emit('switch_autoplay_mode', { roomId, mode });
 
     const handlePass = (roomId) => {
         if (isSubmitting) return; 
         setIsSubmitting(true);    
-
         socket.emit('pass_turn', { roomId });
         setSelectedCards([]);
-
         setTimeout(() => setIsSubmitting(false), 500); 
     };
     
@@ -243,39 +276,34 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
     const handlePlayCards = (roomId) => {
         if (isSubmitting) return; 
         if (selectedCards.length === 0) return alert("请先选牌");
-        
         setIsSubmitting(true); 
-        
         const cardsToPlay = [...selectedCards];
-        
         backupHandRef.current = [...myHand];
         const nextHand = myHand.filter(c => !cardsToPlay.includes(c));
         setMyHand(nextHand);
-        
         setLastPlayed(sortHand(cardsToPlay, sortModeRef.current));
         setLastPlayerName(username); 
         setSelectedCards([]); 
-        
         SoundManager.play('play');
         socket.emit('play_cards', { roomId, cards: cardsToPlay });
-
         setTimeout(() => setIsSubmitting(false), 3000);
     };
 
-    // [修改] 提示按钮点击逻辑：循环切换候选牌型
     const handleRequestHint = (roomId) => {
         if (availableHints.length > 0) {
-            // 当前选中的提示索引
             const targetHint = availableHints[hintIndex]; 
             setSelectedCards(targetHint);
-            
-            // 移动指针到下一个，为下次点击做准备
             setHintIndex((hintIndex + 1) % availableHints.length);
         } else {
             setInfoMessage('没有打得过的牌');
             setTimeout(()=>setInfoMessage(''), 1000);
             SoundManager.play('pass'); 
         }
+    };
+
+    // [新增] 发送聊天
+    const handleSendQuickChat = (roomId, message) => {
+        socket.emit('send_chat', { roomId, message });
     };
 
     return {
@@ -286,16 +314,19 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
         playersInfo, finishedRank, pendingPoints, gameLogs,
         sortMode, turnRemaining, handCounts,
         isSubmitting, 
+        
+        chatMessages, // [新增]
 
         // Actions
         toggleSort, 
         handleToggleAutoPlay,
-        handleSwitchAutoPlayMode, // [新增] 导出该方法
+        handleSwitchAutoPlayMode, 
         handlePass, 
         handlePlayCards,
         handleRequestHint,
         handleMouseDown, 
         handleMouseEnter,
-        handleClearSelection
+        handleClearSelection,
+        handleSendQuickChat // [新增]
     };
 };
