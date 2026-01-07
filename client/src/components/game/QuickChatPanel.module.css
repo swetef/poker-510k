@@ -3,7 +3,14 @@
     bottom: 80px; /* Action Bar 上方 */
     right: 10px;  /* 靠右 */
     width: 320px;
-    max-height: 400px;
+    
+    /* [关键修复] 动态高度限制 */
+    /* 确保高度不超过屏幕高度减去底部预留空间，防止顶部 Tab 栏溢出屏幕 */
+    max-height: min(400px, calc(100vh - 100px));
+    
+    /* 宽度限制，防止超小屏溢出 */
+    max-width: calc(100vw - 20px);
+
     background: rgba(30, 39, 46, 0.95);
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -25,7 +32,7 @@
     padding: 5px;
     gap: 5px;
     border-bottom: 1px solid rgba(255,255,255,0.1);
-    flex-shrink: 0;
+    flex-shrink: 0; /* 防止 Header 被压缩 */
 }
 
 .tab {
@@ -49,7 +56,7 @@
 
 .content {
     flex: 1;
-    overflow-y: auto;
+    overflow-y: auto; /* 让内容区域滚动，而不是撑大整个面板 */
     padding: 10px;
     display: flex;
     flex-direction: column;
@@ -88,4 +95,31 @@
 @keyframes slideUp {
     from { opacity: 0; transform: translateY(20px); }
     to { opacity: 1; transform: translateY(0); }
+}
+
+/* [新增] 针对手机横屏 (高度较小) 的特殊适配 
+   当屏幕高度小于 500px 时，采用紧凑模式
+*/
+@media (max-height: 500px) {
+    .overlay {
+        bottom: 70px; /* 稍微下移，紧贴 Action Bar */
+        right: 60px;  /* 稍微左移，避开可能的右侧刘海或手势条 */
+        width: 260px; /* 变窄，减少视线遮挡 */
+        border-radius: 12px;
+    }
+    
+    .tab {
+        padding: 6px 0; /* 压缩 Tab 高度 */
+        font-size: 12px;
+    }
+    
+    .msgBtn {
+        padding: 6px 10px; /* 压缩列表项高度 */
+        font-size: 12px;
+    }
+    
+    .content {
+        padding: 5px;
+        gap: 5px;
+    }
 }
