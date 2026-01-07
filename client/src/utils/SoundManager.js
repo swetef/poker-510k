@@ -1,19 +1,7 @@
-/**
- * Web Audio API 音效管理器 + TTS 语音合成 + MP3 语音播放
- * [升级] 支持自定义 MP3 语音包替换默认电子音
- */
 import GameRules from './gameRules.js'; 
 
-// ============================================================
-// 🎙️ 语音映射表 (2024全新语音包版)
-// 格式: "聊天文字": "子目录/文件名.mp3"
-// 基础路径: client/public/sounds/voice/
-// ============================================================
+
 const VOICE_MAP = {
-    // ============================================================
-    // 📂 文件夹 1: taunt (嘲讽/名场面)
-    // 对应分隔符 \\\\\ 之前的内容
-    // ============================================================
     "Are you ok": "taunt/are you ok!.MP3",
     "八十": "taunt/八十.mp3",
     "打击范围覆盖全球": "taunt/打击范围覆盖全球.MP3",
@@ -38,10 +26,8 @@ const VOICE_MAP = {
     "虎杀两羊": "taunt/一虎杀两羊.mp3",
     "优势在我": "taunt/优势在我.MP3",
 
-    // ============================================================
-    // 📂 文件夹 2: meme (搞怪/趣味音效)
-    // 对应分隔符 \\\\\ 和 ////// 中间的内容
-    // ============================================================
+
+
     "CS GOGOGO": "meme/CS GOGOGO.mp3",
     "被捅": "meme/被捅.mp3",
     "你干嘛哎呦": "meme/蔡徐坤你干嘛哎呦.mp3",
@@ -61,10 +47,8 @@ const VOICE_MAP = {
     "我听不懂": "meme/我听不懂.MP3",
     "一定要赢啊": "meme/一定要赢啊.MP3",
 
-    // ============================================================
-    // 📂 文件夹 3: chat (回应/反击)
-    // 对应分隔符 ////// 之后的内容
-    // ============================================================
+
+
     "抱怨": "chat/抱怨.mp3",
     "抱怨2": "chat/抱怨2.mp3",
     "敢不敢跟我比划": "chat/敢不敢跟我比划比划2.mp3",
@@ -91,12 +75,17 @@ const VOICE_MAP = {
 
 const SoundManager = {
     ctx: null,
-    enabled: true, // 全局静音开关
+    enabled: true, 
+    lastPlayedKey: null,      // [新增] 用于记录最后一手牌的特征，防止重复播报
+    _lastSpokenText: '',      // [新增] 用于TTS去重
+    _lastSpokenTime: 0,       // [新增] 用于TTS防抖时间戳
 
     init: () => {
         if (!SoundManager.ctx) {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
-            SoundManager.ctx = new AudioContext();
+            if (AudioContext) {
+                SoundManager.ctx = new AudioContext();
+            }
         }
     },
 
@@ -111,31 +100,30 @@ const SoundManager = {
         // 1. [优先] 检查是否有对应的 MP3 文件配置
         if (VOICE_MAP[text]) {
             const fileName = VOICE_MAP[text];
-            // 拼接路径：/sounds/voice/ + 子目录/文件名.mp3
             const audioPath = `/sounds/voice/${fileName}`;
             
             const audio = new Audio(audioPath);
-            audio.volume = 1.0; // 音量控制
+            audio.volume = 1.0; 
             
-            // 播放并捕获错误 (防止文件不存在报错)
             audio.play().catch(err => {
                 console.warn(`[SoundManager] 播放语音文件失败 (${audioPath}):`, err);
-                // 如果文件播放失败，自动降级回 TTS 电子音
                 SoundManager._ttsSpeak(text, rate);
             });
             return;
         }
 
-        // 2. [降级] 如果没有配置 MP3，使用浏览器自带 TTS
         SoundManager._ttsSpeak(text, rate);
     },
 
-    /**
-     * 内部方法：浏览器原生 TTS (电子音)
-     */
+
     _ttsSpeak: (text, rate) => {
+        // [新增] 防抖逻辑：如果 500ms 内重复播放相同文本，则直接拦截
+        const now = Date.now();
+        if (text === SoundManager._lastSpokenText && (now - SoundManager._lastSpokenTime < 500)) {
+            return;
+        }
+        
         if ('speechSynthesis' in window) {
-            // 打断当前正在说的（防止消息堆积）
             window.speechSynthesis.cancel();
             
             const utterance = new SpeechSynthesisUtterance(text);
@@ -147,16 +135,34 @@ const SoundManager = {
             const cnVoice = voices.find(v => v.lang.includes('zh') && v.name.includes('Google'));
             if (cnVoice) utterance.voice = cnVoice;
 
+            // 记录最后一次播放的信息
+            SoundManager._lastSpokenText = text;
+            SoundManager._lastSpokenTime = now;
+
             window.speechSynthesis.speak(utterance);
         }
     },
 
     /**
-     * 智能分析牌型并朗读 (保留电子音，因为组合太多，除非你也想录制 '对3', '三带一' 等)
+     * 智能分析牌型并朗读
      */
     playCardVoice: (cards) => {
-        if (!cards || cards.length === 0) return;
+        if (!cards || cards.length === 0) {
+            SoundManager.lastPlayedKey = null; // [新增] 如果没牌，重置记录
+            return;
+        }
         
+        // [新增] 生成当前牌组的唯一标识（根据牌的ID或数值）
+        const currentKey = cards.map(c => c.id || `${c.suit}_${c.val}`).join('|');
+        
+        // [新增] 如果这手牌已经播报过，则直接跳过
+        if (currentKey === SoundManager.lastPlayedKey) {
+            return;
+        }
+        
+        // 更新记录
+        SoundManager.lastPlayedKey = currentKey;
+
         const analysis = GameRules.analyze(cards, 2); 
         const ptText = SoundManager._getPointVoiceText(analysis.val);
 
@@ -238,8 +244,11 @@ const SoundManager = {
                     SoundManager.beep(600, 0.05, 'sine');
                     break;
                 case 'pass': 
+                    // [新增] 玩家不出牌时，也要重置 lastPlayedKey，
+                    // 这样当下一次有人再出同样的牌（比如一轮过后又回到相同手牌）时能重新触发报音
+                    SoundManager.lastPlayedKey = "pass"; 
                     SoundManager.beep(200, 0.15, 'triangle');
-                    SoundManager.speak("不要"); // 这里也会尝试去 VOICE_MAP 找 "不要"
+                    SoundManager.speak("不要"); 
                     break;
                 default:
                     break;
@@ -250,7 +259,7 @@ const SoundManager = {
     },
 
     beep: (freq, duration, type = 'sine') => {
-        if (!SoundManager.enabled) return;
+        if (!SoundManager.enabled || !SoundManager.ctx) return;
         const ctx = SoundManager.ctx;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -265,7 +274,7 @@ const SoundManager = {
     },
 
     noise: (duration) => {
-        if (!SoundManager.enabled) return;
+        if (!SoundManager.enabled || !SoundManager.ctx) return;
         const ctx = SoundManager.ctx;
         const bufferSize = ctx.sampleRate * duration;
         const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);

@@ -1,8 +1,8 @@
-Project Context Generated at 2026/1/7 15:28:16
+Project Context (Full) - Generated at 2026/1/7 16:00:03
 
 
 ================================================================================
-FILE PATH: client\eslint.config.js
+FILE: client\eslint.config.js
 ================================================================================
 import js from '@eslint/js'
 import globals from 'globals'
@@ -36,7 +36,7 @@ export default defineConfig([
 
 
 ================================================================================
-FILE PATH: client\index.html
+FILE: client\index.html
 ================================================================================
 <!doctype html>
 <html lang="en">
@@ -65,7 +65,7 @@ FILE PATH: client\index.html
 </html>
 
 ================================================================================
-FILE PATH: client\package.json
+FILE: client\package.json
 ================================================================================
 {
   "name": "client",
@@ -102,7 +102,7 @@ FILE PATH: client\package.json
 
 
 ================================================================================
-FILE PATH: client\src\App.css
+FILE: client\src\App.css
 ================================================================================
 #root {
   max-width: 1280px;
@@ -149,7 +149,7 @@ FILE PATH: client\src\App.css
 
 
 ================================================================================
-FILE PATH: client\src\App.jsx
+FILE: client\src\App.jsx
 ================================================================================
 import React from 'react';
 import { useGame } from './context/GameContext';
@@ -182,7 +182,7 @@ export default function App() {
 }
 
 ================================================================================
-FILE PATH: client\src\components\BaseUI.jsx
+FILE: client\src\components\BaseUI.jsx
 ================================================================================
 
 export { Card, MiniCard } from './ui/Card.jsx';
@@ -192,7 +192,7 @@ export { LandscapeHint, DisconnectAlert } from './ui/SystemHints.jsx';
 
 
 ================================================================================
-FILE PATH: client\src\components\CountDownTimer.jsx
+FILE: client\src\components\CountDownTimer.jsx
 ================================================================================
 import React, { useState, useEffect, useRef } from 'react';
 import { Clock } from 'lucide-react';
@@ -304,7 +304,7 @@ const CountDownTimer = ({ initialSeconds, totalSeconds = 60, position = 'top' })
 export default CountDownTimer;
 
 ================================================================================
-FILE PATH: client\src\components\game\GameActionBar.jsx
+FILE: client\src\components\game\GameActionBar.jsx
 ================================================================================
 import React, { useState, useEffect } from 'react';
 import { RotateCcw, Zap, Lightbulb, Clock, Loader2, AlertTriangle, Repeat, Shield, Coins, Coffee, Eye, ClipboardList, CheckCircle, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
@@ -594,7 +594,7 @@ export const GameActionBar = ({ onShowSettlement }) => {
 };
 
 ================================================================================
-FILE PATH: client\src\components\game\GameActionBar.module.css
+FILE: client\src\components\game\GameActionBar.module.css
 ================================================================================
 .actionBar {
     position: absolute;
@@ -807,7 +807,7 @@ FILE PATH: client\src\components\game\GameActionBar.module.css
 }
 
 ================================================================================
-FILE PATH: client\src\components\game\GameHeader.jsx
+FILE: client\src\components\game\GameHeader.jsx
 ================================================================================
 import React, { useState } from 'react';
 // [修改] 引入 Info 图标
@@ -1003,7 +1003,7 @@ export const GameHeader = () => {
 };
 
 ================================================================================
-FILE PATH: client\src\components\game\GameHeader.module.css
+FILE: client\src\components\game\GameHeader.module.css
 ================================================================================
 /* 顶部栏容器 */
 .header {
@@ -1231,7 +1231,7 @@ FILE PATH: client\src\components\game\GameHeader.module.css
 }
 
 ================================================================================
-FILE PATH: client\src\components\game\HandArea.jsx
+FILE: client\src\components\game\HandArea.jsx
 ================================================================================
 import React, { useState, useEffect } from 'react';
 import { Bot, Eye } from 'lucide-react';
@@ -1350,7 +1350,7 @@ export const HandArea = () => {
 };
 
 ================================================================================
-FILE PATH: client\src\components\game\HandArea.module.css
+FILE: client\src\components\game\HandArea.module.css
 ================================================================================
 .handArea {
     position: absolute;
@@ -1401,7 +1401,7 @@ FILE PATH: client\src\components\game\HandArea.module.css
 }
 
 ================================================================================
-FILE PATH: client\src\components\game\PlayerLayout.jsx
+FILE: client\src\components\game\PlayerLayout.jsx
 ================================================================================
 import React from 'react';
 import { Bot, Zap, CheckCircle, Eye } from 'lucide-react'; 
@@ -1723,7 +1723,7 @@ export const PlayerLayout = () => {
 };
 
 ================================================================================
-FILE PATH: client\src\components\game\QuickChatPanel.jsx
+FILE: client\src\components\game\QuickChatPanel.jsx
 ================================================================================
 import React, { useState } from 'react';
 import css from './QuickChatPanel.module.css';
@@ -1770,14 +1770,21 @@ export const QuickChatPanel = ({ onClose }) => {
 };
 
 ================================================================================
-FILE PATH: client\src\components\game\QuickChatPanel.module.css
+FILE: client\src\components\game\QuickChatPanel.module.css
 ================================================================================
 .overlay {
     position: absolute;
     bottom: 80px; /* Action Bar 上方 */
     right: 10px;  /* 靠右 */
     width: 320px;
-    max-height: 400px;
+    
+    /* [关键修复] 动态高度限制 */
+    /* 确保高度不超过屏幕高度减去底部预留空间，防止顶部 Tab 栏溢出屏幕 */
+    max-height: min(400px, calc(100vh - 100px));
+    
+    /* 宽度限制，防止超小屏溢出 */
+    max-width: calc(100vw - 20px);
+
     background: rgba(30, 39, 46, 0.95);
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -1799,7 +1806,7 @@ FILE PATH: client\src\components\game\QuickChatPanel.module.css
     padding: 5px;
     gap: 5px;
     border-bottom: 1px solid rgba(255,255,255,0.1);
-    flex-shrink: 0;
+    flex-shrink: 0; /* 防止 Header 被压缩 */
 }
 
 .tab {
@@ -1823,7 +1830,7 @@ FILE PATH: client\src\components\game\QuickChatPanel.module.css
 
 .content {
     flex: 1;
-    overflow-y: auto;
+    overflow-y: auto; /* 让内容区域滚动，而不是撑大整个面板 */
     padding: 10px;
     display: flex;
     flex-direction: column;
@@ -1864,8 +1871,35 @@ FILE PATH: client\src\components\game\QuickChatPanel.module.css
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* [新增] 针对手机横屏 (高度较小) 的特殊适配 
+   当屏幕高度小于 500px 时，采用紧凑模式
+*/
+@media (max-height: 500px) {
+    .overlay {
+        bottom: 70px; /* 稍微下移，紧贴 Action Bar */
+        right: 60px;  /* 稍微左移，避开可能的右侧刘海或手势条 */
+        width: 260px; /* 变窄，减少视线遮挡 */
+        border-radius: 12px;
+    }
+    
+    .tab {
+        padding: 6px 0; /* 压缩 Tab 高度 */
+        font-size: 12px;
+    }
+    
+    .msgBtn {
+        padding: 6px 10px; /* 压缩列表项高度 */
+        font-size: 12px;
+    }
+    
+    .content {
+        padding: 5px;
+        gap: 5px;
+    }
+}
+
 ================================================================================
-FILE PATH: client\src\components\game\RoomSettingsForm.jsx
+FILE: client\src\components\game\RoomSettingsForm.jsx
 ================================================================================
 import React from 'react';
 import { Users, Layers, Target, Clock, Shuffle, Sparkles, Shield, Eye, Award, Sliders } from 'lucide-react'; 
@@ -2132,7 +2166,7 @@ export const RoomSettingsForm = ({ config, onChange, readOnly = false }) => {
 };
 
 ================================================================================
-FILE PATH: client\src\components\game\RoomSettingsForm.module.css
+FILE: client\src\components\game\RoomSettingsForm.module.css
 ================================================================================
 .configContainer {
     width: 100%;
@@ -2280,7 +2314,7 @@ FILE PATH: client\src\components\game\RoomSettingsForm.module.css
 }
 
 ================================================================================
-FILE PATH: client\src\components\game\SettlementModal.jsx
+FILE: client\src\components\game\SettlementModal.jsx
 ================================================================================
 import React, { useState, useEffect } from 'react';
 import { Crown, Coins, List, History, X } from 'lucide-react';
@@ -2463,7 +2497,7 @@ export const SettlementModal = ({ isOpen, onClose }) => {
 };
 
 ================================================================================
-FILE PATH: client\src\components\game\SettlementModal.module.css
+FILE: client\src\components\game\SettlementModal.module.css
 ================================================================================
 .modalOverlay {
     position: fixed; 
@@ -2676,7 +2710,7 @@ FILE PATH: client\src\components\game\SettlementModal.module.css
 }
 
 ================================================================================
-FILE PATH: client\src\components\game\TableCenterArea.jsx
+FILE: client\src\components\game\TableCenterArea.jsx
 ================================================================================
 import React from 'react';
 import { useGame } from '../../context/GameContext.jsx';
@@ -2742,7 +2776,7 @@ export const TableCenterArea = () => {
 };
 
 ================================================================================
-FILE PATH: client\src\components\game\TableCenterArea.module.css
+FILE: client\src\components\game\TableCenterArea.module.css
 ================================================================================
 /* 桌面出牌展示区 (居中) */
 .tableCenter {
@@ -2871,7 +2905,7 @@ FILE PATH: client\src\components\game\TableCenterArea.module.css
 }
 
 ================================================================================
-FILE PATH: client\src\components\modals\RulesModal.jsx
+FILE: client\src\components\modals\RulesModal.jsx
 ================================================================================
 import React from 'react';
 import { BookOpen, X, Trophy, AlertTriangle, Zap } from 'lucide-react';
@@ -2939,7 +2973,7 @@ export const RulesModal = ({ isOpen, onClose }) => {
 };
 
 ================================================================================
-FILE PATH: client\src\components\modals\RulesModal.module.css
+FILE: client\src\components\modals\RulesModal.module.css
 ================================================================================
 .modalOverlay {
     position: fixed;
@@ -3064,7 +3098,7 @@ FILE PATH: client\src\components\modals\RulesModal.module.css
 }
 
 ================================================================================
-FILE PATH: client\src\components\modals\SettingsModal.jsx
+FILE: client\src\components\modals\SettingsModal.jsx
 ================================================================================
 import React from 'react';
 import { Settings, X } from 'lucide-react';
@@ -3105,7 +3139,7 @@ export const SettingsModal = ({ isOpen, onClose, config, onChange, readOnly }) =
 };
 
 ================================================================================
-FILE PATH: client\src\components\modals\SettingsModal.module.css
+FILE: client\src\components\modals\SettingsModal.module.css
 ================================================================================
 .modalOverlay {
     position: fixed;
@@ -3200,7 +3234,7 @@ FILE PATH: client\src\components\modals\SettingsModal.module.css
 }
 
 ================================================================================
-FILE PATH: client\src\components\ScoreTable.jsx
+FILE: client\src\components\ScoreTable.jsx
 ================================================================================
 import React from 'react';
 import { Trophy, Shield, Medal, ScrollText } from 'lucide-react';
@@ -3371,7 +3405,7 @@ export const ScoreTable = ({
 };
 
 ================================================================================
-FILE PATH: client\src\components\ui\Card.jsx
+FILE: client\src\components\ui\Card.jsx
 ================================================================================
 import React from 'react';
 import { getCardDisplay } from '../../utils/cardLogic.js';
@@ -3445,7 +3479,7 @@ export const MiniCard = ({ cardVal, index }) => {
 };
 
 ================================================================================
-FILE PATH: client\src\components\ui\Card.module.css
+FILE: client\src\components\ui\Card.module.css
 ================================================================================
 /* 基础卡牌容器 */
 .card {
@@ -3536,7 +3570,7 @@ FILE PATH: client\src\components\ui\Card.module.css
 }
 
 ================================================================================
-FILE PATH: client\src\components\ui\ChatBubble.jsx
+FILE: client\src\components\ui\ChatBubble.jsx
 ================================================================================
 import React from 'react';
 import css from './ChatBubble.module.css';
@@ -3555,7 +3589,7 @@ export const ChatBubble = ({ message }) => {
 };
 
 ================================================================================
-FILE PATH: client\src\components\ui\ChatBubble.module.css
+FILE: client\src\components\ui\ChatBubble.module.css
 ================================================================================
 .bubbleContainer {
     position: absolute;
@@ -3604,7 +3638,7 @@ FILE PATH: client\src\components\ui\ChatBubble.module.css
 }
 
 ================================================================================
-FILE PATH: client\src\components\ui\GameLogPanel.jsx
+FILE: client\src\components\ui\GameLogPanel.jsx
 ================================================================================
 import React, { useEffect, useRef, useState } from 'react'; 
 import { History, ChevronDown, ChevronUp } from 'lucide-react'; 
@@ -3652,7 +3686,7 @@ export const GameLogPanel = ({ logs }) => {
 };
 
 ================================================================================
-FILE PATH: client\src\components\ui\GameLogPanel.module.css
+FILE: client\src\components\ui\GameLogPanel.module.css
 ================================================================================
 .panel {
     position: absolute;
@@ -3726,7 +3760,7 @@ FILE PATH: client\src\components\ui\GameLogPanel.module.css
 }
 
 ================================================================================
-FILE PATH: client\src\components\ui\PlayerAvatar.jsx
+FILE: client\src\components\ui\PlayerAvatar.jsx
 ================================================================================
 import React from 'react';
 import { Trophy, Flag, Shield, Coins } from 'lucide-react';
@@ -3809,7 +3843,7 @@ export const PlayerAvatar = ({ player, isTurn, score, roundScore = 0, targetScor
 };
 
 ================================================================================
-FILE PATH: client\src\components\ui\PlayerAvatar.module.css
+FILE: client\src\components\ui\PlayerAvatar.module.css
 ================================================================================
 /* 头像容器 */
 .playerBox {
@@ -3953,7 +3987,7 @@ FILE PATH: client\src\components\ui\PlayerAvatar.module.css
 }
 
 ================================================================================
-FILE PATH: client\src\components\ui\SystemHints.jsx
+FILE: client\src\components\ui\SystemHints.jsx
 ================================================================================
 import React from 'react';
 import { RefreshCw, WifiOff } from 'lucide-react';
@@ -4019,7 +4053,7 @@ export const DisconnectAlert = () => {
 };
 
 ================================================================================
-FILE PATH: client\src\context\GameContext.jsx
+FILE: client\src\context\GameContext.jsx
 ================================================================================
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 
@@ -4224,7 +4258,7 @@ export const useGame = () => {
 };
 
 ================================================================================
-FILE PATH: client\src\hooks\game\useBattleLogic.js
+FILE: client\src\hooks\game\useBattleLogic.js
 ================================================================================
 import { useState, useEffect, useRef } from 'react';
 import { sortHand } from '../../utils/cardLogic.js';
@@ -4560,7 +4594,7 @@ export const useBattleLogic = (socket, username, mySocketId, roomId, deckCount =
 };
 
 ================================================================================
-FILE PATH: client\src\hooks\game\useGameData.js
+FILE: client\src\hooks\game\useGameData.js
 ================================================================================
 import { useState, useEffect } from 'react';
 import SoundManager from '../../utils/SoundManager.js';
@@ -4687,7 +4721,7 @@ export const useGameData = (socket, setIsLoading, { setIsRoundOver, setRoundOver
 };
 
 ================================================================================
-FILE PATH: client\src\hooks\game\useRoomLogic.js
+FILE: client\src\hooks\game\useRoomLogic.js
 ================================================================================
 import { useState, useEffect } from 'react';
 
@@ -4761,7 +4795,7 @@ export const useRoomLogic = (socket, isConnected) => {
 };
 
 ================================================================================
-FILE PATH: client\src\hooks\game\useSocketCore.js
+FILE: client\src\hooks\game\useSocketCore.js
 ================================================================================
 import { useEffect, useRef } from 'react';
 import { useSocketConnection } from '../useSocketConnection.js';
@@ -4792,7 +4826,7 @@ export const useSocketCore = (username, roomId) => {
 };
 
 ================================================================================
-FILE PATH: client\src\hooks\useHandGesture.js
+FILE: client\src\hooks\useHandGesture.js
 ================================================================================
 import { useEffect, useRef } from 'react';
 import { getCardIndexFromTouch } from '../utils/cardLogic.js';
@@ -4947,7 +4981,7 @@ export const useHandGesture = ({
 };
 
 ================================================================================
-FILE PATH: client\src\hooks\useSocketConnection.js
+FILE: client\src\hooks\useSocketConnection.js
 ================================================================================
 import { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
@@ -5083,7 +5117,7 @@ export const useSocketConnection = () => {
 };
 
 ================================================================================
-FILE PATH: client\src\index.css
+FILE: client\src\index.css
 ================================================================================
 /* =========================================
    全局基础样式 (Base & Reset)
@@ -5467,7 +5501,7 @@ button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color;
 }
 
 ================================================================================
-FILE PATH: client\src\main.jsx
+FILE: client\src\main.jsx
 ================================================================================
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -5486,7 +5520,7 @@ createRoot(document.getElementById('root')).render(
 )
 
 ================================================================================
-FILE PATH: client\src\screens\DrawSeatScreen.jsx
+FILE: client\src\screens\DrawSeatScreen.jsx
 ================================================================================
 import React, { useState, useEffect } from 'react';
 import { Card } from '../components/BaseUI.jsx'; 
@@ -5619,7 +5653,7 @@ export const DrawSeatScreen = () => {
 };
 
 ================================================================================
-FILE PATH: client\src\screens\DrawSeatScreen.module.css
+FILE: client\src\screens\DrawSeatScreen.module.css
 ================================================================================
 /* 抽签页主容器 (复用游戏页背景风格) */
 .drawTable {
@@ -5837,7 +5871,7 @@ FILE PATH: client\src\screens\DrawSeatScreen.module.css
 }
 
 ================================================================================
-FILE PATH: client\src\screens\GameScreen.jsx
+FILE: client\src\screens\GameScreen.jsx
 ================================================================================
 import React, { useState } from 'react';
 import css from './GameScreen.module.css'; 
@@ -5938,7 +5972,7 @@ export const GameScreen = () => {
 };
 
 ================================================================================
-FILE PATH: client\src\screens\GameScreen.module.css
+FILE: client\src\screens\GameScreen.module.css
 ================================================================================
 /* 游戏主容器 */
 .gameTable {
@@ -6040,7 +6074,7 @@ FILE PATH: client\src\screens\GameScreen.module.css
 }
 
 ================================================================================
-FILE PATH: client\src\screens\LobbyScreen.jsx
+FILE: client\src\screens\LobbyScreen.jsx
 ================================================================================
 import React, { useState } from 'react';
 import { Target, Layers, User, Play, Clock, Bot, Shield, ArrowUp, ArrowDown, Settings, X, Sparkles, Award, ChevronLeft } from 'lucide-react';
@@ -6309,7 +6343,7 @@ export const LobbyScreen = () => {
 };
 
 ================================================================================
-FILE PATH: client\src\screens\LobbyScreen.module.css
+FILE: client\src\screens\LobbyScreen.module.css
 ================================================================================
 /* --- [新增] 大厅页专用容器 --- */
 .lobbyContainer {
@@ -6579,7 +6613,7 @@ FILE PATH: client\src\screens\LobbyScreen.module.css
 }
 
 ================================================================================
-FILE PATH: client\src\screens\LoginScreen.jsx
+FILE: client\src\screens\LoginScreen.jsx
 ================================================================================
 import React, { useState, useEffect } from 'react'; 
 import { User, Monitor, RefreshCw, Plus, LogIn, Maximize, Minimize, Wifi, WifiOff, History, BookOpen } from 'lucide-react'; 
@@ -6812,7 +6846,7 @@ export const LoginScreen = () => {
 };
 
 ================================================================================
-FILE PATH: client\src\screens\LoginScreen.module.css
+FILE: client\src\screens\LoginScreen.module.css
 ================================================================================
 /* =========================================
    登录页专属样式 (LoginScreen)
@@ -7227,7 +7261,7 @@ FILE PATH: client\src\screens\LoginScreen.module.css
 }
 
 ================================================================================
-FILE PATH: client\src\utils\cardLogic.js
+FILE: client\src\utils\cardLogic.js
 ================================================================================
 // 纯逻辑工具
 
@@ -7430,7 +7464,7 @@ export const isBomb = (cards) => {
 };
 
 ================================================================================
-FILE PATH: client\src\utils\chatConfig.js
+FILE: client\src\utils\chatConfig.js
 ================================================================================
 export const CHAT_CATEGORIES = [
     {
@@ -7468,12 +7502,12 @@ export const CHAT_CATEGORIES = [
 ];
 
 ================================================================================
-FILE PATH: client\src\utils\constants.js
+FILE: client\src\utils\constants.js
 ================================================================================
 
 
 ================================================================================
-FILE PATH: client\src\utils\gameRules.js
+FILE: client\src\utils\gameRules.js
 ================================================================================
 /**
  * 核心游戏规则 (复刻服务端逻辑)
@@ -7702,7 +7736,7 @@ export const canPlay = GameRules.canPlay;
 export default GameRules;
 
 ================================================================================
-FILE PATH: client\src\utils\smartHint.js
+FILE: client\src\utils\smartHint.js
 ================================================================================
 /**
  * 智能提示逻辑 (优化版)
@@ -8100,7 +8134,7 @@ const SmartHint = {
 export default SmartHint;
 
 ================================================================================
-FILE PATH: client\src\utils\SoundManager.js
+FILE: client\src\utils\SoundManager.js
 ================================================================================
 /**
  * Web Audio API 音效管理器 + TTS 语音合成 + MP3 语音播放
@@ -8398,7 +8432,7 @@ const SoundManager = {
 export default SoundManager;
 
 ================================================================================
-FILE PATH: client\vite.config.js
+FILE: client\vite.config.js
 ================================================================================
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -8410,7 +8444,7 @@ export default defineConfig({
 
 
 ================================================================================
-FILE PATH: server\config\constants.js
+FILE: server\config\constants.js
 ================================================================================
 // ==========================================
 // 游戏服务端全局配置文件
@@ -8457,7 +8491,7 @@ module.exports = {
 };
 
 ================================================================================
-FILE PATH: server\game\BotLogic.js
+FILE: server\game\BotLogic.js
 ================================================================================
 const CardRules = require('./CardRules');
 
@@ -8953,7 +8987,7 @@ const BotLogic = {
 module.exports = BotLogic;
 
 ================================================================================
-FILE PATH: server\game\BotManager.js
+FILE: server\game\BotManager.js
 ================================================================================
 const BotLogic = require('./BotLogic');
 const CardRules = require('./CardRules');
@@ -9180,7 +9214,7 @@ class BotManager {
 module.exports = BotManager;
 
 ================================================================================
-FILE PATH: server\game\CardRules.js
+FILE: server\game\CardRules.js
 ================================================================================
 // 纯规则计算 (510K 逻辑、比大小、手牌操作)
 
@@ -9465,7 +9499,7 @@ const CardRules = {
 module.exports = CardRules;
 
 ================================================================================
-FILE PATH: server\game\Deck.js
+FILE: server\game\Deck.js
 ================================================================================
 // 牌库生成与洗牌 - [增强版] 支持公平不洗牌 & 模拟线下叠牌模式 & 精确控制模式
 // 基于《基于4人4副牌的洗牌算法及扩展到3-8适配的说明》实现
@@ -9940,7 +9974,7 @@ class Deck {
 module.exports = Deck;
 
 ================================================================================
-FILE PATH: server\game\GameManager.js
+FILE: server\game\GameManager.js
 ================================================================================
 const CardRules = require('./CardRules');
 const Deck = require('./Deck');
@@ -11005,7 +11039,7 @@ class GameManager {
 module.exports = GameManager;
 
 ================================================================================
-FILE PATH: server\game\SeatManager.js
+FILE: server\game\SeatManager.js
 ================================================================================
 const CardRules = require('./CardRules');
 const Deck = require('./Deck');
@@ -11127,7 +11161,7 @@ class SeatManager {
 module.exports = SeatManager;
 
 ================================================================================
-FILE PATH: server\handlers\gameHandler.js
+FILE: server\handlers\gameHandler.js
 ================================================================================
 const SeatManager = require('../game/SeatManager');
 const GameManager = require('../game/GameManager');
@@ -11426,7 +11460,7 @@ module.exports = (io, socket, rooms) => {
 };
 
 ================================================================================
-FILE PATH: server\handlers\roomHandler.js
+FILE: server\handlers\roomHandler.js
 ================================================================================
 module.exports = (io, socket, rooms) => {
     
@@ -11806,7 +11840,7 @@ module.exports = (io, socket, rooms) => {
 };
 
 ================================================================================
-FILE PATH: server\index.js
+FILE: server\index.js
 ================================================================================
 const express = require('express');
 const http = require('http');
@@ -11907,7 +11941,7 @@ server.listen(PORT, () => {
 });
 
 ================================================================================
-FILE PATH: server\package.json
+FILE: server\package.json
 ================================================================================
 {
   "name": "server",
@@ -11931,7 +11965,7 @@ FILE PATH: server\package.json
 
 
 ================================================================================
-FILE PATH: server\utils\constants.js
+FILE: server\utils\constants.js
 ================================================================================
 // 服务端常量定义 (CommonJS)
 
@@ -12005,6 +12039,6 @@ module.exports = {
 };
 
 ================================================================================
-FILE PATH: server\utils\socketAuth.js
+FILE: server\utils\socketAuth.js
 ================================================================================
 // (可选) 身份验证工具

@@ -4,7 +4,7 @@ import css from './GameActionBar.module.css';
 import { useGame } from '../../context/GameContext.jsx';
 import TimerComponent from '../CountDownTimer.jsx';
 import { isBomb } from '../../utils/cardLogic.js';
-import { QuickChatPanel } from './QuickChatPanel.jsx'; // [新增]
+import { QuickChatPanel } from './QuickChatPanel.jsx'; 
 
 export const GameActionBar = ({ onShowSettlement }) => {
     const { 
@@ -19,7 +19,7 @@ export const GameActionBar = ({ onShowSettlement }) => {
     } = useGame();
 
     const [confirmState, setConfirmState] = useState(false);
-    const [showChat, setShowChat] = useState(false); // [新增]
+    const [showChat, setShowChat] = useState(false); 
 
     useEffect(() => {
         setConfirmState(false);
@@ -44,10 +44,8 @@ export const GameActionBar = ({ onShowSettlement }) => {
         setWatchedPlayerId(availableIds[nextIndex]);
     };
 
-    // [修改] 始终渲染聊天面板
     const renderChatPanel = () => showChat && <QuickChatPanel onClose={() => setShowChat(false)} />;
     
-    // [新增] 聊天按钮
     const renderChatButton = () => (
         <button 
             className={css.btnSecondary} 
